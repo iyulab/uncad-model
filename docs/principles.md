@@ -18,9 +18,9 @@ If it is unclear which row a change falls in, treat it as the stricter one.
 
 | | Meaning |
 |---|---|
-| **Reference ID** | The name by which this entity is pointed at. One scheme, shared by every consumer |
-| **Provenance** | Where the entity came from — read from a vector source, recognized from a raster source, or produced by an operation |
-| **Confidence** | How far the entity's values can be trusted. Includes "unknown" |
+| **Reference ID** | The name by which this entity is pointed at. One scheme, shared by every consumer. Minted by whoever puts the entity into the model — a parser, a recognizer, an editor — at the moment it is put there, never by a reader. Opaque to consumers, unique within a model, and the same for the same inputs. A file handle is not a reference ID: it is provenance data, carried separately, present only for entities that came from a file |
+| **Provenance** | Where the entity came from — read from a vector source, recognized from a raster source, or produced by an operation. A closed set: a fourth kind is a discussion, not an addition |
+| **Confidence** | How far the entity's values can be trusted. A total order — unknown, low, high — so that whichever layer merges values can take the lower one. Finer grades and numeric scores are not part of the model; where a score is folded into a grade is a product's decision, not a component's |
 
 ## 3. Invariants
 
@@ -30,7 +30,19 @@ If it is unclear which row a change falls in, treat it as the stricter one.
 4. **What cannot be established is "unknown".** It is a first-class value, not an error, and never replaced by a default or an estimate.
 5. **Consumers need not know why confidence is low.** They act on the marker alone.
 
-*What this costs:* every producer has to fill these markers in, and every consumer has to carry them through. There is no lightweight variant of the model without them.
+*What this costs:* every producer has to fill these markers in, and every consumer has to carry them through. There is no lightweight variant of the model without them, and none of the three has a default value — a producer states them or the entity cannot be built.
+
+### 3.1 Three shapes of "unknown"
+
+They are orthogonal: one entity can be recognized from a raster, of a type the model does not know, with a layer that could not be resolved, all at once.
+
+| What is unknown | How it is carried |
+|---|---|
+| The entity's **kind** | An "unrecognized" entity that keeps the type name the file used |
+| One **referenced value** (a layer, a block, a style) | Three states: resolved; absent, because the file carries no handle for it; unresolved, because the handle answers to nothing. The last keeps the handle — it is the only thing that tells a missing table row from references broken wholesale |
+| How far the **values** can be trusted | Confidence |
+
+An unresolved reference is never written as an empty string, in the model or in its serialization. An empty name and a name that could not be read must stay distinguishable.
 
 ## 4. Pure data, no weight
 
