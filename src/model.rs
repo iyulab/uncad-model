@@ -739,6 +739,11 @@ pub struct LightEntity {
 pub struct LeaderEntity {
     pub common: EntityCommon,
     pub vertices: Vec<Point3D>,
+    /// DXF 71. Two states for three facts: a file that states no arrowhead
+    /// and a file that states nothing are the same `false` here. The field
+    /// beside it is an `Option` for exactly that reason, and this one is
+    /// not -- a binary drawing always stores the value, a text one may omit
+    /// it, and readers of the two then disagree without either being wrong.
     pub has_arrowhead: bool,
     /// DXF 72. `None` when the file does not state it: which way the format
     /// reads an absent group here is not something this model can source.
