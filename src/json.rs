@@ -295,8 +295,9 @@ mod tests {
                 gradient: Some(HatchGradient {
                     is_radial: true,
                     angle: 0.7,
-                    color1: "#ff0000".to_string(),
-                    color2: "#0000ff".to_string(),
+                    color1: 0xff0000,
+                    color2: Some(0x0000ff),
+                    tint: 0.0,
                 }),
                 pattern_lines: vec![HatchPatternLine {
                     angle: 0.5,

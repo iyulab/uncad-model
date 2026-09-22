@@ -452,17 +452,31 @@ pub struct HatchPatternLine {
     pub dash_pattern: Vec<f64>,
 }
 
-/// A HATCH gradient fill, reduced to two colors and a shape. The gradient
+/// A HATCH gradient fill, reduced to its colors and a shape. The gradient
 /// name (DXF 470: `SPHERICAL`/`HEMISPHERICAL`/`CURVED`/`LINEAR`/`CYLINDER`)
 /// collapses to `is_radial`: the two spherical names are radial, everything
 /// else linear. The gradient shift (DXF 461) is not carried.
+///
+/// Colors are what the file states, as packed 24-bit RGB (`0xRRGGBB`), the
+/// same form as [`EntityCommon::true_color`]: an ACI stop is resolved
+/// through the palette, a true-color stop is taken as is. What the fill
+/// looks like -- how a single-color gradient fades, whether white is
+/// flipped for a white background -- is a renderer's decision and is not
+/// baked into these values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HatchGradient {
     pub is_radial: bool,
     /// Radians.
     pub angle: f64,
-    pub color1: String,
-    pub color2: String,
+    /// The first stop's color (DXF 421 of the first color record).
+    pub color1: u32,
+    /// The second stop's color, `None` for a single-color gradient (DXF 452
+    /// set), whose second stop a renderer derives from `color1` and `tint`.
+    pub color2: Option<u32>,
+    /// Single-color gradient tint (DXF 462, `0.0`-`1.0`): how far the fill
+    /// fades from `color1` toward white. `0.0` when the gradient has two
+    /// colors.
+    pub tint: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
