@@ -62,6 +62,16 @@ The test: *would a third party using this model for the first time need the same
 
 Serialization is stable: the same model produces the same bytes. Snapshot tests depend on it.
 
+## 6.1 What a reader owes the model's strings
+
+A reader fills this model from a file, and a file's text is not always Unicode. More than one reader exists, so the rule is stated once here rather than settled again in each of them:
+
+- **Bytes that are valid UTF-8 are taken as UTF-8**, whatever the file's header declares. An ASCII file is both, and a file whose text a tool wrote as UTF-8 under a legacy header reads correctly this way.
+- **Otherwise the declared code page is trusted** — no sniffing, no guessing from the content. A file that declares the wrong code page reads cleanly wrong, which is a thing its author can fix; a reader that guesses is wrong in a way nobody can predict.
+- **A byte the code page has no character for becomes U+FFFD and is reported**, in the diagnostics the read returns. A code page the reader has no table for is reported the same way and the text read as UTF-8. Neither is ever silent: a string that came back wrong must be visible as such.
+
+None of this reaches the model's types — a string field is a string. What it fixes is the one question every reader of a pre-Unicode format has to answer, answered the same way by all of them.
+
 ## 7. Compatibility
 
 The crate is in 0.x. When a more correct shape is found, a breaking change is the normal way to adopt it; it is not deferred for migration cost. Breaking changes bump the minor version. The major version is not bumped without an explicit maintainer decision.
