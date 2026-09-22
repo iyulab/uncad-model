@@ -6,23 +6,28 @@ Every entity carries a **reference ID**, a **provenance** and a **confidence** �
 
 This crate is pure data: types and serialization, plus the one piece of arithmetic every consumer of a block reference needs alike -- the placement an INSERT applies to its block (`Affine2`). It parses nothing, renders nothing, and has no native dependencies.
 
-## Who uses it
+## Dependencies
 
-| Crate | Relation to the model |
-|---|---|
-| [uncad](https://github.com/iyulab/uncad) | DWG/DXF → model |
-| [iron-scout-cad](https://github.com/iyulab/iron-scout-cad) | model → semantic summary, entity references |
-| [iron-hand-cad](https://github.com/iyulab/iron-hand-cad) | (model, reference, verb) → new model |
-| [iron-diff-cad](https://github.com/iyulab/iron-diff-cad) | (model, model) → numeric change set |
-| [iron-render-cad](https://github.com/iyulab/iron-render-cad) | model → SVG/PNG, change overlays |
-
-Dependencies point **toward** this crate. It depends on none of the above — in particular, it does not depend on `uncad` and does not inherit its license.
+The dependency tree is permissive-only (MIT / Apache-2.0 / BSD). This crate depends on no
+parser, no renderer and no native code, so anything that needs only to *describe* a drawing can
+depend on it alone.
 
 ## Status
 
-0.x. The crate carries the entity types (`Entity` and one struct per kind, with the reference ID, provenance and confidence markers of [docs/principles.md](docs/principles.md) section 2 on every one, three-state `Ref` for every reference, plain `Point2D`/`Point3D`), the tables (`Tables`: layers, block definitions, mline styles), the ACI palette, the reader diagnostics, and the JSON serialization (`CadDatabase::to_json`, a direct serde form that round-trips). Read the principles before proposing anything.
+0.x. The crate provides:
 
-`golden/` is a test-only crate (not published): synthetic drawing specs, a DXF writer for them, and property checks. Consumers use it as a dev-dependency to run their share of the golden cases.
+- **Entities** — `Entity` and one struct per kind, each carrying a reference ID, a provenance and
+  a confidence, with a three-state `Ref` for every reference and plain `Point2D` / `Point3D`.
+- **Tables** — `Tables`: layers, block definitions, dimension styles, mline styles.
+- **Placement** — `Affine2`, the transform a block reference applies to its block, composed across
+  nested references.
+- **Palette and diagnostics** — the ACI colour table and the reader diagnostics a drawing carries.
+- **Serialization** — `CadDatabase::to_json`, a direct serde form that round-trips.
+
+The design rules are in [docs/principles.md](docs/principles.md).
+
+`golden/` is a test-only crate (not published): synthetic drawing specs, a DXF writer for them,
+and property checks, usable as a dev-dependency.
 
 ## License
 
