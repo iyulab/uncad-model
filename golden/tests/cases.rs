@@ -169,3 +169,72 @@ fn an_ascii_case_refuses_non_ascii_text() {
     }
     write(&spec);
 }
+
+/// G3 at two sizes, and what grows between them.
+///
+/// Every other case is too small for cost to show. This one asks whether
+/// the numbers grow the way they should: ten times the copies should be
+/// ten times the entities, and a copy's geometry should land exactly where
+/// its index says -- a drawing that is merely *big* proves nothing if its
+/// contents drifted on the way out.
+#[test]
+fn g3_grows_linearly_and_lands_where_its_index_says() {
+    let small = cases::g3_many_parts(10);
+    let large = cases::g3_many_parts(100);
+    let one = cases::g1_general_part();
+
+    assert_eq!(small.entities.len(), one.entities.len() * 10);
+    assert_eq!(large.entities.len(), one.entities.len() * 100);
+
+    // A copy is G1 moved, not G1 rewritten: the same kinds in the same
+    // order, so a reader meets the same drawing ten times over.
+    let kind = |e: &EntitySpec| std::mem::discriminant(e);
+    let per_copy = one.entities.len();
+    for copy in 0..10 {
+        for (i, entity) in one.entities.iter().enumerate() {
+            assert_eq!(
+                kind(&small.entities[copy * per_copy + i]),
+                kind(entity),
+                "copy {copy}, entity {i}"
+            );
+        }
+    }
+
+    // The first entity of copy 3 sits exactly one pitch from where the
+    // index says -- the grid is predictable, not merely spread out.
+    let per_row = (10.0f64).sqrt().ceil() as usize;
+    let (dx, dy) = cases::g3_offset(3, per_row);
+    match (&one.entities[0], &small.entities[3 * per_copy]) {
+        (
+            EntitySpec::LwPolyline { vertices: a, .. },
+            EntitySpec::LwPolyline { vertices: b, .. },
+        ) => {
+            assert_eq!(a.len(), b.len());
+            assert_eq!(b[0].x, a[0].x + dx);
+            assert_eq!(b[0].y, a[0].y + dy);
+        }
+        (a, b) => panic!("expected the same kind, got {a:?} and {b:?}"),
+    }
+}
+
+/// The written file and the expected model grow with the drawing, and
+/// nothing is lost on the way through the writer at size.
+#[test]
+fn g3_writes_and_reads_back_every_copy() {
+    let spec = cases::g3_many_parts(40);
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    assert!(
+        model.entities.len() >= spec.entities.len(),
+        "every top-level entity is expected back: {} of {}",
+        model.entities.len(),
+        spec.entities.len()
+    );
+    // Every layer the single part declares is still declared once, not
+    // forty times: the copies share the drawing's tables.
+    let one = cases::g1_general_part();
+    assert_eq!(
+        model.tables.layers.len(),
+        expected::model(&one, &write(&one)).tables.layers.len()
+    );
+}

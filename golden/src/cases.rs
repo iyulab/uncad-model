@@ -545,6 +545,51 @@ pub fn g8_korean_title_block() -> Spec {
     }
 }
 
+/// G3, one drawing holding many copies of G1 laid out on a grid.
+///
+/// The case the others cannot be: every other case is small enough that a
+/// reader's cost does not show, and the questions this one asks are about
+/// cost -- whether a read stays linear in the entities, and whether a
+/// comparison between two drawings does. A defect that only appears at ten
+/// thousand entities is invisible in a drawing of thirty.
+///
+/// **Generated rather than checked in**, unlike the cases in [`NAMES`]:
+/// its fixture would be megabytes of DXF whose exact bytes nobody reads,
+/// and the oracle here is not the bytes but how the numbers grow. Callers
+/// choose `copies`, so the same case can be built at two sizes and the two
+/// compared -- which is what a cost question actually needs.
+///
+/// The copies are laid out in a square-ish grid with a gap wider than the
+/// part, so no copy touches another and a coordinate can be predicted from
+/// the copy's index alone.
+pub fn g3_many_parts(copies: usize) -> Spec {
+    let one = g1_general_part();
+    let per_row = (copies as f64).sqrt().ceil().max(1.0) as usize;
+    let mut entities = Vec::with_capacity(one.entities.len() * copies);
+    for i in 0..copies {
+        let (dx, dy) = g3_offset(i, per_row);
+        entities.extend(one.entities.iter().map(|e| e.moved(dx, dy)));
+    }
+    Spec {
+        codepage: one.codepage,
+        layers: one.layers,
+        blocks: one.blocks,
+        dim_styles: one.dim_styles,
+        entities,
+    }
+}
+
+/// Where copy `i` of [`g3_many_parts`] sits. The pitch is wider than the
+/// part in G1 (200 x 100 units), so copies never overlap and a test can
+/// predict a coordinate from the index.
+pub fn g3_offset(i: usize, per_row: usize) -> (f64, f64) {
+    const PITCH_X: f64 = 300.0;
+    const PITCH_Y: f64 = 200.0;
+    let row = i / per_row.max(1);
+    let col = i % per_row.max(1);
+    (col as f64 * PITCH_X, row as f64 * PITCH_Y)
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -561,4 +606,8 @@ pub fn by_name(name: &str) -> Option<Spec> {
 }
 
 /// The names [`by_name`] knows, in order.
+///
+/// [`g3_many_parts`] is deliberately absent: it takes a size, and its
+/// fixture would be checked-in megabytes whose exact bytes answer no
+/// question the case asks.
 pub const NAMES: [&str; 8] = ["g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10"];

@@ -78,6 +78,14 @@ impl Xy {
     pub const fn new(x: f64, y: f64) -> Self {
         Xy { x, y }
     }
+
+    /// This point moved by `dx`, `dy`.
+    pub const fn moved(self, dx: f64, dy: f64) -> Self {
+        Xy {
+            x: self.x + dx,
+            y: self.y + dy,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -178,6 +186,100 @@ pub enum EntitySpec {
         measurement: Option<f64>,
         style: Option<String>,
     },
+}
+
+impl EntitySpec {
+    /// This entity moved by `dx`, `dy`, in the drawing's own units.
+    ///
+    /// Every point the variant carries moves; nothing else changes, so a
+    /// dimension still measures the same length and a block reference still
+    /// names the same block. Used to build a drawing out of many copies of
+    /// a smaller one without restating it.
+    pub fn moved(&self, dx: f64, dy: f64) -> EntitySpec {
+        let m = |p: &Xy| p.moved(dx, dy);
+        match self {
+            EntitySpec::Line { layer, start, end } => EntitySpec::Line {
+                layer: layer.clone(),
+                start: m(start),
+                end: m(end),
+            },
+            EntitySpec::Circle {
+                layer,
+                center,
+                radius,
+            } => EntitySpec::Circle {
+                layer: layer.clone(),
+                center: m(center),
+                radius: *radius,
+            },
+            EntitySpec::Arc {
+                layer,
+                center,
+                radius,
+                start_deg,
+                end_deg,
+            } => EntitySpec::Arc {
+                layer: layer.clone(),
+                center: m(center),
+                radius: *radius,
+                start_deg: *start_deg,
+                end_deg: *end_deg,
+            },
+            EntitySpec::LwPolyline {
+                layer,
+                vertices,
+                closed,
+            } => EntitySpec::LwPolyline {
+                layer: layer.clone(),
+                vertices: vertices.iter().map(m).collect(),
+                closed: *closed,
+            },
+            EntitySpec::Text {
+                layer,
+                insert,
+                height,
+                text,
+                rotation_deg,
+            } => EntitySpec::Text {
+                layer: layer.clone(),
+                insert: m(insert),
+                height: *height,
+                text: text.clone(),
+                rotation_deg: *rotation_deg,
+            },
+            EntitySpec::Attdef {
+                layer,
+                insert,
+                height,
+                tag,
+                prompt,
+                default,
+            } => EntitySpec::Attdef {
+                layer: layer.clone(),
+                insert: m(insert),
+                height: *height,
+                tag: tag.clone(),
+                prompt: prompt.clone(),
+                default: default.clone(),
+            },
+            EntitySpec::Insert {
+                layer,
+                block,
+                insert,
+                scale,
+                rotation_deg,
+                attribs,
+            } => EntitySpec::Insert {
+                layer: layer.clone(),
+                block: block.clone(),
+                insert: m(insert),
+                scale: *scale,
+                rotation_deg: *rotation_deg,
+                attribs: attribs.clone(),
+            },
+            other => other.clone(),
+        }
+    }
 }
 
 /// One DIMSTYLE table entry the file declares. Only the variables a case
