@@ -63,3 +63,18 @@ Serialization is stable: the same model produces the same bytes. Snapshot tests 
 ## 7. Compatibility
 
 The crate is in 0.x. When a more correct shape is found, a breaking change is the normal way to adopt it; it is not deferred for migration cost. Breaking changes bump the minor version. The major version is not bumped without an explicit maintainer decision.
+
+## 8. How the model and its consumers are measured
+
+Two layers, kept apart because they answer different questions.
+
+| Layer | Input | Oracle | Lives in |
+|---|---|---|---|
+| **Golden** | Synthetic drawings written from a *spec* (Rust data) by this repository's own DXF writer, which shares no code with any parser | The spec itself: the values a reader must get back, and the model it must produce | `golden/`, a test-only crate every consumer takes as a dev-dependency |
+| **Regression** | Real files a parser's own corpus provides | The distribution a previous run fixed: counts that must not change without a stated reason | The parser's repository, next to its backend |
+
+The golden layer measures *correctness against a known truth*; the regression layer measures *change*. A golden case is one named spec (`G1`, a general part, is the first) and every role reads its share of it: the parser compares its output with the expected model, the summarizer checks its summary against the spec's values, the editor and the differ check that a change touches exactly what it was asked to.
+
+Negative cells -- what must *never* happen: an unrequested entity changed, a low-confidence value reported high, an unknown filled with a default, a non-deterministic byte -- are not one case each but invariants over generated specs, checked by property tests with a seeded, deterministic generator that shrinks a failure to its smallest reproduction.
+
+The layer keeps no real drawings and no parser code, so it carries no license but this crate's own.

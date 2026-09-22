@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 2ec860144c6f49de304774c8a1a70a89967e4f9224d0348974b8b2951d2da95b # shrinks to spec = Spec { layers: [LayerSpec { name: "OUTLINE", color_index: 7 }, LayerSpec { name: "HOLES", color_index: 1 }, LayerSpec { name: "DIMS", color_index: 3 }], blocks: [BlockSpec { name: "PART", entities: [Circle { layer: "0", center: Xy { x: 0.0, y: 0.0 }, radius: 1.0 }] }], entities: [Text { layer: "0", insert: Xy { x: 0.0, y: 0.0 }, height: 0.5, text: "", rotation_deg: 209.08210045581848 }] }

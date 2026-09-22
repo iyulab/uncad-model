@@ -41,4 +41,8 @@ workspace = true
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+# `float_roundtrip`: the default parser is best-effort on floating-point
+# precision, and a value such as 3.6491710599395697 came back one ULP off.
+# The model promises that its JSON round-trips, so the exact parser is
+# required -- feature unification gives it to every consumer of this crate.
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }

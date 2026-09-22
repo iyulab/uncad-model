@@ -1,0 +1,569 @@
+//! Spec -> DXF text (R2000, ASCII).
+//!
+//! Independent of every parser by construction: the output is built from the
+//! DXF reference's group codes alone, as (code, value) pairs. Handles are
+//! issued deterministically, in the order things are written, so the same
+//! spec always produces the same bytes -- and the same handles the oracle
+//! expects to see on the entities that come back.
+
+use crate::spec::{AttribSpec, BlockSpec, EntitySpec, Spec, Xy};
+use std::fmt::Write as _;
+
+/// First handle issued to an entity. Table entries and block records come
+/// before it, so that a reader listing entities by handle sees them in file
+/// order.
+const FIRST_ENTITY_HANDLE: u32 = 0x100;
+
+/// The handles a written drawing carries, so an oracle can name them.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Handles {
+    /// Handle of each top-level entity, in file order. A dimension's
+    /// anonymous block does not appear here; its entities are in `blocks`.
+    pub entities: Vec<u32>,
+    /// Per block definition (named blocks first, in spec order, then the
+    /// dimension blocks `*D1`, `*D2`, ...): the handles of its entities.
+    pub blocks: Vec<(String, Vec<u32>)>,
+    /// Attribute handles per top-level INSERT that has any, keyed by the
+    /// INSERT's own handle.
+    pub attribs: Vec<(u32, Vec<u32>)>,
+}
+
+/// A written drawing: the DXF text plus the handles it issued.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Written {
+    pub dxf: String,
+    pub handles: Handles,
+}
+
+/// Writes `spec` as an R2000 ASCII DXF.
+pub fn write(spec: &Spec) -> Written {
+    let mut w = Writer::default();
+    w.write(spec);
+    Written {
+        dxf: w.out,
+        handles: w.handles,
+    }
+}
+
+#[derive(Default)]
+struct Writer {
+    out: String,
+    next_handle: u32,
+    handles: Handles,
+    /// Anonymous dimension blocks collected while writing entities; emitted
+    /// in the BLOCKS section, which is written after the entities have been
+    /// planned.
+    dim_blocks: Vec<(String, Vec<EntitySpec>)>,
+    /// Block name -> the handle of its BLOCK_RECORD, which owns the block's
+    /// entities (DXF 330 on each of them).
+    block_records: Vec<(String, u32)>,
+}
+
+impl Writer {
+    fn pair(&mut self, code: u16, value: impl std::fmt::Display) {
+        // The DXF reference right-aligns the code in a three-character
+        // field; the value follows on its own line.
+        writeln!(self.out, "{code:>3}\n{value}").expect("String never fails");
+    }
+
+    fn num(&mut self, code: u16, value: f64) {
+        self.pair(code, format!("{value:?}"));
+    }
+
+    fn xy(&mut self, base: u16, p: Xy) {
+        self.num(base, p.x);
+        self.num(base + 10, p.y);
+        self.num(base + 20, 0.0);
+    }
+
+    fn handle(&mut self) -> u32 {
+        let h = self.next_handle;
+        self.next_handle += 1;
+        h
+    }
+
+    fn write(&mut self, spec: &Spec) {
+        // Plan the anonymous dimension blocks first: their names must be
+        // known when the tables are written.
+        let mut dim_count = 0;
+        for e in &spec.entities {
+            if let Some((name, entities)) = dimension_block(e, &mut dim_count) {
+                self.dim_blocks.push((name, entities));
+            }
+        }
+
+        // Handles: tables and block records first (from 1), entities later
+        // (from FIRST_ENTITY_HANDLE).
+        self.next_handle = 1;
+
+        self.pair(0, "SECTION");
+        self.pair(2, "HEADER");
+        self.pair(9, "$ACADVER");
+        self.pair(1, "AC1015");
+        // Rewritten at the end: DXF wants the seed above every handle used.
+        let seed_at = self.out.len();
+        self.pair(9, "$HANDSEED");
+        self.pair(5, "FFFF");
+        self.pair(0, "ENDSEC");
+
+        self.tables(spec);
+        self.next_handle = FIRST_ENTITY_HANDLE;
+        self.blocks(spec);
+        self.entities(spec);
+        self.pair(0, "EOF");
+
+        let seed = format!("{:X}", self.next_handle);
+        let placeholder = "  9\n$HANDSEED\n  5\nFFFF\n";
+        let fixed = format!("  9\n$HANDSEED\n  5\n{seed}\n");
+        debug_assert!(self.out[seed_at..].starts_with(placeholder));
+        self.out
+            .replace_range(seed_at..seed_at + placeholder.len(), &fixed);
+    }
+
+    fn tables(&mut self, spec: &Spec) {
+        self.pair(0, "SECTION");
+        self.pair(2, "TABLES");
+
+        self.pair(0, "TABLE");
+        self.pair(2, "LTYPE");
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(100, "AcDbSymbolTable");
+        self.pair(70, 1);
+        self.pair(0, "LTYPE");
+        let table = h;
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(330, format!("{table:X}"));
+        self.pair(100, "AcDbSymbolTableRecord");
+        self.pair(100, "AcDbLinetypeTableRecord");
+        self.pair(2, "CONTINUOUS");
+        self.pair(70, 0);
+        self.pair(3, "Solid line");
+        self.pair(72, 65);
+        self.pair(73, 0);
+        self.num(40, 0.0);
+        self.pair(0, "ENDTAB");
+
+        self.pair(0, "TABLE");
+        self.pair(2, "LAYER");
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(100, "AcDbSymbolTable");
+        self.pair(70, spec.layers.len() + 1);
+        let table = h;
+        self.layer("0", 7, table);
+        for l in &spec.layers {
+            self.layer(&l.name, l.color_index, table);
+        }
+        self.pair(0, "ENDTAB");
+
+        self.pair(0, "TABLE");
+        self.pair(2, "BLOCK_RECORD");
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(100, "AcDbSymbolTable");
+        self.pair(70, spec.blocks.len() + self.dim_blocks.len() + 2);
+        let table = h;
+        for name in self.block_names(spec) {
+            self.pair(0, "BLOCK_RECORD");
+            let h = self.handle();
+            self.pair(5, format!("{h:X}"));
+            self.pair(330, format!("{table:X}"));
+            self.pair(100, "AcDbSymbolTableRecord");
+            self.pair(100, "AcDbBlockTableRecord");
+            self.pair(2, &name);
+            self.block_records.push((name, h));
+        }
+        self.pair(0, "ENDTAB");
+
+        self.pair(0, "ENDSEC");
+    }
+
+    fn layer(&mut self, name: &str, color_index: i16, table: u32) {
+        self.pair(0, "LAYER");
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(330, format!("{table:X}"));
+        self.pair(100, "AcDbSymbolTableRecord");
+        self.pair(100, "AcDbLayerTableRecord");
+        self.pair(2, name);
+        self.pair(70, 0);
+        self.pair(62, color_index);
+        self.pair(6, "CONTINUOUS");
+    }
+
+    fn block_names(&self, spec: &Spec) -> Vec<String> {
+        let mut names = vec!["*Model_Space".to_string(), "*Paper_Space".to_string()];
+        names.extend(spec.blocks.iter().map(|b| b.name.clone()));
+        names.extend(self.dim_blocks.iter().map(|(n, _)| n.clone()));
+        names
+    }
+
+    fn blocks(&mut self, spec: &Spec) {
+        self.pair(0, "SECTION");
+        self.pair(2, "BLOCKS");
+        for name in ["*Model_Space", "*Paper_Space"] {
+            let owner = self.block_record(name);
+            self.block_begin(name, 0, owner);
+            self.block_end(owner);
+        }
+        let named: Vec<BlockSpec> = spec.blocks.clone();
+        for b in &named {
+            let owner = self.block_record(&b.name);
+            self.block_begin(&b.name, 0, owner);
+            let mut handles = Vec::new();
+            for e in &b.entities {
+                let h = self.entity(e, None, owner);
+                handles.push(h);
+            }
+            self.block_end(owner);
+            self.handles.blocks.push((b.name.clone(), handles));
+        }
+        let dims = std::mem::take(&mut self.dim_blocks);
+        for (name, entities) in &dims {
+            let owner = self.block_record(name);
+            // Bit 0 of the block flags marks an anonymous block.
+            self.block_begin(name, 1, owner);
+            let mut handles = Vec::new();
+            for e in entities {
+                handles.push(self.entity(e, None, owner));
+            }
+            self.block_end(owner);
+            self.handles.blocks.push((name.clone(), handles));
+        }
+        self.dim_blocks = dims;
+        self.pair(0, "ENDSEC");
+    }
+
+    /// The BLOCK_RECORD handle of a block written in the tables.
+    fn block_record(&self, name: &str) -> u32 {
+        self.block_records
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, h)| *h)
+            .expect("every block has a record")
+    }
+
+    fn block_begin(&mut self, name: &str, flags: u16, owner: u32) {
+        self.pair(0, "BLOCK");
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(330, format!("{owner:X}"));
+        self.pair(100, "AcDbEntity");
+        self.pair(8, "0");
+        self.pair(100, "AcDbBlockBegin");
+        self.pair(2, name);
+        self.pair(70, flags);
+        self.xy(10, Xy::new(0.0, 0.0));
+        self.pair(3, name);
+        self.pair(1, "");
+    }
+
+    fn block_end(&mut self, owner: u32) {
+        self.pair(0, "ENDBLK");
+        let h = self.handle();
+        self.pair(5, format!("{h:X}"));
+        self.pair(330, format!("{owner:X}"));
+        self.pair(100, "AcDbEntity");
+        self.pair(8, "0");
+        self.pair(100, "AcDbBlockEnd");
+    }
+
+    fn entities(&mut self, spec: &Spec) {
+        self.pair(0, "SECTION");
+        self.pair(2, "ENTITIES");
+        let owner = self.block_record("*Model_Space");
+        let mut dim_index = 0;
+        for e in &spec.entities {
+            let dim_name = match e {
+                EntitySpec::LinearDimension { .. } | EntitySpec::DiameterDimension { .. } => {
+                    dim_index += 1;
+                    Some(format!("*D{dim_index}"))
+                }
+                _ => None,
+            };
+            let h = self.entity(e, dim_name.as_deref(), owner);
+            self.handles.entities.push(h);
+        }
+        self.pair(0, "ENDSEC");
+    }
+
+    /// Writes one entity and returns its handle. `dim_block` names the
+    /// anonymous block a dimension refers to; `owner` is the BLOCK_RECORD
+    /// that owns the entity (DXF 330).
+    fn entity(&mut self, e: &EntitySpec, dim_block: Option<&str>, owner: u32) -> u32 {
+        let h = self.handle();
+        let hex = format!("{h:X}");
+        match e {
+            EntitySpec::Line { layer, start, end } => {
+                self.pair(0, "LINE");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbLine");
+                self.xy(10, *start);
+                self.xy(11, *end);
+            }
+            EntitySpec::Circle {
+                layer,
+                center,
+                radius,
+            } => {
+                self.pair(0, "CIRCLE");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbCircle");
+                self.xy(10, *center);
+                self.num(40, *radius);
+            }
+            EntitySpec::Arc {
+                layer,
+                center,
+                radius,
+                start_deg,
+                end_deg,
+            } => {
+                self.pair(0, "ARC");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbCircle");
+                self.xy(10, *center);
+                self.num(40, *radius);
+                self.pair(100, "AcDbArc");
+                self.num(50, *start_deg);
+                self.num(51, *end_deg);
+            }
+            EntitySpec::LwPolyline {
+                layer,
+                vertices,
+                closed,
+            } => {
+                self.pair(0, "LWPOLYLINE");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbPolyline");
+                self.pair(90, vertices.len());
+                self.pair(70, u16::from(*closed));
+                for v in vertices {
+                    self.num(10, v.x);
+                    self.num(20, v.y);
+                }
+            }
+            EntitySpec::Text {
+                layer,
+                insert,
+                height,
+                text,
+                rotation_deg,
+            } => {
+                self.pair(0, "TEXT");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbText");
+                self.xy(10, *insert);
+                self.num(40, *height);
+                self.pair(1, text);
+                self.num(50, *rotation_deg);
+                self.pair(100, "AcDbText");
+            }
+            EntitySpec::Attdef {
+                layer,
+                insert,
+                height,
+                tag,
+                prompt,
+                default,
+            } => {
+                self.pair(0, "ATTDEF");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbText");
+                self.xy(10, *insert);
+                self.num(40, *height);
+                self.pair(1, default);
+                self.pair(100, "AcDbAttributeDefinition");
+                self.pair(3, prompt);
+                self.pair(2, tag);
+                self.pair(70, 0);
+            }
+            EntitySpec::Insert {
+                layer,
+                block,
+                insert,
+                scale,
+                rotation_deg,
+                attribs,
+            } => {
+                self.pair(0, "INSERT");
+                self.common(&hex, layer, owner);
+                if !attribs.is_empty() {
+                    self.pair(66, 1);
+                }
+                self.pair(100, "AcDbBlockReference");
+                self.pair(2, block);
+                self.xy(10, *insert);
+                self.num(41, *scale);
+                self.num(42, *scale);
+                self.num(43, *scale);
+                self.num(50, *rotation_deg);
+                if !attribs.is_empty() {
+                    // The attributes and the SEQEND are owned by the INSERT.
+                    let mut attrib_handles = Vec::new();
+                    for a in attribs {
+                        attrib_handles.push(self.attrib(a, layer, h));
+                    }
+                    self.pair(0, "SEQEND");
+                    let sh = self.handle();
+                    self.pair(5, format!("{sh:X}"));
+                    self.pair(330, hex.as_str());
+                    self.pair(100, "AcDbEntity");
+                    self.pair(8, layer);
+                    self.handles.attribs.push((h, attrib_handles));
+                }
+            }
+            EntitySpec::LinearDimension {
+                layer,
+                from,
+                to,
+                line_point,
+                text,
+            } => {
+                self.pair(0, "DIMENSION");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbDimension");
+                self.pair(2, dim_block.expect("a dimension has a block"));
+                self.xy(10, *line_point);
+                self.xy(11, midpoint(*from, *to));
+                // 32 = block reference is set, 0 = rotated (linear).
+                self.pair(70, 32);
+                self.pair(1, text);
+                self.pair(100, "AcDbAlignedDimension");
+                self.xy(13, *from);
+                self.xy(14, *to);
+                self.pair(100, "AcDbRotatedDimension");
+            }
+            EntitySpec::DiameterDimension {
+                layer,
+                first,
+                second,
+                text,
+            } => {
+                self.pair(0, "DIMENSION");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbDimension");
+                self.pair(2, dim_block.expect("a dimension has a block"));
+                self.xy(10, *first);
+                self.xy(11, midpoint(*first, *second));
+                // 32 = block reference, 3 = diameter.
+                self.pair(70, 32 + 3);
+                self.pair(1, text);
+                self.pair(100, "AcDbDiametricDimension");
+                self.xy(15, *second);
+                self.num(40, 0.0);
+            }
+        }
+        h
+    }
+
+    fn attrib(&mut self, a: &AttribSpec, layer: &str, owner: u32) -> u32 {
+        let h = self.handle();
+        self.pair(0, "ATTRIB");
+        self.common(&format!("{h:X}"), layer, owner);
+        self.pair(100, "AcDbText");
+        self.xy(10, a.insert);
+        self.num(40, a.height);
+        self.pair(1, &a.value);
+        self.pair(100, "AcDbAttribute");
+        self.pair(2, &a.tag);
+        self.pair(70, 0);
+        h
+    }
+
+    fn common(&mut self, handle_hex: &str, layer: &str, owner: u32) {
+        self.pair(5, handle_hex);
+        self.pair(330, format!("{owner:X}"));
+        self.pair(100, "AcDbEntity");
+        self.pair(8, layer);
+    }
+}
+
+fn midpoint(a: Xy, b: Xy) -> Xy {
+    Xy::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
+}
+
+/// The drawn geometry of a dimension, as the anonymous block a DXF carries
+/// for it: the dimension line, two extension lines and the text. This is
+/// what a reader that only sees the block (the model carries a dimension as
+/// its block reference) gets back.
+fn dimension_block(e: &EntitySpec, count: &mut usize) -> Option<(String, Vec<EntitySpec>)> {
+    match e {
+        EntitySpec::LinearDimension { .. } | EntitySpec::DiameterDimension { .. } => {
+            *count += 1;
+            Some((format!("*D{count}"), dimension_geometry(e)))
+        }
+        _ => None,
+    }
+}
+
+/// The drawn geometry of one dimension (see [`dimension_block`]); public so
+/// the oracle can state the same entities.
+pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
+    let layer = "0".to_string();
+    match e {
+        EntitySpec::LinearDimension {
+            from,
+            to,
+            line_point,
+            text,
+            ..
+        } => {
+            // A horizontal dimension: the dimension line runs at
+            // `line_point.y` between the two x's, extension lines drop from
+            // it to each measured point.
+            let y = line_point.y;
+            let entities = vec![
+                EntitySpec::Line {
+                    layer: layer.clone(),
+                    start: Xy::new(from.x, y),
+                    end: Xy::new(to.x, y),
+                },
+                EntitySpec::Line {
+                    layer: layer.clone(),
+                    start: *from,
+                    end: Xy::new(from.x, y),
+                },
+                EntitySpec::Line {
+                    layer: layer.clone(),
+                    start: *to,
+                    end: Xy::new(to.x, y),
+                },
+                EntitySpec::Text {
+                    layer,
+                    insert: Xy::new((from.x + to.x) / 2.0, y + 1.0),
+                    height: 2.5,
+                    text: text.clone(),
+                    rotation_deg: 0.0,
+                },
+            ];
+            entities
+        }
+        EntitySpec::DiameterDimension {
+            first,
+            second,
+            text,
+            ..
+        } => {
+            let mid = midpoint(*first, *second);
+            let entities = vec![
+                EntitySpec::Line {
+                    layer: layer.clone(),
+                    start: *first,
+                    end: *second,
+                },
+                EntitySpec::Text {
+                    layer,
+                    insert: Xy::new(mid.x, mid.y + 1.0),
+                    height: 2.5,
+                    text: text.clone(),
+                    rotation_deg: 0.0,
+                },
+            ];
+            entities
+        }
+        _ => Vec::new(),
+    }
+}
