@@ -44,6 +44,10 @@ pub struct Spec {
     pub layers: Vec<LayerSpec>,
     /// Named block definitions an INSERT (or a DIMENSION) can refer to.
     pub blocks: Vec<BlockSpec>,
+    /// DIMSTYLE table entries the file declares. A dimension naming one of
+    /// these resolves; a dimension naming anything else does not, and a file
+    /// with no entries here declares no table at all.
+    pub dim_styles: Vec<DimStyleSpec>,
     /// The drawing's own entities, in file order.
     pub entities: Vec<EntitySpec>,
 }
@@ -137,8 +141,31 @@ pub enum EntitySpec {
         to: Xy,
         /// Where the dimension line sits (DXF 10/20).
         line_point: Xy,
-        /// The text as it should read; also used as the override (DXF 1).
+        /// Written verbatim as DXF 1. `""` and `"<>"` both mean "show the
+        /// measurement", `" "` means "show nothing", anything else is the
+        /// text itself -- and the model folds the first two together.
         text: String,
+        /// DXF 42 when set. Left out, the file states no measurement, which
+        /// drawings older than R2000 routinely do.
+        measurement: Option<f64>,
+        /// DXF 3 when set: the style this dimension names.
+        style: Option<String>,
+    },
+    /// A dimension of the length along an arc. The format gives it its own
+    /// entity while still writing a group 70 that says "three-point
+    /// angular", so it is the case that tells a reader which one it trusts.
+    ArcDimension {
+        layer: String,
+        /// DXF 13/23 and 14/24.
+        from: Xy,
+        to: Xy,
+        /// DXF 15/25, the arc's centre.
+        center: Xy,
+        /// DXF 10/20.
+        line_point: Xy,
+        text: String,
+        measurement: Option<f64>,
+        style: Option<String>,
     },
     /// A diameter dimension across a circle.
     DiameterDimension {
@@ -148,7 +175,24 @@ pub enum EntitySpec {
         first: Xy,
         second: Xy,
         text: String,
+        measurement: Option<f64>,
+        style: Option<String>,
     },
+}
+
+/// One DIMSTYLE table entry the file declares. Only the variables a case
+/// needs are here; the rest stay unwritten, which is itself what a reader
+/// has to report as "this style does not state it".
+#[derive(Debug, Clone, PartialEq)]
+pub struct DimStyleSpec {
+    /// DXF 2.
+    pub name: String,
+    /// DXF 3.
+    pub post: Option<String>,
+    /// DXF 271.
+    pub decimal_places: Option<i32>,
+    /// DXF 140.
+    pub text_height: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -170,6 +214,7 @@ impl EntitySpec {
             | EntitySpec::Attdef { layer, .. }
             | EntitySpec::Insert { layer, .. }
             | EntitySpec::LinearDimension { layer, .. }
+            | EntitySpec::ArcDimension { layer, .. }
             | EntitySpec::DiameterDimension { layer, .. } => layer,
         }
     }

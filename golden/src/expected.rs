@@ -20,6 +20,19 @@ use uncad_model::model::{
     LwPolylineEntity, Origin, Point2D, Point3D, Ref, TextEntity, TextOverride,
 };
 
+/// The reference a dimension's style name becomes: resolved when the file
+/// declares that style, unresolved -- carrying the name -- when it names one
+/// the file never declares, absent when it names none at all.
+fn style_ref(style: &Option<String>, spec: &Spec) -> Ref<String> {
+    match style {
+        None => Ref::Absent,
+        Some(name) if spec.dim_styles.iter().any(|s| &s.name == name) => {
+            Ref::Resolved(name.clone())
+        }
+        Some(name) => Ref::Unresolved(name.clone()),
+    }
+}
+
 /// The spec's dimension text, read the way the format reads group 1.
 fn text_override(text: &str) -> TextOverride {
     match text {
@@ -28,7 +41,7 @@ fn text_override(text: &str) -> TextOverride {
         other => TextOverride::Literal(other.to_string()),
     }
 }
-use uncad_model::tables::{BlockRecord, LayerRecord, Tables};
+use uncad_model::tables::{BlockRecord, DimStyleRecord, LayerRecord, Tables};
 use uncad_model::{CadDatabase, ReadDiagnostics};
 
 /// The model `written` should read back as. `written` must come from
@@ -66,7 +79,9 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             .map(|(_, hs)| hs.as_slice())
             .unwrap_or(&[]);
         let dim_block = match e {
-            EntitySpec::LinearDimension { .. } | EntitySpec::DiameterDimension { .. } => {
+            EntitySpec::LinearDimension { .. }
+            | EntitySpec::ArcDimension { .. }
+            | EntitySpec::DiameterDimension { .. } => {
                 dim_index += 1;
                 Some(format!("*D{dim_index}"))
             }
@@ -124,10 +139,27 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
     CadDatabase {
         entities,
         tables: Tables {
-            // The writer declares no DIMSTYLE table, so a reader has no style
-            // to find -- which is itself worth pinning: a dimension naming a
-            // style the file never declares is an unresolved reference.
-            dim_styles: BTreeMap::new(),
+            // Only the variables the spec states are written, so everything
+            // else stays "this style does not state it" -- the reader must
+            // not fill those in. A spec with no styles declares no table at
+            // all, which is itself worth pinning: then a dimension naming a
+            // style is an unresolved reference.
+            dim_styles: spec
+                .dim_styles
+                .iter()
+                .map(|s| {
+                    (
+                        s.name.clone(),
+                        DimStyleRecord {
+                            name: s.name.clone(),
+                            post: s.post.clone(),
+                            decimal_places: s.decimal_places,
+                            text_height: s.text_height,
+                            ..DimStyleRecord::default()
+                        },
+                    )
+                })
+                .collect(),
             layers,
             block_records,
             mlinestyles: BTreeMap::new(),
@@ -151,7 +183,9 @@ fn dimension_block_entities(spec: &Spec, name: &str) -> Vec<EntitySpec> {
         .filter(|e| {
             matches!(
                 e,
-                EntitySpec::LinearDimension { .. } | EntitySpec::DiameterDimension { .. }
+                EntitySpec::LinearDimension { .. }
+                    | EntitySpec::ArcDimension { .. }
+                    | EntitySpec::DiameterDimension { .. }
             )
         })
         .nth(n - 1)
@@ -303,11 +337,13 @@ fn convert(
             to,
             line_point,
             text,
+            measurement,
+            style,
         } => Entity::Dimension(DimensionEntity {
             common: common(handle, layer),
             block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
             kind: Some(DimensionKind::Rotated),
-            measurement: None,
+            measurement: *measurement,
             text_override: text_override(text),
             definition_point: Some(p3(*line_point)),
             text_midpoint: p2(midpoint(*from, *to)),
@@ -319,18 +355,49 @@ fn convert(
             },
             rotation: 0.0,
             text_rotation: 0.0,
-            style_name: Ref::Absent,
+            style_name: style_ref(style, spec),
+        }),
+        EntitySpec::ArcDimension {
+            layer,
+            from,
+            to,
+            center,
+            line_point,
+            text,
+            measurement,
+            style,
+        } => Entity::Dimension(DimensionEntity {
+            common: common(handle, layer),
+            block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
+            // Its group 70 says "three-point angular"; the entity it is says
+            // otherwise, and the entity wins.
+            kind: Some(DimensionKind::ArcLength),
+            measurement: *measurement,
+            text_override: text_override(text),
+            definition_point: Some(p3(*line_point)),
+            text_midpoint: p2(midpoint(*from, *to)),
+            points: DimensionPoints {
+                extension1: Some(p3(*from)),
+                extension2: Some(p3(*to)),
+                radial: Some(p3(*center)),
+                arc: None,
+            },
+            rotation: 0.0,
+            text_rotation: 0.0,
+            style_name: style_ref(style, spec),
         }),
         EntitySpec::DiameterDimension {
             layer,
             first,
             second,
             text,
+            measurement,
+            style,
         } => Entity::Dimension(DimensionEntity {
             common: common(handle, layer),
             block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
             kind: Some(DimensionKind::Diameter),
-            measurement: None,
+            measurement: *measurement,
             text_override: text_override(text),
             definition_point: Some(p3(*first)),
             text_midpoint: p2(midpoint(*first, *second)),
@@ -342,7 +409,7 @@ fn convert(
             },
             rotation: 0.0,
             text_rotation: 0.0,
-            style_name: Ref::Absent,
+            style_name: style_ref(style, spec),
         }),
     }
 }

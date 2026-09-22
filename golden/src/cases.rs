@@ -1,7 +1,7 @@
 //! The named golden cases. Each is a function returning its spec, so a
 //! consumer can pick the ones its role is measured by.
 
-use crate::spec::{AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, Spec, Xy};
+use crate::spec::{AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, Xy};
 
 /// G1, a general machined part: a closed outline, four holes, three linear
 /// dimensions and one diameter dimension, and a title block inserted with
@@ -45,6 +45,8 @@ pub fn g1_general_part() -> Spec {
         to: Xy::new(200.0, 0.0),
         line_point: Xy::new(0.0, -15.0),
         text: "200".to_string(),
+        measurement: None,
+        style: None,
     });
     entities.push(EntitySpec::LinearDimension {
         layer: dims.clone(),
@@ -52,6 +54,8 @@ pub fn g1_general_part() -> Spec {
         to: Xy::new(0.0, 100.0),
         line_point: Xy::new(-15.0, 0.0),
         text: "100".to_string(),
+        measurement: None,
+        style: None,
     });
     entities.push(EntitySpec::LinearDimension {
         layer: dims.clone(),
@@ -59,12 +63,16 @@ pub fn g1_general_part() -> Spec {
         to: Xy::new(180.0, 20.0),
         line_point: Xy::new(20.0, 35.0),
         text: "160".to_string(),
+        measurement: None,
+        style: None,
     });
     entities.push(EntitySpec::DiameterDimension {
         layer: dims.clone(),
         first: Xy::new(15.0, 20.0),
         second: Xy::new(25.0, 20.0),
         text: "%%C10".to_string(),
+        measurement: None,
+        style: None,
     });
     entities.push(EntitySpec::Insert {
         layer: title.clone(),
@@ -95,6 +103,7 @@ pub fn g1_general_part() -> Spec {
     });
 
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
         layers: vec![
             LayerSpec {
@@ -165,6 +174,7 @@ pub fn g1_general_part() -> Spec {
 pub fn g2_nested_blocks() -> Spec {
     let layer = "0".to_string();
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
         layers: Vec::new(),
         blocks: vec![
@@ -220,6 +230,7 @@ pub fn g6_overlapping_lines() -> Spec {
         end: Xy::new(50.0, 0.0),
     };
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
         layers: Vec::new(),
         blocks: Vec::new(),
@@ -250,6 +261,7 @@ pub fn g9_two_drawing_numbers() -> Spec {
         }],
     };
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
         layers: vec![LayerSpec {
             name: "TITLE".to_string(),
@@ -260,12 +272,110 @@ pub fn g9_two_drawing_numbers() -> Spec {
     }
 }
 
+/// G5, a drawing that is mostly dimensions, and the case that carries what
+/// no file in any corpus here carries: the two spellings of "show the
+/// measurement" that are not just an absent group, the single space that
+/// means "show nothing", a literal that disagrees with the measurement the
+/// same dimension states, an arc-length dimension (its own entity, with a
+/// group 70 that says something else), and a DIMSTYLE table that states
+/// three of its variables and stays silent on the rest.
+pub fn g5_dense_dimensions() -> Spec {
+    let dims = "DIMS".to_string();
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: dims.clone(),
+            color_index: 3,
+        }],
+        blocks: Vec::new(),
+        dim_styles: vec![DimStyleSpec {
+            name: "ISO-25".to_string(),
+            post: Some("<>mm".to_string()),
+            decimal_places: Some(2),
+            text_height: Some(2.5),
+        }],
+        entities: vec![
+            // "<>" and "" are the same thing said two ways, and a reader
+            // that keeps them apart makes two drawings differ over spelling.
+            EntitySpec::LinearDimension {
+                layer: dims.clone(),
+                from: Xy::new(0.0, 0.0),
+                to: Xy::new(120.0, 0.0),
+                line_point: Xy::new(0.0, -15.0),
+                text: "<>".to_string(),
+                measurement: Some(120.0),
+                style: Some("ISO-25".to_string()),
+            },
+            EntitySpec::LinearDimension {
+                layer: dims.clone(),
+                from: Xy::new(0.0, 40.0),
+                to: Xy::new(120.0, 40.0),
+                line_point: Xy::new(0.0, 55.0),
+                text: String::new(),
+                measurement: Some(120.0),
+                style: Some("ISO-25".to_string()),
+            },
+            // A single space is the drawing saying "show nothing".
+            EntitySpec::LinearDimension {
+                layer: dims.clone(),
+                from: Xy::new(0.0, 80.0),
+                to: Xy::new(120.0, 80.0),
+                line_point: Xy::new(0.0, 95.0),
+                text: " ".to_string(),
+                measurement: Some(120.0),
+                style: Some("ISO-25".to_string()),
+            },
+            // The text and the measurement disagree, which real drawings do:
+            // both have to survive, because only one of them is the drawing's
+            // claim about the part.
+            EntitySpec::LinearDimension {
+                layer: dims.clone(),
+                from: Xy::new(0.0, 120.0),
+                to: Xy::new(120.0, 120.0),
+                line_point: Xy::new(0.0, 135.0),
+                text: "125".to_string(),
+                measurement: Some(120.0),
+                style: Some("ISO-25".to_string()),
+            },
+            // Naming a style the file never declares.
+            EntitySpec::LinearDimension {
+                layer: dims.clone(),
+                from: Xy::new(0.0, 160.0),
+                to: Xy::new(120.0, 160.0),
+                line_point: Xy::new(0.0, 175.0),
+                text: "<>".to_string(),
+                measurement: None,
+                style: Some("NOT-DECLARED".to_string()),
+            },
+            EntitySpec::DiameterDimension {
+                layer: dims.clone(),
+                first: Xy::new(60.0, 200.0),
+                second: Xy::new(80.0, 200.0),
+                text: "%%C20".to_string(),
+                measurement: Some(20.0),
+                style: Some("ISO-25".to_string()),
+            },
+            EntitySpec::ArcDimension {
+                layer: dims,
+                from: Xy::new(0.0, 240.0),
+                to: Xy::new(120.0, 240.0),
+                center: Xy::new(60.0, 220.0),
+                line_point: Xy::new(60.0, 260.0),
+                text: "<>".to_string(),
+                measurement: Some(133.5),
+                style: Some("ISO-25".to_string()),
+            },
+        ],
+    }
+}
+
 /// G10, a block reference to a block the file never defines: the reference
 /// must come back unresolved and carrying the name the file wrote, never as
 /// an empty name, never as absent (the file did point at something), and
 /// never as a silently dropped entity.
 pub fn g10_unreferenced_insert() -> Spec {
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
         layers: Vec::new(),
         blocks: Vec::new(),
@@ -318,6 +428,7 @@ pub fn g7_loose_text_title_block() -> Spec {
         text(130.0, -59.0, "SS400"),
     ];
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
         layers: vec![LayerSpec {
             name: title,
@@ -355,6 +466,7 @@ pub fn g8_korean_title_block() -> Spec {
         default: default.to_string(),
     };
     Spec {
+        dim_styles: Vec::new(),
         codepage: Codepage::Ansi949,
         layers: vec![
             LayerSpec {
@@ -442,10 +554,11 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g7" => g7_loose_text_title_block(),
         "g8" => g8_korean_title_block(),
         "g9" => g9_two_drawing_numbers(),
+        "g5" => g5_dense_dimensions(),
         "g10" => g10_unreferenced_insert(),
         _ => return None,
     })
 }
 
 /// The names [`by_name`] knows, in order.
-pub const NAMES: [&str; 7] = ["g1", "g2", "g6", "g7", "g8", "g9", "g10"];
+pub const NAMES: [&str; 8] = ["g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10"];

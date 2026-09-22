@@ -93,6 +93,8 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                 to,
                 line_point,
                 text,
+                measurement: None,
+                style: None,
             }
         }),
         (layer_name(), xy(), xy(), text()).prop_map(|(layer, first, second, text)| {
@@ -101,6 +103,8 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                 first,
                 second,
                 text,
+                measurement: None,
+                style: None,
             }
         }),
         (
@@ -135,6 +139,7 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
 fn spec() -> impl Strategy<Value = Spec> {
     prop::collection::vec(entity(), 0..24).prop_map(|entities| Spec {
         codepage: Codepage::Ascii,
+        dim_styles: Vec::new(),
         layers: vec![
             LayerSpec {
                 name: "OUTLINE".to_string(),

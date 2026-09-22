@@ -202,6 +202,38 @@ impl Writer {
         }
         self.pair(0, "ENDTAB");
 
+        if !spec.dim_styles.is_empty() {
+            self.pair(0, "TABLE");
+            self.pair(2, "DIMSTYLE");
+            let h = self.handle();
+            self.pair(5, format!("{h:X}"));
+            self.pair(100, "AcDbSymbolTable");
+            self.pair(70, spec.dim_styles.len());
+            let table = h;
+            for style in &spec.dim_styles {
+                self.pair(0, "DIMSTYLE");
+                let h = self.handle();
+                // A DIMSTYLE entry's own handle is group 105, not 5: the
+                // format's one exception, because 5 was already taken.
+                self.pair(105, format!("{h:X}"));
+                self.pair(330, format!("{table:X}"));
+                self.pair(100, "AcDbSymbolTableRecord");
+                self.pair(100, "AcDbDimStyleTableRecord");
+                self.pair(2, &style.name);
+                self.pair(70, 0);
+                if let Some(post) = &style.post {
+                    self.pair(3, post);
+                }
+                if let Some(height) = style.text_height {
+                    self.num(140, height);
+                }
+                if let Some(places) = style.decimal_places {
+                    self.pair(271, places);
+                }
+            }
+            self.pair(0, "ENDTAB");
+        }
+
         self.pair(0, "TABLE");
         self.pair(2, "BLOCK_RECORD");
         let h = self.handle();
@@ -321,7 +353,9 @@ impl Writer {
         let mut dim_index = 0;
         for e in &spec.entities {
             let dim_name = match e {
-                EntitySpec::LinearDimension { .. } | EntitySpec::DiameterDimension { .. } => {
+                EntitySpec::LinearDimension { .. }
+                | EntitySpec::ArcDimension { .. }
+                | EntitySpec::DiameterDimension { .. } => {
                     dim_index += 1;
                     Some(format!("*D{dim_index}"))
                 }
@@ -465,6 +499,8 @@ impl Writer {
                 to,
                 line_point,
                 text,
+                measurement,
+                style,
             } => {
                 self.pair(0, "DIMENSION");
                 self.common(&hex, layer, owner);
@@ -475,16 +511,56 @@ impl Writer {
                 // 32 = block reference is set, 0 = rotated (linear).
                 self.pair(70, 32);
                 self.pair(1, text);
+                if let Some(m) = measurement {
+                    self.num(42, *m);
+                }
+                if let Some(style) = style {
+                    self.pair(3, style);
+                }
                 self.pair(100, "AcDbAlignedDimension");
                 self.xy(13, *from);
                 self.xy(14, *to);
                 self.pair(100, "AcDbRotatedDimension");
+            }
+            EntitySpec::ArcDimension {
+                layer,
+                from,
+                to,
+                center,
+                line_point,
+                text,
+                measurement,
+                style,
+            } => {
+                self.pair(0, "ARC_DIMENSION");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbDimension");
+                self.pair(2, dim_block.expect("a dimension has a block"));
+                self.xy(10, *line_point);
+                self.xy(11, midpoint(*from, *to));
+                // 32 = block reference, 5 = three-point angular -- which is
+                // what the format writes on an arc-length dimension, and why
+                // the entity's own name has to win.
+                self.pair(70, 32 + 5);
+                self.pair(1, text);
+                if let Some(m) = measurement {
+                    self.num(42, *m);
+                }
+                if let Some(style) = style {
+                    self.pair(3, style);
+                }
+                self.pair(100, "AcDbArcDimension");
+                self.xy(13, *from);
+                self.xy(14, *to);
+                self.xy(15, *center);
             }
             EntitySpec::DiameterDimension {
                 layer,
                 first,
                 second,
                 text,
+                measurement,
+                style,
             } => {
                 self.pair(0, "DIMENSION");
                 self.common(&hex, layer, owner);
@@ -495,6 +571,12 @@ impl Writer {
                 // 32 = block reference, 3 = diameter.
                 self.pair(70, 32 + 3);
                 self.pair(1, text);
+                if let Some(m) = measurement {
+                    self.num(42, *m);
+                }
+                if let Some(style) = style {
+                    self.pair(3, style);
+                }
                 self.pair(100, "AcDbDiametricDimension");
                 self.xy(15, *second);
                 self.num(40, 0.0);
@@ -535,7 +617,9 @@ pub(crate) fn midpoint(a: Xy, b: Xy) -> Xy {
 /// its block reference) gets back.
 fn dimension_block(e: &EntitySpec, count: &mut usize) -> Option<(String, Vec<EntitySpec>)> {
     match e {
-        EntitySpec::LinearDimension { .. } | EntitySpec::DiameterDimension { .. } => {
+        EntitySpec::LinearDimension { .. }
+        | EntitySpec::ArcDimension { .. }
+        | EntitySpec::DiameterDimension { .. } => {
             *count += 1;
             Some((format!("*D{count}"), dimension_geometry(e)))
         }
@@ -548,6 +632,26 @@ fn dimension_block(e: &EntitySpec, count: &mut usize) -> Option<(String, Vec<Ent
 pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
     let layer = "0".to_string();
     match e {
+        EntitySpec::ArcDimension { from, to, text, .. } => {
+            // An arc-length dimension's drawn block: the two measured points
+            // joined, with the text between them. The arc itself is not
+            // drawn -- what a dimension's block holds is what a reader gets
+            // back, and this case is about the values, not the picture.
+            vec![
+                EntitySpec::Line {
+                    layer: layer.clone(),
+                    start: *from,
+                    end: *to,
+                },
+                EntitySpec::Text {
+                    layer,
+                    insert: midpoint(*from, *to),
+                    height: 2.5,
+                    text: text.clone(),
+                    rotation_deg: 0.0,
+                },
+            ]
+        }
         EntitySpec::LinearDimension {
             from,
             to,
