@@ -1,0 +1,19 @@
+[package]
+name = "uncad-model-golden"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Synthetic golden cases for the uncad-model ecosystem: a case is a spec, the writer turns it into a DXF, and the spec itself is the oracle. Test-only; not published."
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+uncad-model = { path = ".." }
+
+[dev-dependencies]
+proptest = "1"
+serde_json = "1.0.151"

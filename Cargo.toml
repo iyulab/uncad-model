@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [".", "golden"]
+
+[workspace.package]
+edition = "2021"
+# Minimum supported Rust version. Measured, not guessed, and checked by CI's
+# `msrv` job with exactly this toolchain -- raise the two together.
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/iyulab/uncad-model"
+
+[workspace.lints.rust]
+# Pure data: types and serialization. There is no reason for `unsafe` here,
+# and forbidding it keeps a native binding from ever creeping in.
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# Same input, same bytes: nothing this crate outputs may depend on a hash
+# collection's iteration order, which `std` randomizes per instance. The main
+# guard is clippy.toml's `disallowed-types` (std's HashMap/HashSet are not used
+# here at all); this restriction lint additionally covers `for` loops over any
+# other hash-based type, e.g. one handed over by a dependency.
+iter_over_hash_type = "warn"
+
+[package]
+name = "uncad-model"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = "https://github.com/iyulab/uncad-model"
+readme = "README.md"
+description = "The neutral entity model for 2D CAD drawings: types and JSON serialization, shared by parsers, editors, differs and renderers."
+keywords = ["cad", "dwg", "dxf", "model", "json"]
+categories = ["data-structures", "parser-implementations"]
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
