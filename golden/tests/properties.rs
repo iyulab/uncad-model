@@ -204,8 +204,10 @@ proptest! {
 
         let model = expected::model(&spec, &written);
         for e in &model.entities {
-            let h = u32::from_str_radix(&e.common().handle, 16).unwrap();
+            let handle = e.common().source_handle.resolved().expect("a file entity has a handle");
+            let h = u32::from_str_radix(handle, 16).unwrap();
             prop_assert!(all.contains(&h), "entity handle {:X} was never issued", h);
+            prop_assert_eq!(e.common().id.value(), u64::from(h), "the ID is the handle's value");
         }
         // Each issued handle appears in the DXF text as a code-5 pair.
         for h in &all {

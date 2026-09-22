@@ -10,7 +10,8 @@
 
 use std::collections::BTreeMap;
 use uncad_model::model::{
-    CircleEntity, Entity, EntityCommon, InsertEntity, LineEntity, Point3D, Ref,
+    CircleEntity, Confidence, Entity, EntityCommon, EntityId, InsertEntity, LineEntity, Origin,
+    Point3D, Ref,
 };
 use uncad_model::tables::{BlockRecord, LayerRecord, Tables};
 use uncad_model::{CadDatabase, ReadDiagnostics, ToJsonOptions};
@@ -22,7 +23,10 @@ const RUNS: usize = 24;
 
 fn common(handle: &str, layer: &str) -> EntityCommon {
     EntityCommon {
-        handle: handle.to_string(),
+        id: EntityId::new(u64::from_str_radix(handle, 16).unwrap()),
+        origin: Origin::Vector,
+        confidence: Confidence::High,
+        source_handle: Ref::Resolved(handle.to_string()),
         layer: Ref::Resolved(layer.to_string()),
         color_index: 256,
         true_color: None,

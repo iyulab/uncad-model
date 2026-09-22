@@ -20,9 +20,7 @@ Dependencies point **toward** this crate. It depends on none of the above — in
 
 ## Status
 
-0.x. The crate carries the entity types (`Entity` and one struct per kind, three-state `Ref` for every reference, plain `Point2D`/`Point3D`), the tables (`Tables`: layers, block definitions, mline styles), the ACI palette, the reader diagnostics, and the JSON serialization (`CadDatabase::to_json`, a direct serde form that round-trips).
-
-Not yet in the code: the per-entity reference ID, provenance and confidence markers that [docs/principles.md](docs/principles.md) section 2 describes. Today an entity carries its source file handle only. Read the principles before proposing anything; they are the contract the code is converging on.
+0.x. The crate carries the entity types (`Entity` and one struct per kind, with the reference ID, provenance and confidence markers of [docs/principles.md](docs/principles.md) section 2 on every one, three-state `Ref` for every reference, plain `Point2D`/`Point3D`), the tables (`Tables`: layers, block definitions, mline styles), the ACI palette, the reader diagnostics, and the JSON serialization (`CadDatabase::to_json`, a direct serde form that round-trips). Read the principles before proposing anything.
 
 `golden/` is a test-only crate (not published): synthetic drawing specs, a DXF writer for them, and property checks. Consumers use it as a dev-dependency to run their share of the golden cases.
 

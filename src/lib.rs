@@ -20,7 +20,7 @@ pub mod tables;
 use serde::{Deserialize, Serialize};
 
 pub use json::{JsonError, ToJsonOptions};
-pub use model::{Entity, EntityCommon, Point2D, Point3D, Ref};
+pub use model::{Confidence, Entity, EntityCommon, EntityId, Origin, Point2D, Point3D, Ref};
 pub use tables::Tables;
 
 /// A drawing: the model, and nothing else.

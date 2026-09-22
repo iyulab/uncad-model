@@ -5,13 +5,19 @@
 //! own principles state for floating-point fields). Handles are the ones the
 //! writer issued, layers resolve by name, and colors are BYLAYER throughout
 //! because the writer never sets an entity color.
+//!
+//! The three markers a parser must state: the reference ID is the file
+//! handle's value (a parser reading a file with unique handles mints IDs
+//! from them, so the same entity gets the same ID whether the drawing is read
+//! as DWG or as DXF), the origin is `Vector`, the confidence `High`.
 
 use crate::spec::{EntitySpec, Spec, Xy};
 use crate::writer::Written;
 use std::collections::BTreeMap;
 use uncad_model::model::{
-    ArcEntity, AttdefEntity, AttribEntity, CircleEntity, DimensionEntity, Entity, EntityCommon,
-    InsertEntity, LineEntity, LwPolylineEntity, Point2D, Point3D, Ref, TextEntity,
+    ArcEntity, AttdefEntity, AttribEntity, CircleEntity, Confidence, DimensionEntity, Entity,
+    EntityCommon, EntityId, InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D,
+    Ref, TextEntity,
 };
 use uncad_model::tables::{BlockRecord, LayerRecord, Tables};
 use uncad_model::{CadDatabase, ReadDiagnostics};
@@ -142,7 +148,10 @@ fn dimension_block_entities(spec: &Spec, name: &str) -> Vec<EntitySpec> {
 
 fn common(handle: u32, layer: &str) -> EntityCommon {
     EntityCommon {
-        handle: format!("{handle:X}"),
+        id: EntityId::new(u64::from(handle)),
+        origin: Origin::Vector,
+        confidence: Confidence::High,
+        source_handle: Ref::Resolved(format!("{handle:X}")),
         layer: Ref::Resolved(layer.to_string()),
         color_index: 256,
         true_color: None,

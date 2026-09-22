@@ -20,8 +20,13 @@
 //!   real DXF name in its `type_name` field.
 //! - Points are objects (`{"x":..,"y":..}` / `{"x":..,"y":..,"z":..}`); angles
 //!   are radians, as in the model.
-//! - Reference fields (`common.layer`, an INSERT/DIMENSION/TABLE's `block_name`,
-//!   an MLINE's `mlinestyle_name`) are adjacently tagged three-state values:
+//! - `common.id` is the reference ID as a plain integer; `common.origin` and
+//!   `common.confidence` are upper-case strings (`"VECTOR"`, `"HIGH"`, ...);
+//!   `common.source_handle` is a reference field like the ones below, resolved
+//!   to the file's hex handle for an entity that came from a file.
+//! - Reference fields (`common.layer`, `common.source_handle`, an
+//!   INSERT/DIMENSION/TABLE's `block_name`, an MLINE's `mlinestyle_name`) are
+//!   adjacently tagged three-state values:
 //!   `{"type":"RESOLVED","data":"0"}`, `{"type":"ABSENT"}` or
 //!   `{"type":"UNRESOLVED","data":"2A"}` -- never a bare string, so a name that
 //!   could not be read is not mistaken for a name that is empty.
@@ -106,7 +111,10 @@ mod tests {
 
     fn common(handle: &str) -> EntityCommon {
         EntityCommon {
-            handle: handle.to_string(),
+            id: EntityId::new(u64::from_str_radix(handle, 16).unwrap()),
+            origin: Origin::Vector,
+            confidence: Confidence::High,
+            source_handle: Ref::Resolved(handle.to_string()),
             layer: Ref::Resolved("0".to_string()),
             color_index: 256,
             true_color: Some(0x12_34_56),
@@ -454,7 +462,7 @@ mod tests {
 
     #[test]
     fn an_unknown_or_missing_type_tag_is_an_error_not_a_panic() {
-        let common = r#""common":{"handle":"1","layer":{"type":"RESOLVED","data":"0"},"color_index":256,"true_color":null}"#;
+        let common = r#""common":{"id":1,"origin":"VECTOR","confidence":"HIGH","source_handle":{"type":"RESOLVED","data":"1"},"layer":{"type":"RESOLVED","data":"0"},"color_index":256,"true_color":null}"#;
         assert!(serde_json::from_str::<Entity>(&format!(r#"{{"type":"NOPE",{common}}}"#)).is_err());
         assert!(serde_json::from_str::<Entity>(&format!(r#"{{{common}}}"#)).is_err());
         assert!(

@@ -86,12 +86,85 @@ impl Ref<String> {
     }
 }
 
+/// The name by which an entity is pointed at: one scheme, shared by every
+/// consumer. Minted by whoever puts the entity into the model -- a parser, a
+/// recognizer, an editor -- at the moment it is put there, never by a reader.
+/// Unique within a model, opaque to consumers, and the same for the same
+/// inputs. A file handle is not a reference ID (see
+/// [`EntityCommon::source_handle`]).
+///
+/// Serialized as a plain integer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EntityId(u64);
+
+impl EntityId {
+    /// Mints an ID. Only a producer of entities calls this; a consumer
+    /// carries IDs it received and never invents one.
+    pub const fn new(value: u64) -> Self {
+        EntityId(value)
+    }
+
+    /// The ID's value, for producers that derive IDs from one another or
+    /// keep them in a table. It carries no meaning for a consumer.
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+}
+
+/// Where an entity came from. A closed set: a fourth kind is a discussion,
+/// not an addition. Consumers do not branch on it -- they act on
+/// [`Confidence`] alone (the model's invariant 6).
+///
+/// Serialized as `"VECTOR"` / `"RASTER"` / `"DERIVED"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Origin {
+    /// Read from a vector source (a DWG/DXF parser).
+    Vector,
+    /// Recognized from a raster source (an image of a drawing).
+    Raster,
+    /// Produced by an operation on the model (an editor).
+    Derived,
+}
+
+/// How far an entity's values can be trusted. A total order --
+/// `Unknown < Low < High` -- so that whichever layer merges values can take
+/// the lower one, and never raises it: a value that entered low never
+/// leaves high (invariant 2). Finer grades and numeric scores are not part
+/// of the model.
+///
+/// Serialized as `"UNKNOWN"` / `"LOW"` / `"HIGH"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Confidence {
+    /// Nothing is known about how far the values can be trusted.
+    Unknown,
+    /// The values may be wrong; a consumer presents them as such.
+    Low,
+    /// The values are what the source states.
+    High,
+}
+
 /// Fields common to every entity, regardless of type.
+///
+/// None of the three markers has a default: a producer states them or the
+/// entity cannot be built. That is what keeps "vector" and "high" from
+/// leaking in unstated.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EntityCommon {
-    /// Hex handle string (e.g. `"2A"`), used for cross-referencing
-    /// (3DSOLID wireframe attachment, INSERT/DIMENSION block lookups, ...).
-    pub handle: String,
+    /// The reference ID -- see [`EntityId`].
+    pub id: EntityId,
+    /// Where the entity came from -- see [`Origin`].
+    pub origin: Origin,
+    /// How far its values can be trusted -- see [`Confidence`].
+    pub confidence: Confidence,
+    /// The handle the source file gave this entity, as a hex string
+    /// (e.g. `"2A"`): provenance, present only for entities that came from a
+    /// file, kept because it is what a file-level tool (or the file's own
+    /// cross-references) names the entity by. [`Ref::Absent`] for an entity
+    /// that has no file behind it -- recognized or derived.
+    pub source_handle: Ref<String>,
     /// Owning layer's name (DXF 8), resolved from the entity's layer
     /// reference. [`Ref::Unresolved`] when the reference points at nothing;
     /// never an empty string standing in for "could not read".
