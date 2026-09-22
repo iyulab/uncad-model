@@ -500,15 +500,121 @@ pub struct HatchEntity {
     pub pattern_lines: Vec<HatchPatternLine>,
 }
 
+/// What a dimension measures, as the file states it (DXF 70, low three
+/// bits). A file that does not state it leaves [`DimensionEntity::kind`]
+/// `None` -- the format defines no default, so there is nothing to fall back
+/// to and nothing to guess.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DimensionKind {
+    /// 0: a linear dimension, measured along `points.rotation`.
+    Rotated,
+    /// 1: aligned with the two extension line origins.
+    Aligned,
+    /// 2: the angle between two lines.
+    Angular2Line,
+    /// 3: a diameter.
+    Diameter,
+    /// 4: a radius.
+    Radius,
+    /// 5: the angle through three points.
+    Angular3Point,
+    /// 6: an ordinate (a single coordinate from the origin).
+    Ordinate,
+}
+
+/// The dimension's text, as the file states it (DXF 1).
+///
+/// The format spells "just show what you measured" three ways -- the group
+/// absent, an empty string, or the literal `<>` -- and readers of different
+/// files (or of the same file through different libraries) see different
+/// ones of the three. They are one meaning, so this type folds them into one
+/// value: a consumer comparing two drawings must not see a difference that
+/// is only a spelling.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TextOverride {
+    /// Show the measurement. The file wrote nothing, `""`, or `<>`.
+    Measured,
+    /// Show no text at all. The file wrote a single space.
+    Suppressed,
+    /// Show this instead. It may itself contain `<>`, standing for the
+    /// measurement inside a longer string (`"<> H7"`); substituting it is a
+    /// consumer's job, not this model's.
+    Literal(String),
+}
+
+/// The points a dimension is built from, each one the DXF group the file
+/// carries it in. `None` is "the file did not carry that group" -- normal,
+/// since which groups a dimension uses depends on what it measures.
+///
+/// They are named per group rather than per subtype on purpose. The same
+/// group number means the same thing across subtypes in the format, while a
+/// library's own field names do not: LibreDWG's `def_pt`, for one, is group
+/// 10 for most dimensions but is not written as a DXF group at all for a
+/// two-line angular dimension, whose group 16 is its second extension line's
+/// end. A backend that passes its own "definition point" through would put
+/// two different points in one field depending on the file it read.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct DimensionPoints {
+    /// DXF 13: the first extension line's origin.
+    pub extension1: Option<Point3D>,
+    /// DXF 14: the second extension line's origin.
+    pub extension2: Option<Point3D>,
+    /// DXF 15: the point a diameter, radius or angular dimension turns on.
+    pub radial: Option<Point3D>,
+    /// DXF 16: the point defining an angular dimension's arc.
+    pub arc: Option<Point3D>,
+}
+
 /// A DIMENSION carries its drawn geometry (lines, arrows, text) as an
 /// anonymous block (DXF 2) already in world coordinates, so drawing one is
 /// drawing that block with an identity transform. All dimension subtypes
 /// (aligned, angular, diameter, linear, ordinate, arc) share this shape and
 /// fold into [`Entity::Dimension`].
+///
+/// Beyond that block it carries what the file says the dimension *is*: what
+/// it measures, the measurement, the text, and the points it was built from.
+/// Two of those can be missing from a file, and are `None` then rather than
+/// filled in with a plausible value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DimensionEntity {
     pub common: EntityCommon,
+    /// The anonymous block holding the drawn geometry (DXF 2).
     pub block_name: Ref<String>,
+    /// DXF 70, low three bits. `None` when the file does not state it.
+    pub kind: Option<DimensionKind>,
+    /// DXF 42, the measurement the drawing recorded, in the drawing's units
+    /// (radians for an angular dimension). `None` when the file does not
+    /// carry it -- drawings older than R2000 often do not, and the format
+    /// defines no default, so the only honest value is "not stated". It can
+    /// also disagree with [`Self::text_override`], which is why both are
+    /// carried.
+    pub measurement: Option<f64>,
+    /// DXF 1, folded to one value per meaning.
+    pub text_override: TextOverride,
+    /// DXF 10. What it locates depends on [`Self::kind`] -- the dimension
+    /// line for a linear dimension, the far chord for a diameter, the
+    /// feature for an ordinate.
+    ///
+    /// `None` when the reader cannot say which of its own points is this
+    /// group. Every DXF dimension carries group 10, but a backend reading
+    /// the binary format may hold a different point under its own
+    /// "definition point" for some subtypes; saying nothing is better than
+    /// putting two different points in one field.
+    pub definition_point: Option<Point3D>,
+    /// DXF 11: the middle of the dimension text.
+    pub text_midpoint: Point2D,
+    /// The rest of the points, by DXF group.
+    pub points: DimensionPoints,
+    /// DXF 50: the angle the dimension is measured along, radians. The
+    /// format's default is 0, so an absent group is 0 rather than unknown.
+    pub rotation: f64,
+    /// DXF 53: the text's own rotation, radians. Default 0, like
+    /// [`Self::rotation`].
+    pub text_rotation: f64,
+    /// DXF 3: the DIMSTYLE this dimension names.
+    pub style_name: Ref<String>,
 }
 
 /// A 3DSOLID reduced to a wireframe: straight chords between the two

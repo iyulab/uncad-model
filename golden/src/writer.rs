@@ -525,7 +525,7 @@ impl Writer {
     }
 }
 
-fn midpoint(a: Xy, b: Xy) -> Xy {
+pub(crate) fn midpoint(a: Xy, b: Xy) -> Xy {
     Xy::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
 }
 

@@ -262,6 +262,22 @@ mod tests {
             Entity::Dimension(DimensionEntity {
                 common: c.clone(),
                 block_name: Ref::Resolved("*D1".to_string()),
+                kind: Some(DimensionKind::Rotated),
+                measurement: Some(200.0),
+                // A literal that itself contains the measurement's place:
+                // the JSON has to survive it unchanged.
+                text_override: TextOverride::Literal("<> H7".to_string()),
+                definition_point: Some(p3(0.0, -15.0, 0.0)),
+                text_midpoint: p2(100.0, 0.0),
+                points: DimensionPoints {
+                    extension1: Some(p3(0.0, 0.0, 0.0)),
+                    extension2: Some(p3(200.0, 0.0, 0.0)),
+                    radial: None,
+                    arc: None,
+                },
+                rotation: 0.0,
+                text_rotation: 0.25,
+                style_name: Ref::Unresolved("ISO-25".to_string()),
             }),
             Entity::Hatch(HatchEntity {
                 common: c.clone(),
