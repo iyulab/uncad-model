@@ -46,7 +46,9 @@ An unresolved reference is never written as an empty string, in the model or in 
 
 ## 4. Pure data, no weight
 
-Types and serialization only. No parsing, no rendering, no geometry algorithms, no native code, no network. A crate that only needs to *talk about* drawings should pay for nothing else.
+Types and serialization. No parsing, no rendering, no native code, no network. A crate that only needs to *talk about* drawings should pay for nothing else.
+
+One piece of arithmetic lives here, and only one: the placement a block reference applies to its block -- the map from a block definition's coordinates to the drawing's, composed across nested references (`Affine2`). Every consumer that follows an INSERT needs exactly this map and needs nested references to compose the same way, or two of them disagree about where the same line is drawn; it is arithmetic on the INSERT's own fields, with nothing to guess. Distance, intersection, hit-testing, rendering and editing stay in the consumers.
 
 The dependency tree is permissive-only (MIT / Apache-2.0 / BSD), and this crate depends on none of its consumers.
 

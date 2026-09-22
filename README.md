@@ -4,7 +4,7 @@ The neutral entity model for 2D CAD drawings: what a drawing *is* once it has be
 
 Every entity carries a **reference ID**, a **provenance** and a **confidence** — so that anything built on the model can say where a value came from and how far it can be trusted, including "unknown".
 
-This crate is pure data: types and serialization. It parses nothing, renders nothing, and has no native dependencies.
+This crate is pure data: types and serialization, plus the one piece of arithmetic every consumer of a block reference needs alike -- the placement an INSERT applies to its block (`Affine2`). It parses nothing, renders nothing, and has no native dependencies.
 
 ## Who uses it
 
