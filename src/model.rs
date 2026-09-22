@@ -720,16 +720,34 @@ pub struct WipeoutEntity {
     pub boundary: Vec<Point2D>,
 }
 
-/// A light source: its position, and its target when it aims somewhere.
-/// It has no drawable shape of its own (it is invisible in a plan view);
-/// what a consumer shows for it is the consumer's placeholder.
+/// A light source: its position, its target, and what kind of light the
+/// file says it is. It has no drawable shape of its own (it is invisible in
+/// a plan view); what a consumer shows for it is the consumer's placeholder.
+///
+/// Whether the light *aims* at `target` is not carried: it is not something
+/// the file states, but something that follows from `light_type` (distant
+/// and spot lights aim, point lights do not). The model carries what the
+/// file said and leaves that step to whoever needs it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LightEntity {
     pub common: EntityCommon,
     pub position: Point3D,
     pub target: Point3D,
-    /// Distant and spot lights aim at `target`; point lights do not.
-    pub has_target: bool,
+    /// DXF 70. `None` when the file does not state it, or states a value
+    /// outside the format's three.
+    pub light_type: Option<LightType>,
+}
+
+/// What kind of light a LIGHT entity is (DXF 70).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LightType {
+    /// 1: parallel rays from a direction.
+    Distant,
+    /// 2: radiates in every direction from `position`.
+    Point,
+    /// 3: a cone from `position` towards `target`.
+    Spot,
 }
 
 /// Simple (non-MULTILEADER) LEADER: a polyline of `vertices` plus an
@@ -739,12 +757,10 @@ pub struct LightEntity {
 pub struct LeaderEntity {
     pub common: EntityCommon,
     pub vertices: Vec<Point3D>,
-    /// DXF 71. Two states for three facts: a file that states no arrowhead
-    /// and a file that states nothing are the same `false` here. The field
-    /// beside it is an `Option` for exactly that reason, and this one is
-    /// not -- a binary drawing always stores the value, a text one may omit
-    /// it, and readers of the two then disagree without either being wrong.
-    pub has_arrowhead: bool,
+    /// DXF 71. `None` when the file does not state it -- a binary drawing
+    /// always stores the flag, a text one may omit it, and which way the
+    /// format reads an absent flag is not something this model can source.
+    pub has_arrowhead: Option<bool>,
     /// DXF 72. `None` when the file does not state it: which way the format
     /// reads an absent group here is not something this model can source.
     pub path_type: Option<LeaderPath>,
@@ -753,7 +769,12 @@ pub struct LeaderEntity {
     /// DXF 340: the entity the leader points at, when the file names one.
     /// This is a connection the *file* states, not one anybody computed --
     /// which is why it belongs in the model rather than in a consumer.
-    pub annotation_id: Option<EntityId>,
+    ///
+    /// Three states, like every other reference: [`Ref::Resolved`] names an
+    /// entity of this drawing; [`Ref::Unresolved`] keeps the handle the file
+    /// wrote (hex) when no entity of the drawing answers to it; and
+    /// [`Ref::Absent`] is a leader whose file names nothing.
+    pub annotation_id: Ref<EntityId>,
     /// DXF 3: the DIMSTYLE this leader names.
     pub style_name: Ref<String>,
 }

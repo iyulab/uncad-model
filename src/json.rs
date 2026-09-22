@@ -326,10 +326,10 @@ mod tests {
             Entity::Leader(LeaderEntity {
                 common: c.clone(),
                 vertices: vec![p3(0.0, 0.0, 0.0), p3(1.0, 1.0, 0.0)],
-                has_arrowhead: true,
+                has_arrowhead: Some(true),
                 path_type: Some(LeaderPath::Spline),
                 annotation: LeaderAnnotation::Tolerance,
-                annotation_id: Some(EntityId::new(0x4F1)),
+                annotation_id: Ref::Resolved(EntityId::new(0x4F1)),
                 style_name: Ref::Resolved("ISO-25".to_string()),
             }),
             Entity::MultiLeader(MultiLeaderEntity {
@@ -371,7 +371,7 @@ mod tests {
                 common: c.clone(),
                 position: p3(0.0, 0.0, 10.0),
                 target: p3(0.0, 0.0, 0.0),
-                has_target: true,
+                light_type: Some(LightType::Spot),
             }),
             Entity::Unknown {
                 common: c,
