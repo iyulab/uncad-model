@@ -63,7 +63,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             }
             _ => None,
         };
-        let entity = convert(e, h, attribs, dim_block.as_deref());
+        let entity = convert(e, h, attribs, dim_block.as_deref(), spec);
         if let Entity::Insert(insert) = &entity {
             let extra: Vec<Entity> = insert.attribs.iter().cloned().map(Entity::Attrib).collect();
             entities.push(entity);
@@ -101,7 +101,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
         let block_entities = specs
             .iter()
             .zip(handles)
-            .map(|(e, &h)| convert(e, h, &[], None))
+            .map(|(e, &h)| convert(e, h, &[], None, spec))
             .collect();
         block_records.insert(
             name.clone(),
@@ -170,7 +170,13 @@ fn p2(p: Xy) -> Point2D {
     Point2D { x: p.x, y: p.y }
 }
 
-fn convert(e: &EntitySpec, handle: u32, attrib_handles: &[u32], dim_block: Option<&str>) -> Entity {
+fn convert(
+    e: &EntitySpec,
+    handle: u32,
+    attrib_handles: &[u32],
+    dim_block: Option<&str>,
+    spec: &Spec,
+) -> Entity {
     match e {
         EntitySpec::Line { layer, start, end } => Entity::Line(LineEntity {
             common: common(handle, layer),
@@ -243,7 +249,14 @@ fn convert(e: &EntitySpec, handle: u32, attrib_handles: &[u32], dim_block: Optio
             attribs,
         } => Entity::Insert(InsertEntity {
             common: common(handle, layer),
-            block_name: Ref::Resolved(block.clone()),
+            // A reference to a block the file never defines: the file carries
+            // no handle for it, so the reader reports it as absent -- never as
+            // an empty name.
+            block_name: if spec.blocks.iter().any(|b| &b.name == block) {
+                Ref::Resolved(block.clone())
+            } else {
+                Ref::Absent
+            },
             insertion_point: p3(*insert),
             scale: Point3D {
                 x: *scale,

@@ -1,5 +1,5 @@
 //! Writes a golden case to disk, for looking at it or feeding it to a reader
-//! by hand: `cargo run -p uncad-model-golden --example write_case -- g1 out.dxf`.
+//! by hand: `cargo run -p uncad-model-golden --example write_case -- <case> out.dxf`.
 //! With a third argument, the expected model's JSON is written there too.
 
 use uncad_model::ToJsonOptions;
@@ -10,16 +10,13 @@ fn main() {
     let (case, out) = match args.as_slice() {
         [_, case, out, ..] => (case.as_str(), out.as_str()),
         _ => {
-            eprintln!("usage: write_case <g1> <out.dxf> [expected.json]");
+            eprintln!("usage: write_case <case> <out.dxf> [expected.json]");
             std::process::exit(2);
         }
     };
-    let spec = match case {
-        "g1" => cases::g1_general_part(),
-        other => {
-            eprintln!("unknown case {other:?}; known: g1");
-            std::process::exit(2);
-        }
+    let Some(spec) = cases::by_name(case) else {
+        eprintln!("unknown case {case:?}; known: {}", cases::NAMES.join(", "));
+        std::process::exit(2);
     };
     let written = write(&spec);
     std::fs::write(out, &written.dxf).expect("write the DXF");

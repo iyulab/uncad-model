@@ -155,3 +155,143 @@ pub fn g1_general_part() -> Spec {
         entities,
     }
 }
+
+/// G2, block nesting three deep with a rotation and a scale at each level:
+/// block `C` holds one LINE, `B` inserts `C` rotated 90 degrees at (5, 0),
+/// `A` inserts `B` at scale 2, and the drawing inserts `A` at (100, 100).
+/// The line's absolute position is therefore (110, 100) to (110, 120) --
+/// the value a renderer's composed transform must produce.
+pub fn g2_nested_blocks() -> Spec {
+    let layer = "0".to_string();
+    Spec {
+        layers: Vec::new(),
+        blocks: vec![
+            BlockSpec {
+                name: "C".to_string(),
+                entities: vec![EntitySpec::Line {
+                    layer: layer.clone(),
+                    start: Xy::new(0.0, 0.0),
+                    end: Xy::new(10.0, 0.0),
+                }],
+            },
+            BlockSpec {
+                name: "B".to_string(),
+                entities: vec![EntitySpec::Insert {
+                    layer: layer.clone(),
+                    block: "C".to_string(),
+                    insert: Xy::new(5.0, 0.0),
+                    scale: 1.0,
+                    rotation_deg: 90.0,
+                    attribs: Vec::new(),
+                }],
+            },
+            BlockSpec {
+                name: "A".to_string(),
+                entities: vec![EntitySpec::Insert {
+                    layer: layer.clone(),
+                    block: "B".to_string(),
+                    insert: Xy::new(0.0, 0.0),
+                    scale: 2.0,
+                    rotation_deg: 0.0,
+                    attribs: Vec::new(),
+                }],
+            },
+        ],
+        entities: vec![EntitySpec::Insert {
+            layer,
+            block: "A".to_string(),
+            insert: Xy::new(100.0, 100.0),
+            scale: 1.0,
+            rotation_deg: 0.0,
+            attribs: Vec::new(),
+        }],
+    }
+}
+
+/// G6, two identical lines on top of each other: a reader keeps both as
+/// two entities with two IDs, and a pointer asked for the entity at that
+/// place must answer with both candidates rather than pick one.
+pub fn g6_overlapping_lines() -> Spec {
+    let line = |layer: &str| EntitySpec::Line {
+        layer: layer.to_string(),
+        start: Xy::new(0.0, 0.0),
+        end: Xy::new(50.0, 0.0),
+    };
+    Spec {
+        layers: Vec::new(),
+        blocks: Vec::new(),
+        entities: vec![line("0"), line("0")],
+    }
+}
+
+/// G9, two title blocks with two different drawing numbers: a summarizer
+/// asked for *the* drawing number must answer "unknown", not pick one.
+pub fn g9_two_drawing_numbers() -> Spec {
+    let g1 = g1_general_part();
+    let title_block = g1
+        .blocks
+        .into_iter()
+        .find(|b| b.name == "TITLEBLOCK")
+        .expect("G1 has a title block");
+    let insert = |x: f64, number: &str| EntitySpec::Insert {
+        layer: "TITLE".to_string(),
+        block: "TITLEBLOCK".to_string(),
+        insert: Xy::new(x, -60.0),
+        scale: 1.0,
+        rotation_deg: 0.0,
+        attribs: vec![AttribSpec {
+            tag: "DWGNO".to_string(),
+            value: number.to_string(),
+            insert: Xy::new(x + 5.0, -45.0),
+            height: 3.5,
+        }],
+    };
+    Spec {
+        layers: vec![LayerSpec {
+            name: "TITLE".to_string(),
+            color_index: 2,
+        }],
+        blocks: vec![title_block],
+        entities: vec![insert(0.0, "BP-1042"), insert(120.0, "BP-2077")],
+    }
+}
+
+/// G10, a block reference to a block the file never defines: the reference
+/// must come back as an absent or unresolved value, never as an empty name
+/// and never as a silently dropped entity.
+pub fn g10_unreferenced_insert() -> Spec {
+    Spec {
+        layers: Vec::new(),
+        blocks: Vec::new(),
+        entities: vec![
+            EntitySpec::Line {
+                layer: "0".to_string(),
+                start: Xy::new(0.0, 0.0),
+                end: Xy::new(10.0, 10.0),
+            },
+            EntitySpec::Insert {
+                layer: "0".to_string(),
+                block: "MISSING".to_string(),
+                insert: Xy::new(20.0, 20.0),
+                scale: 1.0,
+                rotation_deg: 0.0,
+                attribs: Vec::new(),
+            },
+        ],
+    }
+}
+
+/// Every named case, by the name the fixtures and the sync check use.
+pub fn by_name(name: &str) -> Option<Spec> {
+    Some(match name {
+        "g1" => g1_general_part(),
+        "g2" => g2_nested_blocks(),
+        "g6" => g6_overlapping_lines(),
+        "g9" => g9_two_drawing_numbers(),
+        "g10" => g10_unreferenced_insert(),
+        _ => return None,
+    })
+}
+
+/// The names [`by_name`] knows, in order.
+pub const NAMES: [&str; 5] = ["g1", "g2", "g6", "g9", "g10"];
