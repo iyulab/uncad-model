@@ -727,6 +727,44 @@ impl Entity {
         }
     }
 
+    /// [`common`](Self::common), mutably.
+    pub fn common_mut(&mut self) -> &mut EntityCommon {
+        match self {
+            Entity::Line(e) => &mut e.common,
+            Entity::Circle(e) => &mut e.common,
+            Entity::Text(e) => &mut e.common,
+            Entity::LwPolyline(e) => &mut e.common,
+            Entity::Arc(e) => &mut e.common,
+            Entity::Ellipse(e) => &mut e.common,
+            Entity::Point(e) => &mut e.common,
+            Entity::Solid(e) | Entity::Trace(e) => &mut e.common,
+            Entity::Ray(e) => &mut e.common,
+            Entity::XLine(e) => &mut e.common,
+            Entity::Insert(e) => &mut e.common,
+            Entity::Attrib(e) => &mut e.common,
+            Entity::Attdef(e) => &mut e.common,
+            Entity::Viewport(e) => &mut e.common,
+            Entity::Face3D(e) => &mut e.common,
+            Entity::Spline(e) => &mut e.common,
+            Entity::MText(e) => &mut e.common,
+            Entity::Polyline3D(e) => &mut e.common,
+            Entity::Dimension(e) => &mut e.common,
+            Entity::Hatch(e) => &mut e.common,
+            Entity::Solid3D(e) => &mut e.common,
+            Entity::Leader(e) => &mut e.common,
+            Entity::MultiLeader(e) => &mut e.common,
+            Entity::MLine(e) => &mut e.common,
+            Entity::Region(e) => &mut e.common,
+            Entity::PolylinePFace(e) => &mut e.common,
+            Entity::Polyline2D(e) => &mut e.common,
+            Entity::Tolerance(e) => &mut e.common,
+            Entity::AcadTable(e) => &mut e.common,
+            Entity::Wipeout(e) => &mut e.common,
+            Entity::Light(e) => &mut e.common,
+            Entity::Unknown { common, .. } => common,
+        }
+    }
+
     /// The DXF/entity type name, e.g. `"LINE"`.
     pub fn type_name(&self) -> &str {
         match self {
