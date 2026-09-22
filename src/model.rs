@@ -271,6 +271,11 @@ pub struct AttribEntity {
     pub common: EntityCommon,
     pub start_point: Point2D,
     pub text_height: f64,
+    /// The attribute's tag (DXF 2): the name its value answers to, as the
+    /// block definition's ATTDEF declared it. What a reader of a title
+    /// block looks a value up by; the value alone says nothing about which
+    /// field it fills.
+    pub tag: String,
     pub text: String,
     /// Radians (DXF 50).
     pub rotation: f64,
@@ -327,6 +332,8 @@ pub struct AttdefEntity {
     pub common: EntityCommon,
     pub start_point: Point2D,
     pub text_height: f64,
+    /// The tag (DXF 2) every ATTRIB made from this definition carries.
+    pub tag: String,
     pub default_value: String,
     /// Radians (DXF 50). Kept for parity with ATTRIB; a template is not
     /// normally drawn.

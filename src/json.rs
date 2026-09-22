@@ -138,7 +138,8 @@ mod tests {
             common: c.clone(),
             start_point: p2(1.0, 2.0),
             text_height: 2.5,
-            text: "TAG".to_string(),
+            tag: "TAG".to_string(),
+            text: "value".to_string(),
             rotation: 0.1,
         };
         let ray = RayEntity {
@@ -223,6 +224,7 @@ mod tests {
                 common: c.clone(),
                 start_point: p2(0.0, 0.0),
                 text_height: 2.5,
+                tag: "TAG".to_string(),
                 default_value: "?".to_string(),
                 rotation: 0.4,
             }),

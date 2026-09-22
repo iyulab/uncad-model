@@ -231,12 +231,14 @@ fn convert(
             layer,
             insert,
             height,
+            tag,
             default,
             ..
         } => Entity::Attdef(AttdefEntity {
             common: common(handle, layer),
             start_point: p2(*insert),
             text_height: *height,
+            tag: tag.clone(),
             default_value: default.clone(),
             rotation: 0.0,
         }),
@@ -271,6 +273,7 @@ fn convert(
                     common: common(h, layer),
                     start_point: p2(a.insert),
                     text_height: a.height,
+                    tag: a.tag.clone(),
                     text: a.value.clone(),
                     rotation: 0.0,
                 })
