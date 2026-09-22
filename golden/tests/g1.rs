@@ -72,3 +72,29 @@ fn g1_writes_a_stable_file() {
         "an ASCII case declares no codepage"
     );
 }
+
+/// Every line a dimension block draws has a length: the vertical dimension
+/// used to get a zero-length dimension line and two coincident zero-length
+/// extension lines, because every dimension was drawn as a horizontal one.
+#[test]
+fn dimension_blocks_draw_no_zero_length_lines() {
+    let spec = g1_general_part();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let mut lines = 0;
+    for (name, block) in &model.tables.block_records {
+        if !name.starts_with("*D") {
+            continue;
+        }
+        for e in &block.entities {
+            if let Entity::Line(l) = e {
+                lines += 1;
+                assert_ne!(l.start_point, l.end_point, "{name}: a zero-length line");
+            }
+        }
+    }
+    assert_eq!(
+        lines, 10,
+        "three linear dimensions of three lines, one diameter of one"
+    );
+}

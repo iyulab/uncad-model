@@ -555,35 +555,59 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
             text,
             ..
         } => {
-            // A horizontal dimension: the dimension line runs at
-            // `line_point.y` between the two x's, extension lines drop from
-            // it to each measured point.
-            let y = line_point.y;
-            let entities = vec![
+            // The dimension line runs parallel to the measured span, offset
+            // to the line point; extension lines join each measured point
+            // to it. A span that is taller than it is wide is a vertical
+            // dimension: the line sits at `line_point.x` and the text is
+            // rotated 90 degrees. (Drawing every dimension as horizontal
+            // gave a vertical one a zero-length dimension line and two
+            // coincident zero-length extension lines.)
+            let vertical = (to.y - from.y).abs() > (to.x - from.x).abs();
+            let (line_start, line_end, ext_from, ext_to, text_insert, text_rotation) = if vertical {
+                let x = line_point.x;
+                (
+                    Xy::new(x, from.y),
+                    Xy::new(x, to.y),
+                    Xy::new(x, from.y),
+                    Xy::new(x, to.y),
+                    Xy::new(x - 1.0, (from.y + to.y) / 2.0),
+                    90.0,
+                )
+            } else {
+                let y = line_point.y;
+                (
+                    Xy::new(from.x, y),
+                    Xy::new(to.x, y),
+                    Xy::new(from.x, y),
+                    Xy::new(to.x, y),
+                    Xy::new((from.x + to.x) / 2.0, y + 1.0),
+                    0.0,
+                )
+            };
+            vec![
                 EntitySpec::Line {
                     layer: layer.clone(),
-                    start: Xy::new(from.x, y),
-                    end: Xy::new(to.x, y),
+                    start: line_start,
+                    end: line_end,
                 },
                 EntitySpec::Line {
                     layer: layer.clone(),
                     start: *from,
-                    end: Xy::new(from.x, y),
+                    end: ext_from,
                 },
                 EntitySpec::Line {
                     layer: layer.clone(),
                     start: *to,
-                    end: Xy::new(to.x, y),
+                    end: ext_to,
                 },
                 EntitySpec::Text {
                     layer,
-                    insert: Xy::new((from.x + to.x) / 2.0, y + 1.0),
+                    insert: text_insert,
                     height: 2.5,
                     text: text.clone(),
-                    rotation_deg: 0.0,
+                    rotation_deg: text_rotation,
                 },
-            ];
-            entities
+            ]
         }
         EntitySpec::DiameterDimension {
             first,
