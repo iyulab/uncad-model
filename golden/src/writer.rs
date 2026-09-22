@@ -1,13 +1,16 @@
-//! Spec -> DXF text (R2000, ASCII).
+//! Spec -> DXF text (R2000, ASCII DXF).
 //!
 //! Independent of every parser by construction: the output is built from the
 //! DXF reference's group codes alone, as (code, value) pairs. Handles are
 //! issued deterministically, in the order things are written, so the same
 //! spec always produces the same bytes -- and the same handles the oracle
 //! expects to see on the entities that come back.
+//!
+//! The output is bytes, not a `String`: an R2000 DXF stores text in the
+//! drawing's codepage ([`crate::spec::Codepage`]), so a case with non-ASCII
+//! text is not UTF-8 on disk.
 
-use crate::spec::{AttribSpec, BlockSpec, EntitySpec, Spec, Xy};
-use std::fmt::Write as _;
+use crate::spec::{AttribSpec, BlockSpec, Codepage, EntitySpec, Spec, Xy};
 
 /// First handle issued to an entity. Table entries and block records come
 /// before it, so that a reader listing entities by handle sees them in file
@@ -28,16 +31,27 @@ pub struct Handles {
     pub attribs: Vec<(u32, Vec<u32>)>,
 }
 
-/// A written drawing: the DXF text plus the handles it issued.
+/// A written drawing: the DXF bytes plus the handles it issued.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Written {
-    pub dxf: String,
+    /// The file's bytes: 7-bit ASCII for [`Codepage::Ascii`], otherwise the
+    /// spec's strings encoded in the declared codepage.
+    pub dxf: Vec<u8>,
     pub handles: Handles,
 }
 
 /// Writes `spec` as an R2000 ASCII DXF.
+///
+/// # Panics
+/// When a string cannot be encoded in the spec's codepage: a non-ASCII
+/// string under [`Codepage::Ascii`], or a character the codepage has no
+/// byte sequence for. A case that cannot be written faithfully is not an
+/// oracle for anything.
 pub fn write(spec: &Spec) -> Written {
-    let mut w = Writer::default();
+    let mut w = Writer {
+        codepage: spec.codepage,
+        ..Writer::default()
+    };
     w.write(spec);
     Written {
         dxf: w.out,
@@ -47,7 +61,8 @@ pub fn write(spec: &Spec) -> Written {
 
 #[derive(Default)]
 struct Writer {
-    out: String,
+    out: Vec<u8>,
+    codepage: Codepage,
     next_handle: u32,
     handles: Handles,
     /// Anonymous dimension blocks collected while writing entities; emitted
@@ -63,7 +78,32 @@ impl Writer {
     fn pair(&mut self, code: u16, value: impl std::fmt::Display) {
         // The DXF reference right-aligns the code in a three-character
         // field; the value follows on its own line.
-        writeln!(self.out, "{code:>3}\n{value}").expect("String never fails");
+        self.out
+            .extend_from_slice(format!("{code:>3}\n").as_bytes());
+        let encoded = self.encode(&value.to_string());
+        self.out.extend_from_slice(&encoded);
+        self.out.push(b'\n');
+    }
+
+    /// A string as the file stores it. Every value goes through here, so a
+    /// layer name is encoded the same way as a text value.
+    fn encode(&self, value: &str) -> Vec<u8> {
+        match self.codepage {
+            Codepage::Ascii => {
+                assert!(
+                    value.is_ascii(),
+                    "{value:?} is not ASCII; give the spec a codepage that can encode it"
+                );
+                value.as_bytes().to_vec()
+            }
+            Codepage::Ansi949 => {
+                // WHATWG's euc-kr is the CP949 superset (Unified Hangul
+                // Code), which is what `ANSI_949` names.
+                let (bytes, _, had_errors) = encoding_rs::EUC_KR.encode(value);
+                assert!(!had_errors, "{value:?} has a character CP949 cannot encode");
+                bytes.into_owned()
+            }
+        }
     }
 
     fn num(&mut self, code: u16, value: f64) {
@@ -100,6 +140,10 @@ impl Writer {
         self.pair(2, "HEADER");
         self.pair(9, "$ACADVER");
         self.pair(1, "AC1015");
+        if let Some(name) = self.codepage.dxf_name() {
+            self.pair(9, "$DWGCODEPAGE");
+            self.pair(3, name);
+        }
         // Rewritten at the end: DXF wants the seed above every handle used.
         let seed_at = self.out.len();
         self.pair(9, "$HANDSEED");
@@ -113,11 +157,11 @@ impl Writer {
         self.pair(0, "EOF");
 
         let seed = format!("{:X}", self.next_handle);
-        let placeholder = "  9\n$HANDSEED\n  5\nFFFF\n";
+        let placeholder = b"  9\n$HANDSEED\n  5\nFFFF\n";
         let fixed = format!("  9\n$HANDSEED\n  5\n{seed}\n");
         debug_assert!(self.out[seed_at..].starts_with(placeholder));
         self.out
-            .replace_range(seed_at..seed_at + placeholder.len(), &fixed);
+            .splice(seed_at..seed_at + placeholder.len(), fixed.bytes());
     }
 
     fn tables(&mut self, spec: &Spec) {

@@ -65,5 +65,10 @@ fn g1_writes_a_stable_file() {
     assert_eq!(written.handles.entities.len(), 10);
     assert_eq!(written.handles.blocks.len(), 5);
     assert_eq!(written.handles.attribs.len(), 1);
-    assert!(written.dxf.contains("  9\n$ACADVER\n  1\nAC1015\n"));
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert!(dxf.contains("  9\n$ACADVER\n  1\nAC1015\n"));
+    assert!(
+        !dxf.contains("$DWGCODEPAGE"),
+        "an ASCII case declares no codepage"
+    );
 }

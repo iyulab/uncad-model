@@ -17,5 +17,5 @@ pub mod expected;
 pub mod spec;
 pub mod writer;
 
-pub use spec::{AttribSpec, BlockSpec, EntitySpec, LayerSpec, Spec, Xy};
+pub use spec::{AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, Spec, Xy};
 pub use writer::{write, Handles, Written};

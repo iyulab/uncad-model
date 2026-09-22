@@ -11,7 +11,7 @@
 
 use proptest::prelude::*;
 use uncad_model::ToJsonOptions;
-use uncad_model_golden::spec::{AttribSpec, BlockSpec, EntitySpec, LayerSpec, Spec, Xy};
+use uncad_model_golden::spec::{AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, Spec, Xy};
 use uncad_model_golden::{expected, write};
 
 /// A coordinate that stays out of the ranges where `{:?}` formatting would
@@ -134,6 +134,7 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
 
 fn spec() -> impl Strategy<Value = Spec> {
     prop::collection::vec(entity(), 0..24).prop_map(|entities| Spec {
+        codepage: Codepage::Ascii,
         layers: vec![
             LayerSpec {
                 name: "OUTLINE".to_string(),
@@ -210,9 +211,10 @@ proptest! {
             prop_assert_eq!(e.common().id.value(), u64::from(h), "the ID is the handle's value");
         }
         // Each issued handle appears in the DXF text as a code-5 pair.
+        let dxf = String::from_utf8_lossy(&written.dxf);
         for h in &all {
             let needle = format!("  5\n{h:X}\n");
-            prop_assert!(written.dxf.contains(&needle), "handle {:X} not written", h);
+            prop_assert!(dxf.contains(&needle), "handle {:X} not written", h);
         }
     }
 
@@ -222,17 +224,18 @@ proptest! {
     #[test]
     fn the_dxf_is_well_formed(spec in spec()) {
         let written = write(&spec);
-        let lines: Vec<&str> = written.dxf.lines().collect();
+        let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+        let lines: Vec<&str> = dxf.lines().collect();
         prop_assert_eq!(lines.len() % 2, 0, "odd number of lines");
         for pair in lines.chunks(2) {
             prop_assert!(pair[0].trim().parse::<u16>().is_ok(), "bad group code {:?}", pair[0]);
         }
-        prop_assert_eq!(written.dxf.matches("  0\nSECTION\n").count(), 4);
-        prop_assert_eq!(written.dxf.matches("  0\nENDSEC\n").count(), 4);
-        prop_assert!(written.dxf.ends_with("  0\nEOF\n"));
+        prop_assert_eq!(dxf.matches("  0\nSECTION\n").count(), 4);
+        prop_assert_eq!(dxf.matches("  0\nENDSEC\n").count(), 4);
+        prop_assert!(dxf.ends_with("  0\nEOF\n"));
         for e in &spec.entities {
             let declared = format!("  2\n{}\n", e.layer());
-            prop_assert!(written.dxf.contains(&declared), "layer {} not declared", e.layer());
+            prop_assert!(dxf.contains(&declared), "layer {} not declared", e.layer());
         }
     }
 }

@@ -13,6 +13,8 @@ workspace = true
 
 [dependencies]
 uncad-model = { path = ".." }
+# The codepage encoder for cases with non-ASCII text (`Codepage::Ansi949`).
+encoding_rs = "0.8"
 
 [dev-dependencies]
 proptest = "1"
