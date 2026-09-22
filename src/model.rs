@@ -521,6 +521,11 @@ pub enum DimensionKind {
     Angular3Point,
     /// 6: an ordinate (a single coordinate from the origin).
     Ordinate,
+    /// The length along an arc. The format gives this one its own entity
+    /// (`ARC_DIMENSION`) rather than a value of group 70 -- that group says
+    /// 5 on such a dimension, which would read as a three-point angular one.
+    /// The entity's name is what decides it.
+    ArcLength,
 }
 
 /// The dimension's text, as the file states it (DXF 1).
