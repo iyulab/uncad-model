@@ -327,6 +327,10 @@ mod tests {
                 common: c.clone(),
                 vertices: vec![p3(0.0, 0.0, 0.0), p3(1.0, 1.0, 0.0)],
                 has_arrowhead: true,
+                path_type: Some(LeaderPath::Spline),
+                annotation: LeaderAnnotation::Tolerance,
+                annotation_id: Some(EntityId::new(0x4F1)),
+                style_name: Ref::Resolved("ISO-25".to_string()),
             }),
             Entity::MultiLeader(MultiLeaderEntity {
                 common: c.clone(),
@@ -347,8 +351,10 @@ mod tests {
             Entity::Tolerance(ToleranceEntity {
                 common: c.clone(),
                 insertion_point: p3(0.0, 0.0, 0.0),
-                text_height: 2.5,
+                text_height: Some(2.5),
                 text_value: "%%v0.1".to_string(),
+                direction: Some(p3(1.0, 0.0, 0.0)),
+                style_name: Ref::Resolved("ISO-25".to_string()),
             }),
             Entity::AcadTable(AcadTableEntity {
                 common: c.clone(),

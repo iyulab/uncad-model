@@ -314,8 +314,45 @@ pub struct InsertEntity {
 pub struct ToleranceEntity {
     pub common: EntityCommon,
     pub insertion_point: Point3D,
-    pub text_height: f64,
+    /// DXF 40. `None` when the file does not state it -- a frame of zero
+    /// height is not a height, so a reader that cannot tell an absent group
+    /// from a zeroed one reports nothing rather than a size no file gave.
+    pub text_height: Option<f64>,
     pub text_value: String,
+    /// DXF 11: the direction the frame is written along. `None` when the
+    /// reader cannot say -- a zero vector is not a direction, so a backend
+    /// that cannot tell an absent group from a zeroed one reports nothing.
+    pub direction: Option<Point3D>,
+    /// DXF 3: the DIMSTYLE this frame names, which settles how its
+    /// tolerances are formatted.
+    pub style_name: Ref<String>,
+}
+
+/// How a LEADER's line runs between its vertices (DXF 72).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LeaderPath {
+    /// 0: straight segments.
+    Straight,
+    /// 1: a spline through the vertices.
+    Spline,
+}
+
+/// What a LEADER points at (DXF 73). The format's own default is
+/// [`Self::Nothing`], so a file that omits the group is a leader with no
+/// annotation rather than an unknown one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LeaderAnnotation {
+    /// 0: an MTEXT.
+    MText,
+    /// 1: a TOLERANCE frame.
+    Tolerance,
+    /// 2: a block reference.
+    Insert,
+    /// 3: nothing.
+    #[default]
+    Nothing,
 }
 
 /// ACAD_TABLE, carried the way [`InsertEntity`] is minus `attribs`: a
@@ -703,6 +740,17 @@ pub struct LeaderEntity {
     pub common: EntityCommon,
     pub vertices: Vec<Point3D>,
     pub has_arrowhead: bool,
+    /// DXF 72. `None` when the file does not state it: which way the format
+    /// reads an absent group here is not something this model can source.
+    pub path_type: Option<LeaderPath>,
+    /// DXF 73, with the format's own default when the group is absent.
+    pub annotation: LeaderAnnotation,
+    /// DXF 340: the entity the leader points at, when the file names one.
+    /// This is a connection the *file* states, not one anybody computed --
+    /// which is why it belongs in the model rather than in a consumer.
+    pub annotation_id: Option<EntityId>,
+    /// DXF 3: the DIMSTYLE this leader names.
+    pub style_name: Ref<String>,
 }
 
 /// One entity of a parsed drawing.
