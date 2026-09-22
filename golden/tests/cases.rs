@@ -84,14 +84,16 @@ fn g9_has_two_title_blocks_with_two_drawing_numbers() {
 }
 
 #[test]
-fn g10_reports_the_undefined_block_reference_as_absent() {
+fn g10_keeps_the_name_of_the_block_the_file_never_defines() {
     let spec = cases::g10_unreferenced_insert();
     let written = write(&spec);
     let model = expected::model(&spec, &written);
     let Entity::Insert(i) = &model.entities[1] else {
         panic!("the second entity is the INSERT");
     };
-    assert_eq!(i.block_name, Ref::Absent);
+    // The file names the block, so the name is what the reference owes
+    // back; absent would claim the drawing pointed at nothing.
+    assert_eq!(i.block_name, Ref::Unresolved("MISSING".into()));
     assert!(!model.tables.block_records.contains_key("MISSING"));
     // The writer declares no record and no definition for it: the name
     // appears exactly once, on the INSERT.

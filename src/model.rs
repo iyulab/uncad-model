@@ -34,16 +34,22 @@ pub struct Point2D {
     pub y: f64,
 }
 
-/// A value this model reached through a handle in the source file -- a layer
-/// name, a block name, a style name.
+/// A value this model reached by following what the source file points with
+/// -- a layer name, a block name, a style name.
+///
+/// A file points either with a handle (DWG, and DXF once it has handles) or
+/// with the name itself (a DXF INSERT names its block). Both are references
+/// and both take the same three states.
 ///
 /// Three states rather than an `Option`, because two different things used
-/// to collapse into one empty string: a field the file carries no handle for
-/// at all (normal for some fields), and a handle that nothing in the drawing
-/// answers to (always a defect in the file or in the read). The unresolved
-/// case keeps the handle: it is the only thing that tells one missing table
-/// row (many entities point at the same dead handle) from references broken
-/// wholesale (every entity points somewhere different).
+/// to collapse into one empty string: a field the file points at nothing for
+/// at all (normal for some fields), and a reference that nothing in the
+/// drawing answers to (always a defect in the file or in the read). The
+/// unresolved case keeps what the file wrote -- the handle, or the name: it
+/// is the only thing that tells one missing table row (many entities point
+/// at the same dead reference) from references broken wholesale (every
+/// entity points somewhere different). A reader that drops the name the file
+/// wrote and reports `Absent` instead has erased what the drawing said.
 ///
 /// Serialized adjacently tagged, like [`HatchBoundaryPath`]:
 /// `{"type":"RESOLVED","data":"0"}`, `{"type":"ABSENT"}`,
@@ -51,14 +57,15 @@ pub struct Point2D {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "UPPERCASE")]
 pub enum Ref<T> {
-    /// The handle resolved. `T` is what it resolved to (a name, today).
+    /// The reference resolved. `T` is what it resolved to (a name, today).
     Resolved(T),
-    /// The file carries no handle for this field.
+    /// The file points at nothing for this field.
     Absent,
     /// The file carries a reference, but nothing in the drawing answers to
-    /// it. The value is the handle as a hex string, the same form as
-    /// [`EntityCommon::handle`] -- or, for a pre-R13 drawing, which points at
-    /// its tables by index rather than by handle, the index as `idx:<n>`.
+    /// it. The value is what the file wrote: the handle as a hex string, the
+    /// same form as [`EntityCommon::handle`]; for a pre-R13 drawing, which
+    /// points at its tables by index rather than by handle, the index as
+    /// `idx:<n>`; and where the file points by name, the name.
     Unresolved(String),
 }
 

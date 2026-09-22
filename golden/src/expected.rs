@@ -251,13 +251,15 @@ fn convert(
             attribs,
         } => Entity::Insert(InsertEntity {
             common: common(handle, layer),
-            // A reference to a block the file never defines: the file carries
-            // no handle for it, so the reader reports it as absent -- never as
-            // an empty name.
+            // A reference to a block the file never defines. The file names
+            // the block (DXF group code 2), so the name is what the reader
+            // owes back: unresolved, carrying that name -- never an empty
+            // name, and never absent, which would claim the drawing pointed
+            // at nothing.
             block_name: if spec.blocks.iter().any(|b| &b.name == block) {
                 Ref::Resolved(block.clone())
             } else {
-                Ref::Absent
+                Ref::Unresolved(block.clone())
             },
             insertion_point: p3(*insert),
             scale: Point3D {

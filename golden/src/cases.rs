@@ -261,8 +261,9 @@ pub fn g9_two_drawing_numbers() -> Spec {
 }
 
 /// G10, a block reference to a block the file never defines: the reference
-/// must come back as an absent or unresolved value, never as an empty name
-/// and never as a silently dropped entity.
+/// must come back unresolved and carrying the name the file wrote, never as
+/// an empty name, never as absent (the file did point at something), and
+/// never as a silently dropped entity.
 pub fn g10_unreferenced_insert() -> Spec {
     Spec {
         codepage: Codepage::Ascii,
