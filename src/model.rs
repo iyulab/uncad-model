@@ -421,6 +421,10 @@ pub struct MTextEntity {
     /// (DXF 11) has to derive the angle; one that does not leaves `0.0` and
     /// says so in its own documentation.
     pub rotation: f64,
+    /// DXF 44: the line spacing as a fraction of the default spacing.
+    /// Optional in the DXF reference, which writes optional groups only when
+    /// they differ from the default -- and a fraction *of* the default is 1
+    /// there, so an absent group is 1.
     pub line_spacing_factor: f64,
 }
 
@@ -649,11 +653,16 @@ pub struct DimensionEntity {
     pub text_midpoint: Point2D,
     /// The rest of the points, by DXF group.
     pub points: DimensionPoints,
-    /// DXF 50: the angle the dimension is measured along, radians. The
-    /// format's default is 0, so an absent group is 0 rather than unknown.
+    /// DXF 50: the angle the dimension is measured along, radians. An
+    /// absent group is 0. The DXF reference does not mark the group
+    /// optional, but writers leave it out of an unrotated dimension; what it
+    /// states is a rotation away from the horizontal, so saying nothing
+    /// states none.
     pub rotation: f64,
-    /// DXF 53: the text's own rotation, radians. Default 0, like
-    /// [`Self::rotation`].
+    /// DXF 53: the text's own rotation away from its default orientation,
+    /// radians. Optional in the DXF reference, which writes optional groups
+    /// only when they differ from the default -- and a rotation *away from*
+    /// the default orientation is 0 there, so an absent group is 0.
     pub text_rotation: f64,
     /// DXF 3: the DIMSTYLE this dimension names.
     pub style_name: Ref<String>,
