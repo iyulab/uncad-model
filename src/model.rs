@@ -364,8 +364,13 @@ pub struct AcadTableEntity {
     pub common: EntityCommon,
     pub block_name: Ref<String>,
     pub insertion_point: Point3D,
+    /// Placement as the binary format stores it, where a table shares an
+    /// INSERT's placement fields. The DXF reference writes no scale for a
+    /// table, and a horizontal direction vector (group 11) in place of a
+    /// rotation, so a reader of text drawings has these to derive or to
+    /// leave at identity -- and says which in its own documentation.
     pub scale: Point3D,
-    /// Radians.
+    /// Radians. See [`Self::scale`].
     pub rotation: f64,
 }
 
