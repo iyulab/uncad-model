@@ -124,6 +124,10 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
     CadDatabase {
         entities,
         tables: Tables {
+            // The writer declares no DIMSTYLE table, so a reader has no style
+            // to find -- which is itself worth pinning: a dimension naming a
+            // style the file never declares is an unresolved reference.
+            dim_styles: BTreeMap::new(),
             layers,
             block_records,
             mlinestyles: BTreeMap::new(),

@@ -527,6 +527,7 @@ mod tests {
         let db = CadDatabase {
             entities: one_of_each(),
             tables: Tables {
+                dim_styles: BTreeMap::new(),
                 layers,
                 block_records,
                 mlinestyles,

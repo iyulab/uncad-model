@@ -103,6 +103,7 @@ fn drawing() -> CadDatabase {
     CadDatabase {
         entities,
         tables: Tables {
+            dim_styles: BTreeMap::new(),
             layers,
             block_records,
             mlinestyles,

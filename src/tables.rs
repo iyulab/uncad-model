@@ -23,6 +23,51 @@ pub struct LayerRecord {
     pub color_index: i16,
 }
 
+/// One DIMSTYLE table entry (DXF `DIMSTYLE`): the settings a dimension
+/// names rather than carries.
+///
+/// Every field is `Option` because the format writes a style variable only
+/// when it differs from the value the application starts from. An absent
+/// variable is "this style does not state it", not a value -- what to use
+/// instead is the consumer's decision, the same way assembling the text a
+/// dimension displays is. Writing a plausible number here would make a
+/// style claim something its file never said.
+///
+/// The set is the one the displayed text depends on. Everything else the
+/// table carries is about how the dimension is drawn, which the drawn block
+/// already settles.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DimStyleRecord {
+    /// Style name (DXF 2).
+    pub name: String,
+    /// DXF 3 (`DIMPOST`): the pattern the measurement is placed into, with
+    /// `<>` standing for the measurement -- `"<>mm"`, `"[]"`. Carried
+    /// verbatim.
+    pub post: Option<String>,
+    /// DXF 40 (`DIMSCALE`): the overall scale applied to the dimension's
+    /// drawn sizes.
+    pub scale: Option<f64>,
+    /// DXF 144 (`DIMLFAC`): the factor the measurement is multiplied by
+    /// before it is displayed. A drawing measured in one unit and dimensioned
+    /// in another states it here.
+    pub length_factor: Option<f64>,
+    /// DXF 71 (`DIMTOL`): whether tolerances are appended to the text.
+    pub tolerances: Option<bool>,
+    /// DXF 72 (`DIMLIM`): whether the text is the two limits rather than the
+    /// measurement with tolerances.
+    pub limits: Option<bool>,
+    /// DXF 47 (`DIMTP`): the upper tolerance.
+    pub tolerance_upper: Option<f64>,
+    /// DXF 48 (`DIMTM`): the lower tolerance.
+    pub tolerance_lower: Option<f64>,
+    /// DXF 271 (`DIMDEC`): decimal places in the measurement.
+    pub decimal_places: Option<i32>,
+    /// DXF 272 (`DIMTDEC`): decimal places in the tolerances.
+    pub tolerance_decimal_places: Option<i32>,
+    /// DXF 140 (`DIMTXT`): the text height.
+    pub text_height: Option<f64>,
+}
+
 /// One block definition (DXF `BLOCK` ... `ENDBLK`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BlockRecord {
@@ -47,6 +92,10 @@ pub struct Tables {
     /// `*Model_Space`/`*Paper_Space*`, which also show up flattened into
     /// [`crate::CadDatabase::entities`] -- see that field's documentation).
     pub block_records: BTreeMap<String, BlockRecord>,
+    /// DIMSTYLE name -> record. A dimension names its style (DXF 3) rather
+    /// than carrying these values, so reading what a dimension displays
+    /// means reading this table too.
+    pub dim_styles: BTreeMap<String, DimStyleRecord>,
     /// MLINESTYLE name -> each parallel line's offset from the MLINE
     /// centerline (DXF 49), in the style's own element order. There is no
     /// separate line-identity field, so array order is the only
