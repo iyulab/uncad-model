@@ -24,8 +24,11 @@
 //!   `common.confidence` are upper-case strings (`"VECTOR"`, `"HIGH"`, ...);
 //!   `common.source_handle` is a reference field like the ones below, resolved
 //!   to the file's hex handle for an entity that came from a file.
-//! - Reference fields (`common.layer`, `common.source_handle`, an
-//!   INSERT/DIMENSION/TABLE's `block_name`, an MLINE's `mlinestyle_name`) are
+//! - Reference fields -- every [`Ref`](crate::Ref) in the model:
+//!   `common.layer`, `common.source_handle`, an INSERT/DIMENSION/TABLE's or
+//!   a layout's `block_name`, a dimension's, tolerance's, leader's or text's
+//!   `style_name`, an MLINE's `mlinestyle_name`, a layer's `linetype`, a
+//!   viewport's `frozen_layers` and a leader's `annotation_id` -- are
 //!   adjacently tagged three-state values:
 //!   `{"type":"RESOLVED","data":"0"}`, `{"type":"ABSENT"}` or
 //!   `{"type":"UNRESOLVED","data":"2A"}` -- never a bare string, so a name that

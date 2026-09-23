@@ -73,10 +73,10 @@ pub enum Ref<T> {
     /// The file points at nothing for this field.
     Absent,
     /// The file carries a reference, but nothing in the drawing answers to
-    /// it. The value is what the file wrote: the handle as a hex string, the
-    /// same form as [`EntityCommon::handle`]; for a pre-R13 drawing, which
-    /// points at its tables by index rather than by handle, the index as
-    /// `idx:<n>`; and where the file points by name, the name.
+    /// it. The value is what the file wrote: the handle as a hex string,
+    /// the same form as [`EntityCommon::source_handle`]; for a pre-R13
+    /// drawing, which points at its tables by index rather than by handle,
+    /// the index as `idx:<n>`; and where the file points by name, the name.
     Unresolved(String),
 }
 
