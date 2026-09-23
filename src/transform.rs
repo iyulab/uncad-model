@@ -9,6 +9,7 @@
 //! and nothing else; there is no guessing in it.
 
 use crate::model::{InsertEntity, Point2D};
+use crate::ocs::Ocs;
 use serde::{Deserialize, Serialize};
 
 /// Relative tolerance under which a placement's linear part counts as a
@@ -40,10 +41,12 @@ impl Affine2 {
         f: 0.0,
     };
 
-    /// The placement an INSERT applies to its block's entities: scale by
-    /// the per-axis factors, rotate, then translate to the insertion point
-    /// -- the DXF order. The `z` components (43, 30) are not part of a 2D
-    /// placement and are ignored.
+    /// The placement an INSERT applies to its block's entities, in the
+    /// INSERT's own plane: scale by the per-axis factors, rotate, then
+    /// translate to the insertion point -- the DXF order. The `z` components
+    /// (43, 30) are not part of a 2D placement and are ignored. With the
+    /// default extrusion this is the placement in the world; otherwise
+    /// [`InsertEntity::world_transform`] takes the plane into account.
     pub fn from_insert(insert: &InsertEntity) -> Affine2 {
         Affine2::placement(
             Point2D {
@@ -133,10 +136,20 @@ impl Affine2 {
 }
 
 impl InsertEntity {
-    /// The placement this reference applies to its block's entities. See
-    /// [`Affine2::from_insert`].
+    /// The placement this reference applies to its block's entities, in its
+    /// own plane. See [`Affine2::from_insert`].
     pub fn transform(&self) -> Affine2 {
         Affine2::from_insert(self)
+    }
+
+    /// Where this reference puts its block's entities in the world's XY:
+    /// the placement in its own plane, then that plane taken to the world
+    /// ([`Ocs::flat_map`]) -- a mirror copy's reverses the world x. `None`
+    /// when the plane is tilted out of the world's, or the extrusion names
+    /// no plane: no 2D map places the block exactly then.
+    pub fn world_transform(&self) -> Option<Affine2> {
+        let plane = Ocs::of(self.extrusion)?.flat_map()?;
+        Some(self.transform().then(&plane))
     }
 }
 
@@ -215,5 +228,72 @@ mod tests {
         assert!(mirrored.determinant() < 0.0);
         let flat = Affine2::placement(p(0.0, 0.0), 0.0, 1.0, 0.0);
         assert_eq!(flat.similarity_scale(), None);
+    }
+
+    fn insert_at(point: Point2D, rotation: f64, extrusion: crate::model::Point3D) -> InsertEntity {
+        use crate::model::{Confidence, EntityCommon, EntityId, Origin, Point3D, Ref};
+        InsertEntity {
+            common: EntityCommon {
+                id: EntityId::new(1),
+                origin: Origin::Vector,
+                confidence: Confidence::High,
+                source_handle: Ref::Absent,
+                layer: Ref::Absent,
+                color_index: 256,
+                true_color: None,
+                invisible: false,
+            },
+            block_name: Ref::Resolved("B".to_string()),
+            insertion_point: Point3D {
+                x: point.x,
+                y: point.y,
+                z: 0.0,
+            },
+            scale: Point3D {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            rotation,
+            attribs: Vec::new(),
+            extrusion,
+        }
+    }
+
+    fn z(z: f64) -> crate::model::Point3D {
+        crate::model::Point3D { x: 0.0, y: 0.0, z }
+    }
+
+    #[test]
+    fn a_mirror_copys_placement_reverses_the_world_x() {
+        // Written at (-200, 50) in a system whose x is the world's -x, turned
+        // 30 degrees there: the block's (10, 0) is 10 along that turn from
+        // the insertion point, and the world sees both reversed in x.
+        let insert = insert_at(p(-200.0, 50.0), 30f64.to_radians(), z(-1.0));
+        let t = insert.world_transform().expect("a flat plane");
+        let q = t.apply(p(10.0, 0.0));
+        let (sin, cos) = 30f64.to_radians().sin_cos();
+        assert!((q.x - (200.0 - 10.0 * cos)).abs() < 1e-9, "{q:?}");
+        assert!((q.y - (50.0 + 10.0 * sin)).abs() < 1e-9, "{q:?}");
+        assert!(t.determinant() < 0.0);
+        // In its own plane it is the plain placement.
+        assert_eq!(insert.transform().apply(p(0.0, 0.0)), p(-200.0, 50.0));
+    }
+
+    #[test]
+    fn the_world_plane_places_as_before_and_a_tilted_one_not_at_all() {
+        let insert = insert_at(p(3.0, 4.0), 0.5, z(1.0));
+        assert_eq!(insert.world_transform(), Some(insert.transform()));
+        let tilted = insert_at(
+            p(3.0, 4.0),
+            0.5,
+            crate::model::Point3D {
+                x: 0.0,
+                y: -0.6,
+                z: 0.8,
+            },
+        );
+        assert_eq!(tilted.world_transform(), None);
+        assert_eq!(insert_at(p(0.0, 0.0), 0.0, z(0.0)).world_transform(), None);
     }
 }

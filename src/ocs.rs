@@ -15,6 +15,7 @@
 //! in it.
 
 use crate::model::Point3D;
+use crate::transform::Affine2;
 
 /// The format's threshold for the arbitrary axis algorithm: an extrusion
 /// whose x and y are both below it is "near the world Z axis".
@@ -102,6 +103,22 @@ impl Ocs {
     /// either way (a mirror copy's plane is flat but not the world's).
     pub fn is_flat(self) -> bool {
         self.z.x.abs().max(self.z.y.abs()) <= FLAT_TOLERANCE * self.z.z.abs()
+    }
+
+    /// Where this plane's points land in the world's XY, when the plane is
+    /// parallel to it: the identity for the world's own plane, the world x
+    /// reversed for a mirror copy's. Exact -- a flat plane's z adds nothing
+    /// to a point's world x and y. `None` for a tilted plane: any 2D picture
+    /// of it is a view, and which view is not the format's to say.
+    pub fn flat_map(self) -> Option<Affine2> {
+        self.is_flat().then_some(Affine2 {
+            a: self.x.x,
+            b: self.x.y,
+            c: self.y.x,
+            d: self.y.y,
+            e: 0.0,
+            f: 0.0,
+        })
     }
 
     /// A point of this system in world coordinates.

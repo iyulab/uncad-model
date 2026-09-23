@@ -148,10 +148,11 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                     prop_oneof![Just(1.0), 0.25f64..4.0],
                 ),
                 0..4
-            )
+            ),
+            any::<bool>(),
         )
-            .prop_map(
-                |(layer, insert, scale, rotation_deg, attribs)| EntitySpec::Insert {
+            .prop_map(|(layer, insert, scale, rotation_deg, attribs, mirrored)| {
+                EntitySpec::Insert {
                     layer,
                     block: "PART".to_string(),
                     insert,
@@ -177,8 +178,9 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                             },
                         )
                         .collect(),
+                    mirrored,
                 }
-            ),
+            }),
     ]
 }
 

@@ -110,10 +110,13 @@ fn g7_is_a_title_block_of_loose_texts_and_no_block() {
     let spec = cases::g7_loose_text_title_block();
     let written = write(&spec);
     let model = expected::model(&spec, &written);
-    assert!(
-        model.tables.block_records.len() == 2,
-        "only the two space records"
-    );
+    // The two space records and the mirrored mark -- the title block itself
+    // is no block, and the mark holds no text.
+    assert_eq!(model.tables.block_records.len(), 3);
+    assert!(model.tables.block_records["MARK"]
+        .entities
+        .iter()
+        .all(|e| matches!(e, Entity::Line(_))));
     let texts: Vec<&str> = model
         .entities
         .iter()
@@ -147,6 +150,24 @@ fn g7_is_a_title_block_of_loose_texts_and_no_block() {
         Some(Point2D { x: 140.0, y: -67.0 })
     );
     assert_eq!(caption.width_factor, 0.8);
+}
+
+#[test]
+fn g7_places_its_mirrored_block_where_the_world_sees_it() {
+    let spec = cases::g7_loose_text_title_block();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let Some(Entity::Insert(mark)) = model.entities.last() else {
+        panic!("the last entity is the mirrored INSERT");
+    };
+    assert_eq!(mark.extrusion.z, -1.0);
+    let t = mark.world_transform().expect("a flat plane");
+    let (sin, cos) = 30f64.to_radians().sin_cos();
+    let start = t.apply(Point2D { x: 0.0, y: 0.0 });
+    let end = t.apply(Point2D { x: 8.0, y: 0.0 });
+    assert!((start.x - 175.0).abs() < 1e-9 && (start.y + 66.0).abs() < 1e-9);
+    assert!((end.x - (175.0 - 8.0 * cos)).abs() < 1e-9);
+    assert!((end.y - (-66.0 + 8.0 * sin)).abs() < 1e-9);
 }
 
 #[test]

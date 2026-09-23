@@ -62,7 +62,7 @@ Types and serialization. No parsing, no rendering, no native code, no network. A
 
 The arithmetic that lives here is the coordinate arithmetic the format itself defines on an entity's own fields, and nothing else:
 
-- the placement a block reference applies to its block -- the map from a block definition's coordinates to the drawing's, composed across nested references (`Affine2`, from the INSERT's 10/20, 41/42, 50);
+- the placement a block reference applies to its block -- the map from a block definition's coordinates to the drawing's, composed across nested references (`Affine2`, from the INSERT's 10/20, 41/42, 50, and -- when its plane is parallel to the world's, a mirror copy's included -- its 210 through `Ocs`; a plane tilted out of the world's has no exact 2D placement, and none is given);
 - the coordinate system an entity is written in -- its axes from its extrusion by the arbitrary axis algorithm (`Ocs`, from 210/220/230);
 - the arc a polyline vertex's bulge describes -- its center, radius and sweep from the two vertices and the bulge (`BulgeArc`, from 42).
 

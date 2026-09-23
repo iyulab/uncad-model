@@ -243,6 +243,7 @@ mod tests {
                 scale: p3(1.0, 1.0, 1.0),
                 rotation: 0.25,
                 attribs: vec![attrib.clone()],
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Attrib(attrib),
             Entity::Attdef(AttdefEntity {

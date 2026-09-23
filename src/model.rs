@@ -450,16 +450,24 @@ pub struct InsertEntity {
     /// [`crate::tables::Tables::block_records`] for the block's own
     /// entities.
     pub block_name: Ref<String>,
+    /// A point of the INSERT's own coordinate system, whose Z axis is
+    /// `extrusion`; with the default extrusion that system is the world's.
     pub insertion_point: Point3D,
     /// Per-axis scale factors (DXF 41/42/43); (1,1,1) if never set.
     pub scale: Point3D,
-    /// Radians.
+    /// Radians, measured counter-clockwise about `extrusion` in the
+    /// INSERT's own coordinate system.
     pub rotation: f64,
     /// Attribute values attached to this INSERT (the ATTRIB records between
     /// the INSERT and its SEQEND). A parser also lists them as top-level
     /// [`Entity::Attrib`] entries in `CadDatabase::entities`; a consumer that
     /// draws `entities` gets them from there.
     pub attribs: Vec<AttribEntity>,
+    /// The normal of the plane the block is placed in (DXF 210). An absent
+    /// group is the default (0, 0, 1). A mirror copy writes (0, 0, -1): the
+    /// block's world x is reversed.
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 /// TOLERANCE, a GD&T feature control frame. `text_value` keeps the raw

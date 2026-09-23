@@ -175,6 +175,10 @@ pub enum EntitySpec {
         rotation_deg: f64,
         /// Attribute values; each becomes an ATTRIB after the INSERT.
         attribs: Vec<AttribSpec>,
+        /// In the INSERT's own coordinate system: for a mirrored INSERT
+        /// (extrusion (0, 0, -1)) `insert` is written with its x negated, and
+        /// the block's world x runs the other way.
+        mirrored: bool,
     },
     /// A linear (rotated) dimension between two definition points, with its
     /// drawn geometry in an anonymous `*D<n>` block the writer produces.
@@ -318,13 +322,15 @@ impl EntitySpec {
                 scale,
                 rotation_deg,
                 attribs,
+                mirrored,
             } => EntitySpec::Insert {
                 layer: layer.clone(),
                 block: block.clone(),
-                insert: m(insert),
+                insert: moved_ocs(insert, *mirrored, dx, dy),
                 scale: *scale,
                 rotation_deg: *rotation_deg,
                 attribs: attribs.clone(),
+                mirrored: *mirrored,
             },
             other => other.clone(),
         }

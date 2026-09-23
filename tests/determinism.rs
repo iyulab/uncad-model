@@ -95,6 +95,11 @@ fn drawing() -> CadDatabase {
         },
         rotation: 0.0,
         attribs: Vec::new(),
+        extrusion: Point3D {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        },
     }));
 
     let mut mlinestyles = BTreeMap::new();

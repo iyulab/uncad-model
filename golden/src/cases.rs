@@ -111,6 +111,7 @@ pub fn g1_general_part() -> Spec {
                 width_factor: 1.0,
             },
         ],
+        mirrored: false,
     });
 
     Spec {
@@ -207,6 +208,7 @@ pub fn g2_nested_blocks() -> Spec {
                     scale: 1.0,
                     rotation_deg: 90.0,
                     attribs: Vec::new(),
+                    mirrored: false,
                 }],
             },
             BlockSpec {
@@ -218,6 +220,7 @@ pub fn g2_nested_blocks() -> Spec {
                     scale: 2.0,
                     rotation_deg: 0.0,
                     attribs: Vec::new(),
+                    mirrored: false,
                 }],
             },
         ],
@@ -228,6 +231,7 @@ pub fn g2_nested_blocks() -> Spec {
             scale: 1.0,
             rotation_deg: 0.0,
             attribs: Vec::new(),
+            mirrored: false,
         }],
     }
 }
@@ -279,6 +283,7 @@ pub fn g9_two_drawing_numbers() -> Spec {
             }),
             width_factor: 0.9,
         }],
+        mirrored: false,
     };
     Spec {
         dim_styles: Vec::new(),
@@ -412,6 +417,7 @@ pub fn g10_unreferenced_insert() -> Spec {
                 scale: 1.0,
                 rotation_deg: 0.0,
                 attribs: Vec::new(),
+                mirrored: false,
             },
         ],
     }
@@ -419,7 +425,9 @@ pub fn g10_unreferenced_insert() -> Spec {
 
 /// G7, a title block drawn as loose TEXT entities rather than as a block
 /// with attributes: a frame, then label/value pairs as separate texts.
-/// Nothing but position ties a value to its label.
+/// Nothing but position ties a value to its label. It also carries mirror
+/// copies -- a circle, an arc, a polyline and a block reference written in
+/// their own coordinate systems, extrusion (0, 0, -1).
 pub fn g7_loose_text_title_block() -> Spec {
     let title = "TITLE".to_string();
     let text = |x: f64, y: f64, s: &str| EntitySpec::Text {
@@ -502,6 +510,19 @@ pub fn g7_loose_text_title_block() -> Spec {
             }),
             width_factor: 0.8,
         },
+        // A mirror copy of a block: the INSERT is written at (-175, -66) in
+        // a system whose x is the world's -x, turned 30 degrees there. The
+        // block's line (0, 0)-(8, 0) is drawn from (175, -66) up and to the
+        // left, to (175 - 8 cos 30, -66 + 8 sin 30).
+        EntitySpec::Insert {
+            layer: title.clone(),
+            block: "MARK".to_string(),
+            insert: Xy::new(-175.0, -66.0),
+            scale: 1.0,
+            rotation_deg: 30.0,
+            attribs: Vec::new(),
+            mirrored: true,
+        },
     ];
     Spec {
         dim_styles: Vec::new(),
@@ -510,7 +531,14 @@ pub fn g7_loose_text_title_block() -> Spec {
             name: title,
             color_index: 2,
         }],
-        blocks: Vec::new(),
+        blocks: vec![BlockSpec {
+            name: "MARK".to_string(),
+            entities: vec![EntitySpec::Line {
+                layer: "0".to_string(),
+                start: Xy::new(0.0, 0.0),
+                end: Xy::new(8.0, 0.0),
+            }],
+        }],
         entities,
     }
 }
@@ -617,6 +645,7 @@ pub fn g8_korean_title_block() -> Spec {
                         width_factor: 1.0,
                     },
                 ],
+                mirrored: false,
             },
             EntitySpec::Text {
                 layer: title_layer,

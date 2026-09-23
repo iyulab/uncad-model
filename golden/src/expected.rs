@@ -321,6 +321,7 @@ fn convert(
             scale,
             rotation_deg,
             attribs,
+            mirrored,
         } => Entity::Insert(InsertEntity {
             common: common(handle, layer),
             // A reference to a block the file never defines. The file names
@@ -356,6 +357,7 @@ fn convert(
                     width_factor: a.width_factor,
                 })
                 .collect(),
+            extrusion: extrusion(*mirrored),
         }),
         // The writer states group 2 (the anonymous block), 70, 10, 11, 1 and
         // the subtype's own points -- and deliberately not 42 or 3, so the

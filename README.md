@@ -20,7 +20,7 @@ depend on it alone.
   a confidence, with a three-state `Ref` for every reference and plain `Point2D` / `Point3D`.
 - **Tables** — `Tables`: layers, block definitions, dimension styles, mline styles.
 - **Placement** — `Affine2`, the transform a block reference applies to its block, composed across
-  nested references.
+  nested references; `InsertEntity::world_transform` places a mirror copy's block too.
 - **Palette and diagnostics** — the ACI colour table and the reader diagnostics a drawing carries.
 - **Serialization** — `CadDatabase::to_json`, a direct serde form that round-trips.
 

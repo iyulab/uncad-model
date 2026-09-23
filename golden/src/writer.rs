@@ -498,6 +498,7 @@ impl Writer {
                 scale,
                 rotation_deg,
                 attribs,
+                mirrored,
             } => {
                 self.pair(0, "INSERT");
                 self.common(&hex, layer, owner);
@@ -511,6 +512,7 @@ impl Writer {
                 self.num(42, *scale);
                 self.num(43, *scale);
                 self.num(50, *rotation_deg);
+                self.extrusion(*mirrored);
                 if !attribs.is_empty() {
                     // The attributes and the SEQEND are owned by the INSERT.
                     let mut attrib_handles = Vec::new();
