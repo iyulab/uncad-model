@@ -255,19 +255,50 @@ pub struct TextEntity {
 }
 
 /// LWPOLYLINE, and POLYLINE_2D ([`Entity::Polyline2D`]), which has the same
-/// shape: a POLYLINE_2D's vertices are its VERTEX records, and its
-/// elevation is the z of its own group 10 (DXF 30), where an LWPOLYLINE
-/// has a group of its own for it (DXF 38).
+/// shape: a POLYLINE_2D's vertices, bulges and widths are its VERTEX
+/// records' (DXF 10/20, 42, 40/41), and its elevation is the z of its own
+/// group 10 (DXF 30), where an LWPOLYLINE has a group of its own for it
+/// (DXF 38).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
     /// The vertices' positions (DXF 10/20), in the OCS [`Self::extrusion`]
-    /// defines, at [`Self::elevation`]. A vertex's bulge (DXF 42 -- the
-    /// segment to the next vertex is an arc) is not carried, so an arc
-    /// segment is represented by its chord.
+    /// defines, at [`Self::elevation`]. What runs between two of them --
+    /// a straight segment or an arc, and how wide -- is
+    /// [`Self::bulges`] and [`Self::widths`].
     pub vertices: Vec<Point2D>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
+    /// DXF 42, one per vertex in vertex order: the bulge of the segment
+    /// that leaves the vertex -- the tangent of a quarter of the arc's
+    /// included angle, negative when the arc turns clockwise in the OCS, 0
+    /// for a straight segment (1 is a half circle). The last vertex's
+    /// bulge is the closing segment's when the polyline is closed and
+    /// belongs to no segment when it is open.
+    ///
+    /// Empty when every segment is straight: a file that states only
+    /// zeros and one that states nothing are the same polyline, and a
+    /// reader gives the empty list for both, so that the two compare
+    /// equal. A document written before this field existed reads as empty.
+    #[serde(default)]
+    pub bulges: Vec<f64>,
+    /// DXF 40 and 41, one per vertex in vertex order: the width of the
+    /// segment that leaves the vertex, at its start and at its end.
+    ///
+    /// Empty when every segment is [`Self::const_width`] wide at both ends,
+    /// whether the file states no per-vertex widths or states that width
+    /// for every vertex: the two are the same polyline, and a reader gives
+    /// the empty list for both. A document written before this field
+    /// existed reads as empty.
+    #[serde(default)]
+    pub widths: Vec<SegmentWidth>,
+    /// DXF 43: the width of every segment when [`Self::widths`] is empty;
+    /// 0 is a line with no width. Optional in the reference, with 0 as its
+    /// default, so an absent group -- and a document written before this
+    /// field existed -- reads as 0. A POLYLINE_2D has no such group, its
+    /// widths are its vertices' own, and it carries 0 here.
+    #[serde(default)]
+    pub const_width: f64,
     /// DXF 38: the z of every vertex in the OCS. Optional in the
     /// reference, with 0 as its default, so an absent group -- and a
     /// document written before this field existed -- reads as 0.
@@ -277,6 +308,17 @@ pub struct LwPolylineEntity {
     /// [`CircleEntity::extrusion`].
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
+}
+
+/// The width of one polyline segment where it starts and where it ends
+/// (DXF 40 and 41 of the vertex it leaves), in drawing units. The two
+/// differ for a tapered segment, such as an arrowhead drawn as a polyline.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SegmentWidth {
+    /// DXF 40.
+    pub start: f64,
+    /// DXF 41.
+    pub end: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

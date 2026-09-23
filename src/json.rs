@@ -154,6 +154,22 @@ mod tests {
             common: c.clone(),
             vertices: vec![p2(0.0, 0.0), p2(1.0, 0.0), p2(1.0, 1.0)],
             closed: true,
+            bulges: vec![0.0, 1.0, -0.4142135623730951],
+            widths: vec![
+                SegmentWidth {
+                    start: 0.0,
+                    end: 2.0,
+                },
+                SegmentWidth {
+                    start: 2.0,
+                    end: 2.0,
+                },
+                SegmentWidth {
+                    start: 0.5,
+                    end: 0.0,
+                },
+            ],
+            const_width: 0.25,
             elevation: 5.0,
             extrusion: p3(0.0, 0.0, -1.0),
         };

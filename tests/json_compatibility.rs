@@ -75,3 +75,21 @@ fn an_ocs_entity_without_a_stated_normal_is_in_world_axes_at_elevation_zero() {
     }
     assert_eq!(seen, 10, "every OCS kind the document holds");
 }
+
+#[test]
+fn a_polyline_without_bulges_or_widths_is_straight_and_constant() {
+    let db = load();
+    let polylines: Vec<_> = db
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::LwPolyline(p) | Entity::Polyline2D(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(polylines.len(), 2);
+    for p in polylines {
+        assert!(p.bulges.is_empty() && p.widths.is_empty());
+        assert_eq!(p.const_width, 0.0);
+    }
+}
