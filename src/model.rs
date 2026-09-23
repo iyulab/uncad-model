@@ -680,8 +680,16 @@ pub enum HatchEdge {
     Arc {
         center: Point2D,
         radius: f64,
+        /// Radians, as the file states it. For a counter-clockwise edge it is
+        /// measured counter-clockwise from +x; for a clockwise edge
+        /// (`is_ccw` false) the format measures it clockwise -- it writes the
+        /// complement of the counter-clockwise angle -- so the edge starts at
+        /// `-start_angle` counter-clockwise.
         start_angle: f64,
+        /// Radians, measured the same way as `start_angle`.
         end_angle: f64,
+        /// Whether the edge runs counter-clockwise from its start to its end
+        /// (DXF 73).
         is_ccw: bool,
     },
     Ellipse {
@@ -690,6 +698,8 @@ pub enum HatchEdge {
         end: Point2D,
         /// Minor/major axis length ratio.
         minor_major_ratio: f64,
+        /// Radians, the ellipse's parameter, measured as for an arc edge's
+        /// `start_angle` -- clockwise for a clockwise edge.
         start_angle: f64,
         end_angle: f64,
         is_ccw: bool,
