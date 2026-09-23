@@ -295,10 +295,12 @@ pub struct Tables {
     /// Per-line color and linetype are not carried.
     pub mlinestyles: BTreeMap<String, Vec<f64>>,
     /// Layout name -> record: every LAYOUT object, the model tab's
-    /// included. Empty for a file that has none -- one older than R2000, or
-    /// a DXF without an OBJECTS section -- whose paper space blocks are
-    /// still in [`Self::block_records`], and for a document written before
-    /// this field existed.
+    /// included. Empty for a file that has none -- a DXF without an OBJECTS
+    /// section, or a drawing older than R2000 that no application with
+    /// layouts saved (R13 and R14 have none of their own; a later AutoCAD
+    /// saving to R14 keeps them) -- whose paper space blocks are still in
+    /// [`Self::block_records`], and for a document written before this
+    /// field existed.
     #[serde(default)]
     pub layouts: BTreeMap<String, LayoutRecord>,
 }
