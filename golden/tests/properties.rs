@@ -10,8 +10,11 @@
 //! states the same expected model, byte for byte in JSON.
 
 use proptest::prelude::*;
+use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
 use uncad_model::ToJsonOptions;
-use uncad_model_golden::spec::{AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, Spec, Xy};
+use uncad_model_golden::spec::{
+    AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, LayerState, Spec, Xy,
+};
 use uncad_model_golden::{expected, write};
 
 /// A coordinate that stays out of the ranges where `{:?}` formatting would
@@ -69,13 +72,29 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
             ),
         (
             layer_name(),
-            prop::collection::vec(xy(), 2..12),
-            any::<bool>()
+            prop::collection::vec((xy(), bulge(), width(), width()), 2..12),
+            any::<bool>(),
+            any::<bool>(),
+            any::<bool>(),
+            prop_oneof![Just(0.0), width()],
         )
-            .prop_map(|(layer, vertices, closed)| EntitySpec::LwPolyline {
-                layer,
-                vertices,
-                closed
+            .prop_map(|(layer, points, closed, curved, wide, const_width)| {
+                EntitySpec::LwPolyline {
+                    layer,
+                    vertices: points.iter().map(|p| p.0).collect(),
+                    closed,
+                    bulges: if curved {
+                        points.iter().map(|p| p.1).collect()
+                    } else {
+                        Vec::new()
+                    },
+                    widths: if wide {
+                        points.iter().map(|p| (p.2, p.3)).collect()
+                    } else {
+                        Vec::new()
+                    },
+                    const_width,
+                }
             }),
         (layer_name(), xy(), 0.5f64..50.0, text(), 0.0f64..360.0).prop_map(
             |(layer, insert, height, text, rotation_deg)| EntitySpec::Text {
@@ -112,7 +131,7 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
             xy(),
             0.1f64..10.0,
             0.0f64..360.0,
-            prop::collection::vec((text(), xy(), 0.5f64..20.0), 0..4)
+            prop::collection::vec((text(), xy(), 0.5f64..20.0, any::<bool>()), 0..4)
         )
             .prop_map(
                 |(layer, insert, scale, rotation_deg, attribs)| EntitySpec::Insert {
@@ -124,16 +143,154 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                     attribs: attribs
                         .into_iter()
                         .enumerate()
-                        .map(|(i, (value, insert, height))| AttribSpec {
+                        .map(|(i, (value, insert, height, invisible))| AttribSpec {
                             tag: format!("TAG{i}"),
                             value,
                             insert,
                             height,
+                            invisible,
                         })
                         .collect(),
                 }
             ),
+        later_entity(),
     ]
+}
+
+/// A bulge, in hundredths: straight segments, arcs of either sense, and
+/// half circles (1) among them.
+fn bulge() -> impl Strategy<Value = f64> {
+    (-200i32..=200).prop_map(|b| f64::from(b) / 100.0)
+}
+
+/// A segment width, in tenths.
+fn width() -> impl Strategy<Value = f64> {
+    (0u8..=50).prop_map(|w| f64::from(w) / 10.0)
+}
+
+/// The kinds the golden writer learned after the first cases: justified
+/// text, solids, mirrored OCS entities, ordinate dimensions and polygon
+/// meshes.
+fn later_entity() -> impl Strategy<Value = EntitySpec> {
+    const HORIZONTAL: [HorizontalJustification; 6] = [
+        HorizontalJustification::Left,
+        HorizontalJustification::Center,
+        HorizontalJustification::Right,
+        HorizontalJustification::Aligned,
+        HorizontalJustification::Middle,
+        HorizontalJustification::Fit,
+    ];
+    const VERTICAL: [VerticalJustification; 4] = [
+        VerticalJustification::Baseline,
+        VerticalJustification::Bottom,
+        VerticalJustification::Middle,
+        VerticalJustification::Top,
+    ];
+    let justified = (
+        layer_name(),
+        xy(),
+        xy(),
+        (0usize..6, 0usize..4),
+        text(),
+        (0.5f64..50.0, 0.0f64..360.0, 0.5f64..2.0, -30.0f64..30.0),
+        prop_oneof![Just(None), Just(Some("STANDARD".to_string()))],
+    )
+        .prop_map(|(layer, insert, alignment, (h, v), text, numbers, style)| {
+            let (height, rotation_deg, width_factor, oblique_deg) = numbers;
+            EntitySpec::JustifiedText {
+                layer,
+                insert,
+                alignment,
+                horizontal: HORIZONTAL[h],
+                vertical: VERTICAL[v],
+                height,
+                text,
+                rotation_deg,
+                width_factor,
+                oblique_deg,
+                style,
+            }
+        });
+    let solid =
+        (layer_name(), xy(), xy(), xy(), xy()).prop_map(|(layer, a, b, c, d)| EntitySpec::Solid {
+            layer,
+            corners: [a, b, c, d],
+        });
+    let mirrored = (
+        -100i32..=100,
+        prop_oneof![
+            (layer_name(), xy(), 0.01f64..500.0).prop_map(|(layer, center, radius)| {
+                EntitySpec::Circle {
+                    layer,
+                    center,
+                    radius,
+                }
+            }),
+            (
+                layer_name(),
+                xy(),
+                0.01f64..500.0,
+                0.0f64..360.0,
+                0.0f64..360.0
+            )
+                .prop_map(|(layer, center, radius, start_deg, end_deg)| {
+                    EntitySpec::Arc {
+                        layer,
+                        center,
+                        radius,
+                        start_deg,
+                        end_deg,
+                    }
+                }),
+            (layer_name(), xy(), xy(), xy(), xy()).prop_map(|(layer, a, b, c, d)| {
+                EntitySpec::Solid {
+                    layer,
+                    corners: [a, b, c, d],
+                }
+            }),
+        ],
+    )
+        .prop_map(|(elevation, entity)| EntitySpec::Mirrored {
+            elevation: f64::from(elevation),
+            entity: Box::new(entity),
+        });
+    let ordinate = (layer_name(), xy(), xy(), xy(), any::<bool>(), text()).prop_map(
+        |(layer, datum, feature, leader_end, x, text)| EntitySpec::OrdinateDimension {
+            layer,
+            datum,
+            feature,
+            leader_end,
+            axis: if x { OrdinateAxis::X } else { OrdinateAxis::Y },
+            text,
+            measurement: None,
+            style: None,
+        },
+    );
+    let mesh = (2u16..5, 2u16..5)
+        .prop_flat_map(|(m, n)| {
+            (
+                layer_name(),
+                Just(m),
+                Just(n),
+                any::<bool>(),
+                any::<bool>(),
+                prop::collection::vec(
+                    (coord(), coord(), coord()).prop_map(|(x, y, z)| [x, y, z]),
+                    usize::from(m * n),
+                ),
+            )
+        })
+        .prop_map(
+            |(layer, m, n, closed_m, closed_n, vertices)| EntitySpec::PolygonMesh {
+                layer,
+                m,
+                n,
+                closed_m,
+                closed_n,
+                vertices,
+            },
+        );
+    prop_oneof![justified, solid, mirrored, ordinate, mesh]
 }
 
 fn spec() -> impl Strategy<Value = Spec> {
@@ -144,14 +301,17 @@ fn spec() -> impl Strategy<Value = Spec> {
             LayerSpec {
                 name: "OUTLINE".to_string(),
                 color_index: 7,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: "HOLES".to_string(),
                 color_index: 1,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: "DIMS".to_string(),
                 color_index: 3,
+                state: LayerState::default(),
             },
         ],
         blocks: vec![BlockSpec {
@@ -163,6 +323,9 @@ fn spec() -> impl Strategy<Value = Spec> {
             }],
         }],
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     })
 }
 

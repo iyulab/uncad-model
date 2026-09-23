@@ -1,7 +1,9 @@
 //! The named golden cases. Each is a function returning its spec, so a
 //! consumer can pick the ones its role is measured by.
 
-use crate::spec::{AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, Xy};
+use crate::spec::{
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, Spec, Xy,
+};
 
 /// G1, a general machined part: a closed outline, four holes, three linear
 /// dimensions and one diameter dimension, and a title block inserted with
@@ -31,6 +33,9 @@ pub fn g1_general_part() -> Spec {
             Xy::new(0.0, 100.0),
         ],
         closed: true,
+        bulges: Vec::new(),
+        widths: Vec::new(),
+        const_width: 0.0,
     }];
     for c in hole_centers {
         entities.push(EntitySpec::Circle {
@@ -86,18 +91,21 @@ pub fn g1_general_part() -> Spec {
                 value: "BP-1042".to_string(),
                 insert: Xy::new(125.0, -45.0),
                 height: 3.5,
+                invisible: false,
             },
             AttribSpec {
                 tag: "REV".to_string(),
                 value: "B".to_string(),
                 insert: Xy::new(125.0, -52.0),
                 height: 3.5,
+                invisible: false,
             },
             AttribSpec {
                 tag: "MATERIAL".to_string(),
                 value: "SS400".to_string(),
                 insert: Xy::new(125.0, -59.0),
                 height: 3.5,
+                invisible: false,
             },
         ],
     });
@@ -109,18 +117,22 @@ pub fn g1_general_part() -> Spec {
             LayerSpec {
                 name: outline,
                 color_index: 7,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: holes,
                 color_index: 1,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: dims,
                 color_index: 3,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: title.clone(),
                 color_index: 2,
+                state: LayerState::default(),
             },
         ],
         blocks: vec![BlockSpec {
@@ -135,6 +147,9 @@ pub fn g1_general_part() -> Spec {
                         Xy::new(0.0, 20.0),
                     ],
                     closed: true,
+                    bulges: Vec::new(),
+                    widths: Vec::new(),
+                    const_width: 0.0,
                 },
                 EntitySpec::Attdef {
                     layer: "0".to_string(),
@@ -163,6 +178,9 @@ pub fn g1_general_part() -> Spec {
             ],
         }],
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -217,6 +235,9 @@ pub fn g2_nested_blocks() -> Spec {
             rotation_deg: 0.0,
             attribs: Vec::new(),
         }],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -235,6 +256,9 @@ pub fn g6_overlapping_lines() -> Spec {
         layers: Vec::new(),
         blocks: Vec::new(),
         entities: vec![line("0"), line("0")],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -258,6 +282,7 @@ pub fn g9_two_drawing_numbers() -> Spec {
             value: number.to_string(),
             insert: Xy::new(x + 5.0, -45.0),
             height: 3.5,
+            invisible: false,
         }],
     };
     Spec {
@@ -266,9 +291,13 @@ pub fn g9_two_drawing_numbers() -> Spec {
         layers: vec![LayerSpec {
             name: "TITLE".to_string(),
             color_index: 2,
+            state: LayerState::default(),
         }],
         blocks: vec![title_block],
         entities: vec![insert(0.0, "BP-1042"), insert(120.0, "BP-2077")],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -286,6 +315,7 @@ pub fn g5_dense_dimensions() -> Spec {
         layers: vec![LayerSpec {
             name: dims.clone(),
             color_index: 3,
+            state: LayerState::default(),
         }],
         blocks: Vec::new(),
         dim_styles: vec![DimStyleSpec {
@@ -293,6 +323,7 @@ pub fn g5_dense_dimensions() -> Spec {
             post: Some("<>mm".to_string()),
             decimal_places: Some(2),
             text_height: Some(2.5),
+            ..DimStyleSpec::default()
         }],
         entities: vec![
             // "<>" and "" are the same thing said two ways, and a reader
@@ -366,6 +397,9 @@ pub fn g5_dense_dimensions() -> Spec {
                 style: Some("ISO-25".to_string()),
             },
         ],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -394,6 +428,9 @@ pub fn g10_unreferenced_insert() -> Spec {
                 attribs: Vec::new(),
             },
         ],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -419,6 +456,9 @@ pub fn g7_loose_text_title_block() -> Spec {
                 Xy::new(100.0, -40.0),
             ],
             closed: true,
+            bulges: Vec::new(),
+            widths: Vec::new(),
+            const_width: 0.0,
         },
         text(102.0, -45.0, "DWG NO"),
         text(130.0, -45.0, "BP-1042"),
@@ -433,9 +473,13 @@ pub fn g7_loose_text_title_block() -> Spec {
         layers: vec![LayerSpec {
             name: title,
             color_index: 2,
+            state: LayerState::default(),
         }],
         blocks: Vec::new(),
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -472,10 +516,12 @@ pub fn g8_korean_title_block() -> Spec {
             LayerSpec {
                 name: outline_layer.clone(),
                 color_index: 7,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: title_layer.clone(),
                 color_index: 2,
+                state: LayerState::default(),
             },
         ],
         blocks: vec![BlockSpec {
@@ -490,6 +536,9 @@ pub fn g8_korean_title_block() -> Spec {
                         Xy::new(0.0, 20.0),
                     ],
                     closed: true,
+                    bulges: Vec::new(),
+                    widths: Vec::new(),
+                    const_width: 0.0,
                 },
                 attdef(15.0, "DWGNO", ""),
                 attdef(8.0, "MATERIAL", "SS400"),
@@ -506,6 +555,9 @@ pub fn g8_korean_title_block() -> Spec {
                     Xy::new(0.0, 100.0),
                 ],
                 closed: true,
+                bulges: Vec::new(),
+                widths: Vec::new(),
+                const_width: 0.0,
             },
             EntitySpec::Insert {
                 layer: title_layer.clone(),
@@ -519,18 +571,21 @@ pub fn g8_korean_title_block() -> Spec {
                         value: "BP-1042".to_string(),
                         insert: Xy::new(125.0, -45.0),
                         height: 3.5,
+                        invisible: false,
                     },
                     AttribSpec {
                         tag: "MATERIAL".to_string(),
                         value: material.to_string(),
                         insert: Xy::new(125.0, -52.0),
                         height: 3.5,
+                        invisible: false,
                     },
                     AttribSpec {
                         tag: "DRAWN".to_string(),
                         value: drawn_by.to_string(),
                         insert: Xy::new(125.0, -59.0),
                         height: 3.5,
+                        invisible: false,
                     },
                 ],
             },
@@ -542,6 +597,9 @@ pub fn g8_korean_title_block() -> Spec {
                 rotation_deg: 0.0,
             },
         ],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -576,6 +634,9 @@ pub fn g3_many_parts(copies: usize) -> Spec {
         blocks: one.blocks,
         dim_styles: one.dim_styles,
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 

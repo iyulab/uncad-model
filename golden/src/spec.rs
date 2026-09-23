@@ -6,6 +6,11 @@
 //! say more than the model would be an oracle nothing can be checked
 //! against.
 
+use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
+use uncad_model::tables::{
+    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+};
+
 /// How the writer encodes every string it emits, and what the file declares
 /// in `$DWGCODEPAGE`. An R2000 DXF stores text as 8-bit bytes in the
 /// drawing's codepage, not as UTF-8, so a case with non-ASCII text has to
@@ -48,15 +53,80 @@ pub struct Spec {
     /// these resolves; a dimension naming anything else does not, and a file
     /// with no entries here declares no table at all.
     pub dim_styles: Vec<DimStyleSpec>,
+    /// STYLE (text style) table entries the file declares, by name. A text
+    /// naming one of these resolves; one naming anything else does not. A
+    /// text that names no style stands for the one called `STANDARD`, so
+    /// it resolves when this list has that name and is absent otherwise --
+    /// and with no entries here the file declares no table at all.
+    pub text_styles: Vec<String>,
     /// The drawing's own entities, in file order.
     pub entities: Vec<EntitySpec>,
+    /// The entities of paper space (`*Paper_Space`, the first sheet), in
+    /// file order. The writer puts them after `entities`, marked as paper
+    /// space (DXF 67).
+    pub paper_space: Vec<EntitySpec>,
+    /// The LAYOUT objects the file declares, each naming the block it shows.
+    /// With none the file has no OBJECTS section at all -- what a reader of
+    /// a drawing without layouts sees.
+    pub layouts: Vec<LayoutSpec>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerSpec {
     pub name: String,
-    /// AutoCAD Color Index, 1..=255.
+    /// AutoCAD Color Index, 1..=255. A layer that is off is written with
+    /// this negated -- how a DXF says "off".
     pub color_index: i16,
+    /// Everything else the file says about the layer.
+    pub state: LayerState,
+}
+
+/// A layer's state beyond its name and colour. The default is the state
+/// the writer has always written: on, thawed, unlocked, and neither a plot
+/// flag (DXF 290) nor a lineweight (370) stated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LayerState {
+    /// Written as a negative colour (DXF 62).
+    pub off: bool,
+    /// DXF 70, bit 1.
+    pub frozen: bool,
+    /// DXF 70, bit 4.
+    pub locked: bool,
+    /// DXF 290 when set.
+    pub plot: Option<bool>,
+    /// DXF 370 when set: hundredths of a millimetre, or -3 for the default.
+    pub lineweight: Option<i16>,
+}
+
+/// One LAYOUT object: a tab, the block it shows and its plot settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayoutSpec {
+    /// DXF 1 of the layout part: the tab's name.
+    pub name: String,
+    /// DXF 71.
+    pub tab_order: i32,
+    /// The block record the layout shows (DXF 330): `*Model_Space`,
+    /// `*Paper_Space`, or another `*Paper_Space<n>` the writer then
+    /// declares, empty.
+    pub block: String,
+    /// DXF 10 and 11.
+    pub limits_min: Xy,
+    pub limits_max: Xy,
+    /// DXF 4.
+    pub paper_name: String,
+    /// DXF 44 and 45, millimetres.
+    pub paper_size: (f64, f64),
+    /// DXF 40, 41, 42 and 43 in that order (left, bottom, right, top),
+    /// millimetres.
+    pub margins: [f64; 4],
+    /// DXF 46 and 47, millimetres.
+    pub plot_origin: Xy,
+    /// DXF 72.
+    pub paper_units: PlotPaperUnits,
+    /// DXF 73.
+    pub rotation: PlotRotation,
+    /// DXF 142 and 143: the custom print scale's two sides.
+    pub scale: (f64, f64),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,6 +182,12 @@ pub enum EntitySpec {
         layer: String,
         vertices: Vec<Xy>,
         closed: bool,
+        /// DXF 42 per vertex when not empty (one per vertex).
+        bulges: Vec<f64>,
+        /// DXF 40 and 41 per vertex when not empty (one pair per vertex).
+        widths: Vec<(f64, f64)>,
+        /// DXF 43 when not 0.
+        const_width: f64,
     },
     Text {
         layer: String,
@@ -120,6 +196,92 @@ pub enum EntitySpec {
         text: String,
         /// Degrees.
         rotation_deg: f64,
+    },
+    /// A TEXT with every placement group the plain [`EntitySpec::Text`]
+    /// leaves at the format's defaults.
+    JustifiedText {
+        layer: String,
+        /// DXF 10: the first alignment point.
+        insert: Xy,
+        /// DXF 11, written when either justification is not the default.
+        alignment: Xy,
+        /// DXF 72.
+        horizontal: HorizontalJustification,
+        /// DXF 73.
+        vertical: VerticalJustification,
+        height: f64,
+        text: String,
+        /// Degrees.
+        rotation_deg: f64,
+        /// DXF 41 when not 1.
+        width_factor: f64,
+        /// DXF 51 when not 0; degrees.
+        oblique_deg: f64,
+        /// DXF 7 when set.
+        style: Option<String>,
+    },
+    /// A SOLID: four corners in DXF order.
+    Solid {
+        layer: String,
+        corners: [Xy; 4],
+    },
+    /// The entity inside, written in the object coordinate system whose
+    /// normal (DXF 210) is (0, 0, -1) -- the mirror image across the y axis
+    /// that AutoCAD's MIRROR makes of an entity -- at `elevation`, its z in
+    /// that system. Its coordinates are written as they stand, so the same
+    /// numbers describe the mirror image of the unmirrored entity. Only
+    /// the kinds the format defines in an OCS can be mirrored this way.
+    Mirrored {
+        elevation: f64,
+        entity: Box<EntitySpec>,
+    },
+    /// A polygon mesh (POLYLINE with group 70 bit 16): `m` rows of `n`
+    /// vertices, row by row.
+    PolygonMesh {
+        layer: String,
+        m: u16,
+        n: u16,
+        closed_m: bool,
+        closed_n: bool,
+        vertices: Vec<[f64; 3]>,
+    },
+    /// An ordinate dimension: the distance of `feature` from `datum` along
+    /// one axis, with its leader running to `leader_end`.
+    OrdinateDimension {
+        layer: String,
+        /// DXF 10.
+        datum: Xy,
+        /// DXF 13.
+        feature: Xy,
+        /// DXF 14, and where the text sits (DXF 11).
+        leader_end: Xy,
+        /// DXF 70, bit 64.
+        axis: OrdinateAxis,
+        text: String,
+        measurement: Option<f64>,
+        style: Option<String>,
+    },
+    /// A paper-space viewport; only meaningful in [`Spec::paper_space`].
+    Viewport {
+        layer: String,
+        /// DXF 10, 40 and 41.
+        center: Xy,
+        width: f64,
+        height: f64,
+        /// DXF 68 (0 when off) and the off bit of DXF 90.
+        on: bool,
+        /// DXF 69.
+        id: i32,
+        /// DXF 12.
+        view_center: Xy,
+        /// DXF 45.
+        view_height: f64,
+        /// DXF 17; its z is 0.
+        view_target: Xy,
+        /// DXF 51, degrees.
+        twist_deg: f64,
+        /// DXF 341, by layer name; every name must be a declared layer.
+        frozen_layers: Vec<String>,
     },
     /// An attribute definition -- only meaningful inside a block definition.
     Attdef {
@@ -229,10 +391,16 @@ impl EntitySpec {
                 layer,
                 vertices,
                 closed,
+                bulges,
+                widths,
+                const_width,
             } => EntitySpec::LwPolyline {
                 layer: layer.clone(),
                 vertices: vertices.iter().map(m).collect(),
                 closed: *closed,
+                bulges: bulges.clone(),
+                widths: widths.clone(),
+                const_width: *const_width,
             },
             EntitySpec::Text {
                 layer,
@@ -277,6 +445,78 @@ impl EntitySpec {
                 rotation_deg: *rotation_deg,
                 attribs: attribs.clone(),
             },
+            EntitySpec::JustifiedText {
+                layer,
+                insert,
+                alignment,
+                horizontal,
+                vertical,
+                height,
+                text,
+                rotation_deg,
+                width_factor,
+                oblique_deg,
+                style,
+            } => EntitySpec::JustifiedText {
+                layer: layer.clone(),
+                insert: m(insert),
+                alignment: m(alignment),
+                horizontal: *horizontal,
+                vertical: *vertical,
+                height: *height,
+                text: text.clone(),
+                rotation_deg: *rotation_deg,
+                width_factor: *width_factor,
+                oblique_deg: *oblique_deg,
+                style: style.clone(),
+            },
+            EntitySpec::Solid { layer, corners } => EntitySpec::Solid {
+                layer: layer.clone(),
+                corners: corners.map(|c| c.moved(dx, dy)),
+            },
+            // Mirrored, the entity's own x runs the other way: moving it by
+            // dx in the drawing moves its stated x by -dx.
+            EntitySpec::Mirrored { elevation, entity } => EntitySpec::Mirrored {
+                elevation: *elevation,
+                entity: Box::new(entity.moved(-dx, dy)),
+            },
+            EntitySpec::PolygonMesh {
+                layer,
+                m: rows,
+                n,
+                closed_m,
+                closed_n,
+                vertices,
+            } => EntitySpec::PolygonMesh {
+                layer: layer.clone(),
+                m: *rows,
+                n: *n,
+                closed_m: *closed_m,
+                closed_n: *closed_n,
+                vertices: vertices
+                    .iter()
+                    .map(|[x, y, z]| [x + dx, y + dy, *z])
+                    .collect(),
+            },
+            EntitySpec::OrdinateDimension {
+                layer,
+                datum,
+                feature,
+                leader_end,
+                axis,
+                text,
+                measurement,
+                style,
+            } => EntitySpec::OrdinateDimension {
+                layer: layer.clone(),
+                datum: m(datum),
+                feature: m(feature),
+                leader_end: m(leader_end),
+                axis: *axis,
+                text: text.clone(),
+                measurement: *measurement,
+                style: style.clone(),
+            },
             other => other.clone(),
         }
     }
@@ -285,7 +525,7 @@ impl EntitySpec {
 /// One DIMSTYLE table entry the file declares. Only the variables a case
 /// needs are here; the rest stay unwritten, which is itself what a reader
 /// has to report as "this style does not state it".
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct DimStyleSpec {
     /// DXF 2.
     pub name: String,
@@ -295,6 +535,20 @@ pub struct DimStyleSpec {
     pub decimal_places: Option<i32>,
     /// DXF 140.
     pub text_height: Option<f64>,
+    /// DXF 41.
+    pub arrow_size: Option<f64>,
+    /// DXF 277.
+    pub linear_unit_format: Option<LinearUnitFormat>,
+    /// DXF 78.
+    pub zero_suppression: Option<i32>,
+    /// DXF 45.
+    pub rounding: Option<f64>,
+    /// DXF 275.
+    pub angular_unit_format: Option<AngularUnitFormat>,
+    /// DXF 179.
+    pub angular_decimal_places: Option<i32>,
+    /// DXF 276.
+    pub fraction_format: Option<FractionFormat>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -303,6 +557,8 @@ pub struct AttribSpec {
     pub value: String,
     pub insert: Xy,
     pub height: f64,
+    /// DXF 70, bit 1: the value is not shown.
+    pub invisible: bool,
 }
 
 impl EntitySpec {
@@ -313,11 +569,29 @@ impl EntitySpec {
             | EntitySpec::Arc { layer, .. }
             | EntitySpec::LwPolyline { layer, .. }
             | EntitySpec::Text { layer, .. }
+            | EntitySpec::JustifiedText { layer, .. }
+            | EntitySpec::Solid { layer, .. }
             | EntitySpec::Attdef { layer, .. }
             | EntitySpec::Insert { layer, .. }
+            | EntitySpec::PolygonMesh { layer, .. }
             | EntitySpec::LinearDimension { layer, .. }
             | EntitySpec::ArcDimension { layer, .. }
-            | EntitySpec::DiameterDimension { layer, .. } => layer,
+            | EntitySpec::DiameterDimension { layer, .. }
+            | EntitySpec::OrdinateDimension { layer, .. }
+            | EntitySpec::Viewport { layer, .. } => layer,
+            EntitySpec::Mirrored { entity, .. } => entity.layer(),
         }
+    }
+
+    /// Whether this is a dimension, which the writer gives an anonymous
+    /// `*D<n>` block of its drawn geometry.
+    pub fn is_dimension(&self) -> bool {
+        matches!(
+            self,
+            EntitySpec::LinearDimension { .. }
+                | EntitySpec::ArcDimension { .. }
+                | EntitySpec::DiameterDimension { .. }
+                | EntitySpec::OrdinateDimension { .. }
+        )
     }
 }

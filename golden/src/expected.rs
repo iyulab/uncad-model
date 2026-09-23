@@ -11,14 +11,15 @@
 //! from them, so the same entity gets the same ID whether the drawing is read
 //! as DWG or as DXF), the origin is `Vector`, the confidence `High`.
 
-use crate::spec::{EntitySpec, Spec, Xy};
-use crate::writer::{midpoint, Written};
+use crate::spec::{AttribSpec, EntitySpec, LayerSpec, LayoutSpec, Spec, Xy};
+use crate::writer::{midpoint, space_names, Written};
 use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
     DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
     HorizontalJustification, InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D,
-    Ref, TextEntity, TextOverride, VerticalJustification,
+    Ref, SegmentWidth, Solid3DEntity, SolidEntity, TextEntity, TextOverride, VerticalJustification,
+    ViewportEntity, ViewportView,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -34,6 +35,24 @@ fn style_ref(style: &Option<String>, spec: &Spec) -> Ref<String> {
     }
 }
 
+/// The reference a text's style name (DXF 7) becomes. A text that names a
+/// style resolves when the file declares it and is unresolved, carrying the
+/// name, when it does not. A text that names none stands for `STANDARD`,
+/// the reference's default: it resolves to that entry when the file
+/// declares one (table names are not case-sensitive) and is absent when it
+/// does not -- then the drawing has no style it could mean.
+fn text_style_ref(style: &Option<String>, spec: &Spec) -> Ref<String> {
+    match style {
+        Some(name) if spec.text_styles.contains(name) => Ref::Resolved(name.clone()),
+        Some(name) => Ref::Unresolved(name.clone()),
+        None => spec
+            .text_styles
+            .iter()
+            .find(|s| s.eq_ignore_ascii_case("STANDARD"))
+            .map_or(Ref::Absent, |s| Ref::Resolved(s.clone())),
+    }
+}
+
 /// The spec's dimension text, read the way the format reads group 1.
 fn text_override(text: &str) -> TextOverride {
     match text {
@@ -42,83 +61,75 @@ fn text_override(text: &str) -> TextOverride {
         other => TextOverride::Literal(other.to_string()),
     }
 }
-use uncad_model::tables::{BlockRecord, DimStyleRecord, LayerRecord, Tables};
+use uncad_model::tables::{
+    BlockRecord, DimStyleRecord, LayerRecord, LayoutRecord, PlotSettings, Tables,
+};
 use uncad_model::{CadDatabase, ReadDiagnostics};
 
 /// The model `written` should read back as. `written` must come from
 /// [`crate::writer::write`] on the same `spec`.
 pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
     let mut layers = BTreeMap::new();
-    layers.insert(
-        "0".to_string(),
-        LayerRecord {
-            name: "0".to_string(),
-            color_index: 7,
-            ..layer_state()
-        },
-    );
-    for l in &spec.layers {
-        layers.insert(
-            l.name.clone(),
-            LayerRecord {
-                name: l.name.clone(),
-                color_index: l.color_index,
-                ..layer_state()
-            },
-        );
+    let zero = LayerSpec {
+        name: "0".to_string(),
+        color_index: 7,
+        state: Default::default(),
+    };
+    for l in std::iter::once(&zero).chain(&spec.layers) {
+        layers.insert(l.name.clone(), layer(l));
     }
 
-    // Top-level entities, in file order. An INSERT's attributes are listed
-    // both on the INSERT and as top-level ATTRIB entities, as the model's
-    // JSON documentation states a parser does.
-    let mut entities = Vec::new();
+    // Top-level entities, in file order: the model's, then paper space's.
+    // An INSERT's attributes are listed both on the INSERT and as top-level
+    // ATTRIB entities, as the model's JSON documentation states a parser
+    // does.
     let mut dim_index = 0;
-    for (e, &h) in spec.entities.iter().zip(&written.handles.entities) {
-        let attribs = written
-            .handles
-            .attribs
-            .iter()
-            .find(|(insert, _)| *insert == h)
-            .map(|(_, hs)| hs.as_slice())
-            .unwrap_or(&[]);
-        let dim_block = match e {
-            EntitySpec::LinearDimension { .. }
-            | EntitySpec::ArcDimension { .. }
-            | EntitySpec::DiameterDimension { .. } => {
-                dim_index += 1;
-                Some(format!("*D{dim_index}"))
-            }
-            _ => None,
-        };
-        let entity = convert(e, h, attribs, dim_block.as_deref(), spec);
-        if let Entity::Insert(insert) = &entity {
-            let extra: Vec<Entity> = insert.attribs.iter().cloned().map(Entity::Attrib).collect();
-            entities.push(entity);
-            entities.extend(extra);
-        } else {
-            entities.push(entity);
-        }
-    }
-
-    let mut block_records = BTreeMap::new();
-    block_records.insert(
-        "*Model_Space".to_string(),
-        BlockRecord {
-            name: "*Model_Space".to_string(),
-            entities: entities
+    let mut top_level = |specs: &[EntitySpec], handles: &[u32]| {
+        let mut entities = Vec::new();
+        for (e, &h) in specs.iter().zip(handles) {
+            let attribs = written
+                .handles
+                .attribs
                 .iter()
-                .filter(|e| !matches!(e, Entity::Attrib(_)))
-                .cloned()
-                .collect(),
-        },
-    );
-    block_records.insert(
-        "*Paper_Space".to_string(),
-        BlockRecord {
-            name: "*Paper_Space".to_string(),
-            entities: Vec::new(),
-        },
-    );
+                .find(|(insert, _)| *insert == h)
+                .map(|(_, hs)| hs.as_slice())
+                .unwrap_or(&[]);
+            let dim_block = e.is_dimension().then(|| {
+                dim_index += 1;
+                format!("*D{dim_index}")
+            });
+            let entity = convert(e, h, attribs, dim_block.as_deref(), spec);
+            if let Entity::Insert(insert) = &entity {
+                let extra: Vec<Entity> =
+                    insert.attribs.iter().cloned().map(Entity::Attrib).collect();
+                entities.push(entity);
+                entities.extend(extra);
+            } else {
+                entities.push(entity);
+            }
+        }
+        entities
+    };
+    let model_space = top_level(&spec.entities, &written.handles.entities);
+    let paper_space = top_level(&spec.paper_space, &written.handles.paper_entities);
+
+    // A block record's own list does not repeat an INSERT's attributes.
+    let owned = |entities: &[Entity]| -> Vec<Entity> {
+        entities
+            .iter()
+            .filter(|e| !matches!(e, Entity::Attrib(_)))
+            .cloned()
+            .collect()
+    };
+    let mut block_records = BTreeMap::new();
+    for name in space_names(spec) {
+        let entities = match name.as_str() {
+            "*Model_Space" => owned(&model_space),
+            "*Paper_Space" => owned(&paper_space),
+            _ => Vec::new(),
+        };
+        block_records.insert(name.clone(), BlockRecord { name, entities });
+    }
     for (name, handles) in &written.handles.blocks {
         let specs: Vec<EntitySpec> = if let Some(b) = spec.blocks.iter().find(|b| &b.name == name) {
             b.entities.clone()
@@ -139,6 +150,8 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
         );
     }
 
+    let mut entities = model_space;
+    entities.extend(paper_space);
     CadDatabase {
         entities,
         tables: Tables {
@@ -158,6 +171,13 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                             post: s.post.clone(),
                             decimal_places: s.decimal_places,
                             text_height: s.text_height,
+                            arrow_size: s.arrow_size,
+                            linear_unit_format: s.linear_unit_format,
+                            zero_suppression: s.zero_suppression,
+                            rounding: s.rounding,
+                            angular_unit_format: s.angular_unit_format,
+                            angular_decimal_places: s.angular_decimal_places,
+                            fraction_format: s.fraction_format,
                             ..DimStyleRecord::default()
                         },
                     )
@@ -166,16 +186,21 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             layers,
             block_records,
             mlinestyles: BTreeMap::new(),
-            // The writer writes no OBJECTS section, so there is no LAYOUT
-            // object to read.
-            layouts: BTreeMap::new(),
+            // A spec without layouts has no OBJECTS section, so there is no
+            // LAYOUT object to read.
+            layouts: spec
+                .layouts
+                .iter()
+                .map(|l| (l.name.clone(), layout(l)))
+                .collect(),
         },
         read_diagnostics: ReadDiagnostics::default(),
     }
 }
 
 /// The entities the writer put in the anonymous block `name` (`*D<n>`): the
-/// n-th dimension's drawn geometry. Mirrors the writer's construction so the
+/// n-th dimension's drawn geometry, counting the model's dimensions first
+/// and paper space's after them. Mirrors the writer's construction so the
 /// oracle and the file agree without sharing code paths that could both be
 /// wrong the same way -- the two are compared by the property tests.
 fn dimension_block_entities(spec: &Spec, name: &str) -> Vec<EntitySpec> {
@@ -186,32 +211,55 @@ fn dimension_block_entities(spec: &Spec, name: &str) -> Vec<EntitySpec> {
     let dim = spec
         .entities
         .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                EntitySpec::LinearDimension { .. }
-                    | EntitySpec::ArcDimension { .. }
-                    | EntitySpec::DiameterDimension { .. }
-            )
-        })
+        .chain(&spec.paper_space)
+        .filter(|e| e.is_dimension())
         .nth(n - 1)
         .expect("the n-th dimension exists");
     crate::writer::dimension_geometry(dim)
 }
 
-/// A layer as the writer declares every one: on, thawed, unlocked, with
-/// the CONTINUOUS linetype, and without the plot flag (290) or the
-/// lineweight (370), which it does not write.
-fn layer_state() -> LayerRecord {
+/// A layer as the writer declares it: with the CONTINUOUS linetype, and
+/// with the state the spec gives it -- off as a negative colour, the plot
+/// flag (290) and the lineweight (370) only where the spec states them.
+fn layer(l: &LayerSpec) -> LayerRecord {
     LayerRecord {
-        name: String::new(),
-        color_index: 7,
-        off: false,
-        frozen: false,
-        locked: false,
-        plot: None,
-        lineweight: None,
+        name: l.name.clone(),
+        color_index: if l.state.off {
+            -l.color_index
+        } else {
+            l.color_index
+        },
+        off: l.state.off,
+        frozen: l.state.frozen,
+        locked: l.state.locked,
+        plot: l.state.plot,
+        lineweight: l.state.lineweight,
         linetype: Ref::Resolved("CONTINUOUS".to_string()),
+    }
+}
+
+fn layout(l: &LayoutSpec) -> LayoutRecord {
+    let [margin_left, margin_bottom, margin_right, margin_top] = l.margins;
+    LayoutRecord {
+        name: l.name.clone(),
+        tab_order: l.tab_order,
+        block_name: Ref::Resolved(l.block.clone()),
+        limits_min: p2(l.limits_min),
+        limits_max: p2(l.limits_max),
+        plot_settings: PlotSettings {
+            paper_name: l.paper_name.clone(),
+            paper_width: l.paper_size.0,
+            paper_height: l.paper_size.1,
+            margin_left,
+            margin_bottom,
+            margin_right,
+            margin_top,
+            plot_origin: p2(l.plot_origin),
+            paper_units: Some(l.paper_units),
+            rotation: Some(l.rotation),
+            scale_numerator: l.scale.0,
+            scale_denominator: l.scale.1,
+        },
     }
 }
 
@@ -229,11 +277,11 @@ fn common(handle: u32, layer: &str) -> EntityCommon {
 }
 
 fn p3(p: Xy) -> Point3D {
-    Point3D {
-        x: p.x,
-        y: p.y,
-        z: 0.0,
-    }
+    at(p, 0.0)
+}
+
+fn at(p: Xy, z: f64) -> Point3D {
+    Point3D { x: p.x, y: p.y, z }
 }
 
 /// The OCS normal of an entity whose file writes no group 210: the
@@ -242,6 +290,27 @@ const Z_AXIS: Point3D = Point3D {
     x: 0.0,
     y: 0.0,
     z: 1.0,
+};
+
+/// The OCS normal [`EntitySpec::Mirrored`] writes.
+const MIRRORED: Point3D = Point3D {
+    x: 0.0,
+    y: 0.0,
+    z: -1.0,
+};
+
+/// The object coordinate system an entity is written in: its normal and
+/// its elevation in it.
+#[derive(Clone, Copy)]
+struct Ocs {
+    extrusion: Point3D,
+    elevation: f64,
+}
+
+/// The world's own axes, what every entity not written mirrored is in.
+const WORLD: Ocs = Ocs {
+    extrusion: Z_AXIS,
+    elevation: 0.0,
 };
 
 fn p2(p: Xy) -> Point2D {
@@ -255,7 +324,29 @@ fn convert(
     dim_block: Option<&str>,
     spec: &Spec,
 ) -> Entity {
+    convert_in(e, handle, attrib_handles, dim_block, spec, WORLD)
+}
+
+fn convert_in(
+    e: &EntitySpec,
+    handle: u32,
+    attrib_handles: &[u32],
+    dim_block: Option<&str>,
+    spec: &Spec,
+    ocs: Ocs,
+) -> Entity {
     match e {
+        EntitySpec::Mirrored { elevation, entity } => convert_in(
+            entity,
+            handle,
+            attrib_handles,
+            dim_block,
+            spec,
+            Ocs {
+                extrusion: MIRRORED,
+                elevation: *elevation,
+            },
+        ),
         EntitySpec::Line { layer, start, end } => Entity::Line(LineEntity {
             common: common(handle, layer),
             start_point: p3(*start),
@@ -267,9 +358,9 @@ fn convert(
             radius,
         } => Entity::Circle(CircleEntity {
             common: common(handle, layer),
-            center: p3(*center),
+            center: at(*center, ocs.elevation),
             radius: *radius,
-            extrusion: Z_AXIS,
+            extrusion: ocs.extrusion,
         }),
         EntitySpec::Arc {
             layer,
@@ -279,25 +370,45 @@ fn convert(
             end_deg,
         } => Entity::Arc(ArcEntity {
             common: common(handle, layer),
-            center: p3(*center),
+            center: at(*center, ocs.elevation),
             radius: *radius,
             start_angle: start_deg.to_radians(),
             end_angle: end_deg.to_radians(),
-            extrusion: Z_AXIS,
+            extrusion: ocs.extrusion,
         }),
         EntitySpec::LwPolyline {
             layer,
             vertices,
             closed,
+            bulges,
+            widths,
+            const_width,
         } => Entity::LwPolyline(LwPolylineEntity {
             common: common(handle, layer),
             vertices: vertices.iter().copied().map(p2).collect(),
             closed: *closed,
-            bulges: Vec::new(),
-            widths: Vec::new(),
-            const_width: 0.0,
-            elevation: 0.0,
-            extrusion: Z_AXIS,
+            // Two spellings of one polyline are one model: every bulge 0 is
+            // no bulge at all, and every segment as wide as the constant
+            // width is no per-vertex width at all.
+            bulges: if bulges.iter().all(|b| *b == 0.0) {
+                Vec::new()
+            } else {
+                bulges.clone()
+            },
+            widths: if widths
+                .iter()
+                .all(|&(start, end)| start == *const_width && end == *const_width)
+            {
+                Vec::new()
+            } else {
+                widths
+                    .iter()
+                    .map(|&(start, end)| SegmentWidth { start, end })
+                    .collect()
+            },
+            const_width: *const_width,
+            elevation: ocs.elevation,
+            extrusion: ocs.extrusion,
         }),
         EntitySpec::Text {
             layer,
@@ -316,12 +427,52 @@ fn convert(
             alignment_point: None,
             width_factor: 1.0,
             oblique_angle: 0.0,
-            // No case declares a STYLE table, so the style an absent group
-            // stands for (STANDARD) is not in the drawing.
-            style_name: Ref::Absent,
-            elevation: 0.0,
-            extrusion: Z_AXIS,
+            style_name: text_style_ref(&None, spec),
+            elevation: ocs.elevation,
+            extrusion: ocs.extrusion,
         }),
+        EntitySpec::JustifiedText {
+            layer,
+            insert,
+            alignment,
+            horizontal,
+            vertical,
+            height,
+            text,
+            rotation_deg,
+            width_factor,
+            oblique_deg,
+            style,
+        } => Entity::Text(TextEntity {
+            common: common(handle, layer),
+            start_point: p2(*insert),
+            text_height: *height,
+            text: text.clone(),
+            rotation: rotation_deg.to_radians(),
+            horizontal_justification: *horizontal,
+            vertical_justification: *vertical,
+            // Left/baseline text states no alignment point.
+            alignment_point: (*horizontal != HorizontalJustification::Left
+                || *vertical != VerticalJustification::Baseline)
+                .then(|| p2(*alignment)),
+            width_factor: *width_factor,
+            oblique_angle: oblique_deg.to_radians(),
+            style_name: text_style_ref(style, spec),
+            elevation: ocs.elevation,
+            extrusion: ocs.extrusion,
+        }),
+        EntitySpec::Solid { layer, corners } => {
+            let [corner1, corner2, corner3, corner4] = corners.map(p2);
+            Entity::Solid(SolidEntity {
+                common: common(handle, layer),
+                corner1,
+                corner2,
+                corner3,
+                corner4,
+                elevation: ocs.elevation,
+                extrusion: ocs.extrusion,
+            })
+        }
         EntitySpec::Attdef {
             layer,
             insert,
@@ -342,7 +493,7 @@ fn convert(
             alignment_point: None,
             width_factor: 1.0,
             oblique_angle: 0.0,
-            style_name: Ref::Absent,
+            style_name: text_style_ref(&None, spec),
             elevation: 0.0,
             extrusion: Z_AXIS,
         }),
@@ -365,7 +516,7 @@ fn convert(
             } else {
                 Ref::Unresolved(block.clone())
             },
-            insertion_point: p3(*insert),
+            insertion_point: at(*insert, ocs.elevation),
             scale: Point3D {
                 x: *scale,
                 y: *scale,
@@ -375,25 +526,21 @@ fn convert(
             attribs: attribs
                 .iter()
                 .zip(attrib_handles)
-                .map(|(a, &h)| AttribEntity {
-                    common: common(h, layer),
-                    start_point: p2(a.insert),
-                    text_height: a.height,
-                    tag: a.tag.clone(),
-                    flags: AttributeFlags::default(),
-                    text: a.value.clone(),
-                    rotation: 0.0,
-                    horizontal_justification: HorizontalJustification::Left,
-                    vertical_justification: VerticalJustification::Baseline,
-                    alignment_point: None,
-                    width_factor: 1.0,
-                    oblique_angle: 0.0,
-                    style_name: Ref::Absent,
-                    elevation: 0.0,
-                    extrusion: Z_AXIS,
-                })
+                .map(|(a, &h)| attrib(a, h, layer, spec))
                 .collect(),
-            extrusion: Z_AXIS,
+            extrusion: ocs.extrusion,
+        }),
+        EntitySpec::PolygonMesh {
+            layer,
+            m,
+            n,
+            closed_m,
+            closed_n,
+            vertices,
+        } => Entity::PolylineMesh(Solid3DEntity {
+            common: common(handle, layer),
+            wireframe_edges: mesh_wireframe(*m, *n, *closed_m, *closed_n, vertices),
+            skipped_edges: 0,
         }),
         // The writer states group 2 (the anonymous block), 70, 10, 11, 1 and
         // the subtype's own points -- and deliberately not 42 or 3, so the
@@ -481,5 +628,124 @@ fn convert(
             style_name: style_ref(style, spec),
             ordinate_axis: None,
         }),
+        EntitySpec::OrdinateDimension {
+            layer,
+            datum,
+            feature,
+            leader_end,
+            axis,
+            text,
+            measurement,
+            style,
+        } => Entity::Dimension(DimensionEntity {
+            common: common(handle, layer),
+            block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
+            kind: Some(DimensionKind::Ordinate),
+            measurement: *measurement,
+            text_override: text_override(text),
+            // Group 10 of an ordinate dimension is the datum it measures
+            // from; its feature is group 13 and its leader's end group 14.
+            definition_point: Some(p3(*datum)),
+            text_midpoint: p2(*leader_end),
+            points: DimensionPoints {
+                extension1: Some(p3(*feature)),
+                extension2: Some(p3(*leader_end)),
+                radial: None,
+                arc: None,
+            },
+            rotation: 0.0,
+            text_rotation: 0.0,
+            style_name: style_ref(style, spec),
+            ordinate_axis: Some(*axis),
+        }),
+        EntitySpec::Viewport {
+            layer,
+            center,
+            width,
+            height,
+            on,
+            id,
+            view_center,
+            view_height,
+            view_target,
+            twist_deg,
+            frozen_layers,
+        } => Entity::Viewport(ViewportEntity {
+            common: common(handle, layer),
+            center: p3(*center),
+            width: *width,
+            height: *height,
+            view: Some(ViewportView {
+                center: p2(*view_center),
+                height: *view_height,
+                target: p3(*view_target),
+                // The writer writes every view as a plan view with the
+                // default lens.
+                direction: Z_AXIS,
+                twist: twist_deg.to_radians(),
+                lens_length: 50.0,
+            }),
+            on: Some(*on),
+            viewport_id: Some(*id),
+            frozen_layers: frozen_layers
+                .iter()
+                .map(|name| Ref::Resolved(name.clone()))
+                .collect(),
+        }),
     }
+}
+
+/// An ATTRIB as the writer writes it: in the world's own axes, whatever its
+/// INSERT's, with the invisible flag the spec gives it.
+fn attrib(a: &AttribSpec, handle: u32, layer: &str, spec: &Spec) -> AttribEntity {
+    AttribEntity {
+        common: common(handle, layer),
+        start_point: p2(a.insert),
+        text_height: a.height,
+        tag: a.tag.clone(),
+        flags: AttributeFlags {
+            invisible: a.invisible,
+            ..AttributeFlags::default()
+        },
+        text: a.value.clone(),
+        rotation: 0.0,
+        horizontal_justification: HorizontalJustification::Left,
+        vertical_justification: VerticalJustification::Baseline,
+        alignment_point: None,
+        width_factor: 1.0,
+        oblique_angle: 0.0,
+        style_name: text_style_ref(&None, spec),
+        elevation: 0.0,
+        extrusion: Z_AXIS,
+    }
+}
+
+/// A polygon mesh's grid lines in the order the model states for
+/// [`Entity::PolylineMesh`]: with vertex `i * n + j` at row `i`, column `j`,
+/// first `(i, j)-(i + 1, j)` row by row, then `(i, j)-(i, j + 1)` row by
+/// row, the closing edges included where the mesh is closed.
+fn mesh_wireframe(
+    m: u16,
+    n: u16,
+    closed_m: bool,
+    closed_n: bool,
+    vertices: &[[f64; 3]],
+) -> Vec<[Point3D; 2]> {
+    let (m, n) = (usize::from(m), usize::from(n));
+    let vertex = |i: usize, j: usize| {
+        let [x, y, z] = vertices[i * n + j];
+        Point3D { x, y, z }
+    };
+    let mut edges = Vec::new();
+    for i in 0..if closed_m { m } else { m - 1 } {
+        for j in 0..n {
+            edges.push([vertex(i, j), vertex((i + 1) % m, j)]);
+        }
+    }
+    for i in 0..m {
+        for j in 0..if closed_n { n } else { n - 1 } {
+            edges.push([vertex(i, j), vertex(i, (j + 1) % n)]);
+        }
+    }
+    edges
 }
