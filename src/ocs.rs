@@ -10,7 +10,7 @@
 //!
 //! Every consumer that takes such an entity to the drawing's coordinates
 //! needs the same axes for the same extrusion, so they live with the model
-//! rather than in each of them -- the same reason [`Affine2`](crate::Affine2)
+//! rather than in each of them -- the same reason [`Affine2`]
 //! does. It is arithmetic on the entity's own extrusion; there is no guessing
 //! in it.
 
