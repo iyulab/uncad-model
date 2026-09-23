@@ -16,8 +16,9 @@ use crate::writer::{midpoint, Written};
 use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, CircleEntity, Confidence, DimensionEntity,
-    DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId, InsertEntity, LineEntity,
-    LwPolylineEntity, Origin, Point2D, Point3D, Ref, TextEntity, TextOverride,
+    DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId, HorizontalJustification,
+    InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D, Ref, TextEntity,
+    TextOverride, VerticalJustification,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -289,6 +290,14 @@ fn convert(
             text_height: *height,
             text: text.clone(),
             rotation: rotation_deg.to_radians(),
+            horizontal_justification: HorizontalJustification::Left,
+            vertical_justification: VerticalJustification::Baseline,
+            alignment_point: None,
+            width_factor: 1.0,
+            oblique_angle: 0.0,
+            // No case declares a STYLE table, so the style an absent group
+            // stands for (STANDARD) is not in the drawing.
+            style_name: Ref::Absent,
             elevation: 0.0,
             extrusion: Z_AXIS,
         }),
@@ -306,6 +315,12 @@ fn convert(
             tag: tag.clone(),
             default_value: default.clone(),
             rotation: 0.0,
+            horizontal_justification: HorizontalJustification::Left,
+            vertical_justification: VerticalJustification::Baseline,
+            alignment_point: None,
+            width_factor: 1.0,
+            oblique_angle: 0.0,
+            style_name: Ref::Absent,
             elevation: 0.0,
             extrusion: Z_AXIS,
         }),
@@ -345,6 +360,12 @@ fn convert(
                     tag: a.tag.clone(),
                     text: a.value.clone(),
                     rotation: 0.0,
+                    horizontal_justification: HorizontalJustification::Left,
+                    vertical_justification: VerticalJustification::Baseline,
+                    alignment_point: None,
+                    width_factor: 1.0,
+                    oblique_angle: 0.0,
+                    style_name: Ref::Absent,
                     elevation: 0.0,
                     extrusion: Z_AXIS,
                 })

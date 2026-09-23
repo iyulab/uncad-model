@@ -234,14 +234,49 @@ pub struct CircleEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextEntity {
     pub common: EntityCommon,
-    /// DXF 10: where the text's baseline starts, in the OCS
-    /// [`Self::extrusion`] defines.
+    /// DXF 10: the text's first alignment point -- where its baseline
+    /// starts -- in the OCS [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     pub text: String,
     /// Radians (DXF 50). TEXT stores this as a plain angle, unlike MTEXT,
     /// whose rotation is a direction vector (see [`MTextEntity::rotation`]).
     pub rotation: f64,
+    /// DXF 72, with the format's own default ([`HorizontalJustification::Left`])
+    /// when the group is absent, and for a document written before this
+    /// field existed.
+    #[serde(default)]
+    pub horizontal_justification: HorizontalJustification,
+    /// DXF 73, with the format's own default
+    /// ([`VerticalJustification::Baseline`]) when the group is absent, and
+    /// for a document written before this field existed.
+    #[serde(default)]
+    pub vertical_justification: VerticalJustification,
+    /// DXF 11: the point the text is justified at, in the OCS like
+    /// `start_point` -- for [`HorizontalJustification::Aligned`] and
+    /// [`HorizontalJustification::Fit`], the other end of its baseline.
+    /// `None` for left/baseline justification, which the file places by
+    /// `start_point` alone and states no such point for.
+    pub alignment_point: Option<Point2D>,
+    /// DXF 41: the characters' width relative to the width their style
+    /// draws them at. Optional in the reference, with 1 as its default --
+    /// a ratio -- so an absent group, and a document written before this
+    /// field existed, reads as 1.
+    #[serde(default = "one")]
+    pub width_factor: f64,
+    /// DXF 51: how far the characters slant from upright, radians.
+    /// Optional in the reference, with 0 as its default, so an absent group,
+    /// and a document written before this field existed, reads as 0.
+    #[serde(default)]
+    pub oblique_angle: f64,
+    /// DXF 7: the text style (an entry of the drawing's STYLE table, which
+    /// the model does not carry) the text is drawn in. The reference's
+    /// default for an absent group is the style named `STANDARD`, so a
+    /// reader resolves an absent group to that entry when the drawing has
+    /// one; [`Ref::Absent`] when it has none, and for a document written
+    /// before this field existed.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
     /// The z of the text's points in its OCS (DXF 30; the binary format
     /// stores it once, as the text's elevation). The points are 2D here,
     /// so this is where the third coordinate the file states is kept. 0
@@ -367,6 +402,55 @@ fn z_axis() -> Point3D {
     }
 }
 
+/// A ratio's default, 1: no departure from what it is a ratio to.
+fn one() -> f64 {
+    1.0
+}
+
+/// What a document written before a reference field existed reads as.
+fn absent<T>() -> Ref<T> {
+    Ref::Absent
+}
+
+/// How a TEXT, ATTRIB or ATTDEF is justified along its baseline (DXF 72,
+/// 0 to 5 in this order). The format's own default is [`Self::Left`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HorizontalJustification {
+    /// The text starts at its start point.
+    #[default]
+    Left,
+    /// Centred on its alignment point.
+    Center,
+    /// Ends at its alignment point.
+    Right,
+    /// Fills the baseline from its start point to its alignment point, its
+    /// height scaled with its width.
+    Aligned,
+    /// Centred on its alignment point, horizontally and vertically.
+    Middle,
+    /// Fills the baseline from its start point to its alignment point at
+    /// its own height, only its width scaled.
+    Fit,
+}
+
+/// Which line of a TEXT, ATTRIB or ATTDEF sits on its alignment point (DXF
+/// 73 on TEXT, 74 on ATTRIB and ATTDEF; 0 to 3 in this order). The
+/// format's own default is [`Self::Baseline`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum VerticalJustification {
+    /// The baseline.
+    #[default]
+    Baseline,
+    /// The bottom of the descenders.
+    Bottom,
+    /// The middle of the text.
+    Middle,
+    /// The top of the text.
+    Top,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PointEntity {
     pub common: EntityCommon,
@@ -420,6 +504,41 @@ pub struct AttribEntity {
     pub text: String,
     /// Radians (DXF 50).
     pub rotation: f64,
+    /// DXF 72, with the format's own default ([`HorizontalJustification::Left`])
+    /// when the group is absent, and for a document written before this
+    /// field existed.
+    #[serde(default)]
+    pub horizontal_justification: HorizontalJustification,
+    /// DXF 74 (73 is the field length here), with the format's own default
+    /// ([`VerticalJustification::Baseline`]) when the group is absent, and
+    /// for a document written before this field existed.
+    #[serde(default)]
+    pub vertical_justification: VerticalJustification,
+    /// DXF 11: the point the value is justified at, in the OCS like
+    /// `start_point` -- for [`HorizontalJustification::Aligned`] and
+    /// [`HorizontalJustification::Fit`], the other end of its baseline.
+    /// `None` for left/baseline justification, which the file places by
+    /// `start_point` alone and states no such point for.
+    pub alignment_point: Option<Point2D>,
+    /// DXF 41: the characters' width relative to the width their style
+    /// draws them at. Optional in the reference, with 1 as its default --
+    /// a ratio -- so an absent group, and a document written before this
+    /// field existed, reads as 1.
+    #[serde(default = "one")]
+    pub width_factor: f64,
+    /// DXF 51: how far the characters slant from upright, radians.
+    /// Optional in the reference, with 0 as its default, so an absent group,
+    /// and a document written before this field existed, reads as 0.
+    #[serde(default)]
+    pub oblique_angle: f64,
+    /// DXF 7: the text style (an entry of the drawing's STYLE table, which
+    /// the model does not carry) the value is drawn in. The reference's
+    /// default for an absent group is the style named `STANDARD`, so a
+    /// reader resolves an absent group to that entry when the drawing has
+    /// one; [`Ref::Absent`] when it has none, and for a document written
+    /// before this field existed.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
     /// The z of the attribute's points in its OCS, as
     /// [`TextEntity::elevation`].
     #[serde(default)]
@@ -538,6 +657,41 @@ pub struct AttdefEntity {
     /// Radians (DXF 50). Kept for parity with ATTRIB; a template is not
     /// normally drawn.
     pub rotation: f64,
+    /// DXF 72, with the format's own default ([`HorizontalJustification::Left`])
+    /// when the group is absent, and for a document written before this
+    /// field existed.
+    #[serde(default)]
+    pub horizontal_justification: HorizontalJustification,
+    /// DXF 74 (73 is the field length here), with the format's own default
+    /// ([`VerticalJustification::Baseline`]) when the group is absent, and
+    /// for a document written before this field existed.
+    #[serde(default)]
+    pub vertical_justification: VerticalJustification,
+    /// DXF 11: the point the value is justified at, in the OCS like
+    /// `start_point` -- for [`HorizontalJustification::Aligned`] and
+    /// [`HorizontalJustification::Fit`], the other end of its baseline.
+    /// `None` for left/baseline justification, which the file places by
+    /// `start_point` alone and states no such point for.
+    pub alignment_point: Option<Point2D>,
+    /// DXF 41: the characters' width relative to the width their style
+    /// draws them at. Optional in the reference, with 1 as its default --
+    /// a ratio -- so an absent group, and a document written before this
+    /// field existed, reads as 1.
+    #[serde(default = "one")]
+    pub width_factor: f64,
+    /// DXF 51: how far the characters slant from upright, radians.
+    /// Optional in the reference, with 0 as its default, so an absent group,
+    /// and a document written before this field existed, reads as 0.
+    #[serde(default)]
+    pub oblique_angle: f64,
+    /// DXF 7: the text style (an entry of the drawing's STYLE table, which
+    /// the model does not carry) the value is drawn in. The reference's
+    /// default for an absent group is the style named `STANDARD`, so a
+    /// reader resolves an absent group to that entry when the drawing has
+    /// one; [`Ref::Absent`] when it has none, and for a document written
+    /// before this field existed.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
     /// The z of the definition's points in its OCS, as
     /// [`TextEntity::elevation`].
     #[serde(default)]

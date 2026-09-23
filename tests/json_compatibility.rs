@@ -12,7 +12,7 @@
 //! its curve, a leader's annotation became a three-state reference), so a
 //! 0.1.0 document carrying either is not expected to load.
 
-use uncad_model::model::{Entity, Point3D};
+use uncad_model::model::{Entity, HorizontalJustification, Point3D, Ref, VerticalJustification};
 use uncad_model::CadDatabase;
 
 const Z_AXIS: Point3D = Point3D {
@@ -74,6 +74,50 @@ fn an_ocs_entity_without_a_stated_normal_is_in_world_axes_at_elevation_zero() {
         seen += 1;
     }
     assert_eq!(seen, 10, "every OCS kind the document holds");
+}
+
+#[test]
+fn text_without_placement_groups_is_left_baseline_upright_and_unstyled() {
+    let db = load();
+    let mut seen = 0;
+    let mut check = |h, v, ap: Option<_>, wf, oa, style: &Ref<String>| {
+        assert_eq!(h, HorizontalJustification::Left);
+        assert_eq!(v, VerticalJustification::Baseline);
+        assert!(ap.is_none());
+        assert_eq!((wf, oa), (1.0, 0.0));
+        assert_eq!(*style, Ref::Absent);
+        seen += 1;
+    };
+    for e in &db.entities {
+        match e {
+            Entity::Text(t) => check(
+                t.horizontal_justification,
+                t.vertical_justification,
+                t.alignment_point,
+                t.width_factor,
+                t.oblique_angle,
+                &t.style_name,
+            ),
+            Entity::Attrib(a) => check(
+                a.horizontal_justification,
+                a.vertical_justification,
+                a.alignment_point,
+                a.width_factor,
+                a.oblique_angle,
+                &a.style_name,
+            ),
+            Entity::Attdef(a) => check(
+                a.horizontal_justification,
+                a.vertical_justification,
+                a.alignment_point,
+                a.width_factor,
+                a.oblique_angle,
+                &a.style_name,
+            ),
+            _ => {}
+        }
+    }
+    assert_eq!(seen, 3);
 }
 
 #[test]
