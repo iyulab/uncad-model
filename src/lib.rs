@@ -10,7 +10,8 @@
 //! every consumer needs alike and must compute the same way: the placement
 //! an INSERT applies to its block ([`Affine2`]), the coordinate system an
 //! entity is written in ([`Ocs`]), and the arc a polyline vertex's bulge
-//! describes ([`BulgeArc`]).
+//! describes ([`BulgeArc`]); and the one step of reading a string the formats
+//! define the same way everywhere, undoing how it was stored ([`text`]).
 //!
 //! The rules the model follows are in `docs/principles.md` alongside this
 //! crate; the shape of each type follows the DXF reference.
@@ -23,6 +24,7 @@ pub mod json;
 pub mod model;
 pub mod ocs;
 pub mod tables;
+pub mod text;
 pub mod transform;
 
 use serde::{Deserialize, Serialize};

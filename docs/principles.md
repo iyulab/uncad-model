@@ -92,7 +92,9 @@ A reader fills this model from a file, and a file's text is not always Unicode. 
 
 None of this reaches the model's types — a string field is a string. What it fixes is the one question every reader of a pre-Unicode format has to answer, answered the same way by all of them.
 
-Decoding stops at the bytes. What the text itself encodes is carried as written: MTEXT formatting codes, `\U+XXXX` escapes and `%%` codes stay in the string, so two files that write the same character two ways carry two different strings. Reading them is a consumer's job.
+**How the file stored a string is undone; what the text says is not.** A file whose text is in a code page writes a character that page cannot hold as an escape, in any string — `\U+XXXX`, or `\M+nXXXX` for a character of an Asian code page — and a DXF file, whose every value is one line, writes a control character in caret notation (`^J` for a line break). That is storage: a reader turns each back into the character ([`text`](../src/text.rs) does it the same way for every reader), so a drawing saved with the character and one saved with its escape carry the same string. An escape that names an ASCII character is left as written: no writer needs one, and undoing it could turn text into a code.
+
+What the text itself encodes is carried as written: MTEXT formatting codes and `%%` codes stay in the string. They say something about how the text is shown — underline it, stack these two parts, draw a degree sign in this font's way — and what to do with that is a consumer's choice.
 
 ## 7. Compatibility
 
