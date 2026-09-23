@@ -142,6 +142,8 @@ mod tests {
             tag: "TAG".to_string(),
             text: "value".to_string(),
             rotation: 0.1,
+            elevation: 0.0,
+            extrusion: p3(0.0, 0.0, 1.0),
         };
         let ray = RayEntity {
             common: c.clone(),
@@ -152,6 +154,8 @@ mod tests {
             common: c.clone(),
             vertices: vec![p2(0.0, 0.0), p2(1.0, 0.0), p2(1.0, 1.0)],
             closed: true,
+            elevation: 5.0,
+            extrusion: p3(0.0, 0.0, -1.0),
         };
         let solid3d = Solid3DEntity {
             common: c.clone(),
@@ -168,6 +172,7 @@ mod tests {
                 common: c.clone(),
                 center: p3(0.0, 0.0, 0.0),
                 radius: 1.0,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Text(TextEntity {
                 common: c.clone(),
@@ -175,6 +180,8 @@ mod tests {
                 text_height: 2.5,
                 text: "hi".to_string(),
                 rotation: 0.2,
+                elevation: 1.5,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::LwPolyline(lwpoly.clone()),
             Entity::Arc(ArcEntity {
@@ -183,6 +190,7 @@ mod tests {
                 radius: 1.0,
                 start_angle: 0.0,
                 end_angle: 1.0,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Ellipse(EllipseEntity {
                 common: c.clone(),
@@ -203,6 +211,8 @@ mod tests {
                 corner2: p2(1.0, 0.0),
                 corner3: p2(1.0, 1.0),
                 corner4: p2(0.0, 1.0),
+                elevation: 0.0,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Trace(SolidEntity {
                 common: c.clone(),
@@ -210,6 +220,8 @@ mod tests {
                 corner2: p2(1.0, 0.0),
                 corner3: p2(0.0, 0.2),
                 corner4: p2(1.0, 0.2),
+                elevation: 2.0,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Ray(ray.clone()),
             Entity::XLine(ray),
@@ -220,6 +232,7 @@ mod tests {
                 scale: p3(1.0, 1.0, 1.0),
                 rotation: 0.25,
                 attribs: vec![attrib.clone()],
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Attrib(attrib),
             Entity::Attdef(AttdefEntity {
@@ -229,6 +242,8 @@ mod tests {
                 tag: "TAG".to_string(),
                 default_value: "?".to_string(),
                 rotation: 0.4,
+                elevation: 0.0,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Viewport(ViewportEntity {
                 common: c.clone(),
@@ -485,6 +500,7 @@ mod tests {
             common: common("2B"),
             center: p3(0.0, 0.0, 0.0),
             radius: f64::NAN,
+            extrusion: p3(0.0, 0.0, 1.0),
         });
         let text =
             serde_json::to_string(&e).expect("serde_json writes null for NaN, it does not fail");

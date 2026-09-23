@@ -53,3 +53,25 @@ fn fields_added_since_read_as_their_documentation_says() {
         }
     }
 }
+
+#[test]
+fn an_ocs_entity_without_a_stated_normal_is_in_world_axes_at_elevation_zero() {
+    let db = load();
+    let mut seen = 0;
+    for e in &db.entities {
+        let (extrusion, elevation) = match e {
+            Entity::Circle(c) => (c.extrusion, 0.0),
+            Entity::Arc(a) => (a.extrusion, 0.0),
+            Entity::LwPolyline(p) | Entity::Polyline2D(p) => (p.extrusion, p.elevation),
+            Entity::Text(t) => (t.extrusion, t.elevation),
+            Entity::Attrib(a) => (a.extrusion, a.elevation),
+            Entity::Attdef(a) => (a.extrusion, a.elevation),
+            Entity::Insert(i) => (i.extrusion, 0.0),
+            Entity::Solid(s) | Entity::Trace(s) => (s.extrusion, s.elevation),
+            _ => continue,
+        };
+        assert_eq!((extrusion, elevation), (Z_AXIS, 0.0), "{}", e.type_name());
+        seen += 1;
+    }
+    assert_eq!(seen, 10, "every OCS kind the document holds");
+}

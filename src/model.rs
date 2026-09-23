@@ -13,6 +13,14 @@
 //! departure, noted on each field). Where a consumer has to approximate --
 //! a curve drawn as chords, a solid drawn as its wireframe -- that is the
 //! consumer's decision and is not encoded here.
+//!
+//! Coordinates are the ones the file states. Most entities state world
+//! coordinates; the planar ones the reference defines in an *object
+//! coordinate system* (OCS) -- CIRCLE, ARC, LWPOLYLINE and POLYLINE_2D,
+//! TEXT, ATTRIB, ATTDEF, INSERT, SOLID and TRACE -- state OCS coordinates
+//! and carry the OCS's normal as `extrusion` (see
+//! [`CircleEntity::extrusion`]). Taking those to world coordinates is a
+//! consumer's step, the reference's "arbitrary axis algorithm".
 
 use serde::{Deserialize, Serialize};
 
@@ -203,41 +211,87 @@ pub struct LineEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CircleEntity {
     pub common: EntityCommon,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines; its `z` is the
+    /// circle's elevation in that system.
     pub center: Point3D,
     pub radius: f64,
+    /// DXF 210: the normal of the object coordinate system the entity's
+    /// coordinates are stated in. (0, 0, 1) makes that system the world's
+    /// own axes; a mirrored entity has (0, 0, -1), whose x axis points the
+    /// other way, so the same stated centre lies on the other side of the y
+    /// axis. Carried as the file states it: taking the coordinates to the
+    /// world is the consumer's step (the DXF reference's arbitrary axis
+    /// algorithm). Optional in the reference, with (0, 0, 1) as its
+    /// default, so an absent group -- and a document written before this
+    /// field existed -- reads as (0, 0, 1).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextEntity {
     pub common: EntityCommon,
+    /// DXF 10: where the text's baseline starts, in the OCS
+    /// [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     pub text: String,
     /// Radians (DXF 50). TEXT stores this as a plain angle, unlike MTEXT,
     /// whose rotation is a direction vector (see [`MTextEntity::rotation`]).
     pub rotation: f64,
+    /// The z of the text's points in its OCS (DXF 30; the binary format
+    /// stores it once, as the text's elevation). The points are 2D here,
+    /// so this is where the third coordinate the file states is kept. 0
+    /// for a document written before this field existed.
+    #[serde(default)]
+    pub elevation: f64,
+    /// DXF 210, the normal of the OCS the text's points are stated in --
+    /// see [`CircleEntity::extrusion`].
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
+/// LWPOLYLINE, and POLYLINE_2D ([`Entity::Polyline2D`]), which has the same
+/// shape: a POLYLINE_2D's vertices are its VERTEX records, and its
+/// elevation is the z of its own group 10 (DXF 30), where an LWPOLYLINE
+/// has a group of its own for it (DXF 38).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
-    /// The vertices' positions only. A vertex's bulge (DXF 42 -- the segment
-    /// to the next vertex is an arc) is not carried, so an arc segment is
-    /// represented by its chord.
+    /// The vertices' positions (DXF 10/20), in the OCS [`Self::extrusion`]
+    /// defines, at [`Self::elevation`]. A vertex's bulge (DXF 42 -- the
+    /// segment to the next vertex is an arc) is not carried, so an arc
+    /// segment is represented by its chord.
     pub vertices: Vec<Point2D>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
+    /// DXF 38: the z of every vertex in the OCS. Optional in the
+    /// reference, with 0 as its default, so an absent group -- and a
+    /// document written before this field existed -- reads as 0.
+    #[serde(default)]
+    pub elevation: f64,
+    /// DXF 210, the normal of the OCS the vertices are stated in -- see
+    /// [`CircleEntity::extrusion`].
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArcEntity {
     pub common: EntityCommon,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines.
     pub center: Point3D,
     pub radius: f64,
-    /// Radians.
+    /// Radians, measured in the OCS: counter-clockwise from its x axis as
+    /// seen from the side the normal points to. An arc whose normal is
+    /// (0, 0, -1) therefore runs clockwise in the world.
     pub start_angle: f64,
-    /// Radians.
+    /// Radians, like [`Self::start_angle`].
     pub end_angle: f64,
+    /// DXF 210, the normal of the OCS the arc is stated in -- see
+    /// [`CircleEntity::extrusion`].
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -277,13 +331,22 @@ pub struct PointEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SolidEntity {
     pub common: EntityCommon,
-    /// Corners in DXF order (group codes 10, 11, 12, 13). The 1-2-4-3
-    /// reordering a filled rendering needs is the renderer's concern, not
-    /// part of the data.
+    /// Corners in DXF order (group codes 10, 11, 12, 13), in the OCS
+    /// [`Self::extrusion`] defines. The 1-2-4-3 reordering a filled
+    /// rendering needs is the renderer's concern, not part of the data.
     pub corner1: Point2D,
     pub corner2: Point2D,
     pub corner3: Point2D,
     pub corner4: Point2D,
+    /// The corners' z in the OCS (DXF 30; the binary format stores one
+    /// elevation for all four). 0 for a document written before this field
+    /// existed.
+    #[serde(default)]
+    pub elevation: f64,
+    /// DXF 210, the normal of the OCS the corners are stated in -- see
+    /// [`CircleEntity::extrusion`].
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 /// Shared by RAY and XLINE: both are a base point and a direction, and
@@ -301,6 +364,7 @@ pub struct RayEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AttribEntity {
     pub common: EntityCommon,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     /// The attribute's tag (DXF 2): the name its value answers to, as the
@@ -311,6 +375,14 @@ pub struct AttribEntity {
     pub text: String,
     /// Radians (DXF 50).
     pub rotation: f64,
+    /// The z of the attribute's points in its OCS, as
+    /// [`TextEntity::elevation`].
+    #[serde(default)]
+    pub elevation: f64,
+    /// DXF 210, the normal of the OCS the attribute's points are stated in
+    /// -- see [`CircleEntity::extrusion`].
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -320,16 +392,22 @@ pub struct InsertEntity {
     /// [`crate::tables::Tables::block_records`] for the block's own
     /// entities.
     pub block_name: Ref<String>,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines.
     pub insertion_point: Point3D,
     /// Per-axis scale factors (DXF 41/42/43); (1,1,1) if never set.
     pub scale: Point3D,
-    /// Radians.
+    /// Radians, about the OCS normal.
     pub rotation: f64,
     /// Attribute values attached to this INSERT (the ATTRIB records between
     /// the INSERT and its SEQEND). A parser also lists them as top-level
     /// [`Entity::Attrib`] entries in `CadDatabase::entities`; a consumer that
     /// draws `entities` gets them from there.
     pub attribs: Vec<AttribEntity>,
+    /// DXF 210, the normal of the OCS the insertion point and rotation are
+    /// stated in -- see [`CircleEntity::extrusion`]. A block mirrored with
+    /// the reference has (0, 0, -1) here and its scale as stated.
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 /// TOLERANCE, a GD&T feature control frame. `text_value` keeps the raw
@@ -404,6 +482,7 @@ pub struct AcadTableEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AttdefEntity {
     pub common: EntityCommon,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     /// The tag (DXF 2) every ATTRIB made from this definition carries.
@@ -412,6 +491,14 @@ pub struct AttdefEntity {
     /// Radians (DXF 50). Kept for parity with ATTRIB; a template is not
     /// normally drawn.
     pub rotation: f64,
+    /// The z of the definition's points in its OCS, as
+    /// [`TextEntity::elevation`].
+    #[serde(default)]
+    pub elevation: f64,
+    /// DXF 210, the normal of the OCS the definition's points are stated
+    /// in -- see [`CircleEntity::extrusion`].
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

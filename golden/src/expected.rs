@@ -214,6 +214,14 @@ fn p3(p: Xy) -> Point3D {
     }
 }
 
+/// The OCS normal of an entity whose file writes no group 210: the
+/// reference's default, the world's own z axis.
+const Z_AXIS: Point3D = Point3D {
+    x: 0.0,
+    y: 0.0,
+    z: 1.0,
+};
+
 fn p2(p: Xy) -> Point2D {
     Point2D { x: p.x, y: p.y }
 }
@@ -239,6 +247,7 @@ fn convert(
             common: common(handle, layer),
             center: p3(*center),
             radius: *radius,
+            extrusion: Z_AXIS,
         }),
         EntitySpec::Arc {
             layer,
@@ -252,6 +261,7 @@ fn convert(
             radius: *radius,
             start_angle: start_deg.to_radians(),
             end_angle: end_deg.to_radians(),
+            extrusion: Z_AXIS,
         }),
         EntitySpec::LwPolyline {
             layer,
@@ -261,6 +271,8 @@ fn convert(
             common: common(handle, layer),
             vertices: vertices.iter().copied().map(p2).collect(),
             closed: *closed,
+            elevation: 0.0,
+            extrusion: Z_AXIS,
         }),
         EntitySpec::Text {
             layer,
@@ -274,6 +286,8 @@ fn convert(
             text_height: *height,
             text: text.clone(),
             rotation: rotation_deg.to_radians(),
+            elevation: 0.0,
+            extrusion: Z_AXIS,
         }),
         EntitySpec::Attdef {
             layer,
@@ -289,6 +303,8 @@ fn convert(
             tag: tag.clone(),
             default_value: default.clone(),
             rotation: 0.0,
+            elevation: 0.0,
+            extrusion: Z_AXIS,
         }),
         EntitySpec::Insert {
             layer,
@@ -326,8 +342,11 @@ fn convert(
                     tag: a.tag.clone(),
                     text: a.value.clone(),
                     rotation: 0.0,
+                    elevation: 0.0,
+                    extrusion: Z_AXIS,
                 })
                 .collect(),
+            extrusion: Z_AXIS,
         }),
         // The writer states group 2 (the anonymous block), 70, 10, 11, 1 and
         // the subtype's own points -- and deliberately not 42 or 3, so the
