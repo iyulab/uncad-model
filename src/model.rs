@@ -983,7 +983,8 @@ pub struct MLineEntity {
 
 /// WIPEOUT's clip boundary, resolved to 2D points in the entity's own local
 /// space (the image-entity pixel-to-world transform, DXF 10/11/12, is
-/// already applied; block nesting composes on top).
+/// already applied; block nesting composes on top). A closed loop: its first
+/// point is not repeated at the end, however the file wrote it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WipeoutEntity {
     pub common: EntityCommon,
