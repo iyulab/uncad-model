@@ -728,12 +728,63 @@ pub struct AttdefEntity {
     pub extrusion: Point3D,
 }
 
+/// A paper-space viewport: a frame on a layout's sheet, and the view of the
+/// model it shows through that frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViewportEntity {
     pub common: EntityCommon,
+    /// DXF 10: the centre of the frame on the sheet, in paper space.
     pub center: Point3D,
+    /// DXF 40: the frame's width, in paper space units.
     pub width: f64,
+    /// DXF 41: the frame's height, in paper space units.
     pub height: f64,
+    /// What the frame shows of the model. `None` when the record does not
+    /// carry it: a viewport from a file older than R2000 keeps its view in
+    /// extended data, which the model does not read. A document written
+    /// before this field existed reads as `None` too.
+    pub view: Option<ViewportView>,
+    /// Whether the viewport is on, showing its view (DXF 68, where 0 is
+    /// off). The binary format states the same thing as bit 0x20000 of the
+    /// viewport's status flags (DXF 90), set when it is off. `None` when
+    /// the file does not state it.
+    pub on: Option<bool>,
+    /// DXF 69: the viewport's number within its layout. 1 is the layout's
+    /// own overall viewport -- the one that is the sheet itself rather than
+    /// a window onto the model. `None` when the file does not state it: the
+    /// binary format stores no such number.
+    pub viewport_id: Option<i32>,
+    /// The layers frozen in this viewport alone (DXF 341; 331 in a DXF
+    /// from R2004 on), in file order, each a reference like
+    /// [`EntityCommon::layer`]. Empty when there are none, and for a
+    /// document written before this field existed.
+    #[serde(default)]
+    pub frozen_layers: Vec<Ref<String>>,
+}
+
+/// What a paper-space viewport shows of the model: a view, stated the way
+/// the format states one -- a target point, a direction to look along and
+/// a twist, which together define the view's own display coordinates, and
+/// the part of that plane the frame shows.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ViewportView {
+    /// DXF 12: the centre of the view, in its display coordinates.
+    pub center: Point2D,
+    /// DXF 45: the height of the model the frame shows, in drawing units.
+    /// The frame's own height is in paper units, so the two together are
+    /// the scale the model is shown at.
+    pub height: f64,
+    /// DXF 17: the point of the model the view looks at, in world
+    /// coordinates; display coordinates are measured from it.
+    pub target: Point3D,
+    /// DXF 16: the direction from the target towards the viewer, in world
+    /// coordinates. (0, 0, 1) is a plan view.
+    pub direction: Point3D,
+    /// DXF 51: how far the view is turned about its direction, radians.
+    pub twist: f64,
+    /// DXF 42: the lens length of a perspective view, in millimetres; it
+    /// has no effect on a parallel one.
+    pub lens_length: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1092,8 +1143,7 @@ pub struct Solid3DEntity {
 
 /// MULTILEADER's leader-line geometry only: the lines connecting the
 /// content to its landing point, as polylines. The text or block content
-/// itself is not carried, the same narrow scope as 3DSOLID's wireframe and
-/// VIEWPORT's frame.
+/// itself is not carried, the same narrow scope as 3DSOLID's wireframe.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MultiLeaderEntity {
     pub common: EntityCommon,

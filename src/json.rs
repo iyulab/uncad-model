@@ -296,6 +296,20 @@ mod tests {
                 center: p3(0.0, 0.0, 0.0),
                 width: 10.0,
                 height: 5.0,
+                view: Some(ViewportView {
+                    center: p2(150.0, 80.0),
+                    height: 250.0,
+                    target: p3(0.0, 0.0, 0.0),
+                    direction: p3(0.0, 0.0, 1.0),
+                    twist: 0.5235987755982988,
+                    lens_length: 50.0,
+                }),
+                on: Some(true),
+                viewport_id: Some(2),
+                frozen_layers: vec![
+                    Ref::Resolved("DIMS".to_string()),
+                    Ref::Unresolved("4B".to_string()),
+                ],
             }),
             Entity::Face3D(Face3DEntity {
                 common: c.clone(),

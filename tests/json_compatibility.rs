@@ -151,6 +151,16 @@ fn an_mtext_without_width_or_extents_is_unwrapped_and_unmeasured() {
 }
 
 #[test]
+fn a_viewport_without_view_fields_states_no_view() {
+    let db = load();
+    let Some(Entity::Viewport(v)) = db.entities.iter().find(|e| e.type_name() == "VIEWPORT") else {
+        panic!("the document has a VIEWPORT");
+    };
+    assert_eq!((v.view, v.on, v.viewport_id), (None, None, None));
+    assert!(v.frozen_layers.is_empty());
+}
+
+#[test]
 fn a_polyline_without_bulges_or_widths_is_straight_and_constant() {
     let db = load();
     let polylines: Vec<_> = db
