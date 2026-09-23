@@ -365,6 +365,8 @@ mod tests {
                     offset: p2(0.0, 1.0),
                     dash_pattern: vec![1.0, -0.5],
                 }],
+                elevation: 2.5,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Solid3D(solid3d.clone()),
             Entity::Leader(LeaderEntity {

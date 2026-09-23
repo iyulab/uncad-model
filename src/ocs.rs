@@ -1,5 +1,5 @@
 //! An entity's own coordinate system (OCS): the plane a CIRCLE, ARC,
-//! polyline, SOLID or TRACE is written in, given by its extrusion direction.
+//! polyline, SOLID, TRACE or HATCH is written in, given by its extrusion direction.
 //!
 //! The format fixes the system's axes from the extrusion alone (the
 //! "arbitrary axis algorithm"): the X axis is the world Y axis crossed with

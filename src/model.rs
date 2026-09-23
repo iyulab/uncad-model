@@ -782,6 +782,16 @@ pub struct HatchEntity {
     /// data could not be read. When non-empty, these are the lines to tile
     /// inside `boundary_paths`.
     pub pattern_lines: Vec<HatchPatternLine>,
+    /// The boundary paths and pattern lines are points and directions of the
+    /// hatch's own coordinate system, whose Z axis is `extrusion`; this is
+    /// their z there (DXF 30 of the elevation point). An absent group is `0`.
+    #[serde(default)]
+    pub elevation: f64,
+    /// The normal of the hatch's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1). A mirror copy writes (0, 0, -1): its boundary's
+    /// world x is reversed, and so is the turn of every arc edge and bulge.
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 /// What a dimension measures, as the file states it (DXF 70, low three
