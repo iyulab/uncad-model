@@ -250,6 +250,22 @@ pub struct EllipseEntity {
     pub axis_ratio: f64,
     pub start_angle: f64,
     pub end_angle: f64,
+    /// The normal of the ellipse's plane (DXF 210). `center` and
+    /// `major_axis_endpoint` are world coordinates; the normal says which
+    /// way the minor axis points (normal x major) and so which way the
+    /// parameters run. A mirrored ellipse has (0, 0, -1). An absent group is
+    /// the default (0, 0, 1).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
+}
+
+/// The default extrusion direction (DXF 210): the world Z axis.
+fn z_axis() -> Point3D {
+    Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: 1.0,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

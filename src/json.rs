@@ -191,6 +191,7 @@ mod tests {
                 axis_ratio: 0.5,
                 start_angle: 0.1,
                 end_angle: 1.5,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Point(PointEntity {
                 common: c.clone(),
