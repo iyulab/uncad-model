@@ -60,7 +60,15 @@ Invariant 4 is what draws the line: a departure group's absence is established b
 
 Types and serialization. No parsing, no rendering, no native code, no network. A crate that only needs to *talk about* drawings should pay for nothing else.
 
-One piece of arithmetic lives here, and only one: the placement a block reference applies to its block -- the map from a block definition's coordinates to the drawing's, composed across nested references (`Affine2`). Every consumer that follows an INSERT needs exactly this map and needs nested references to compose the same way, or two of them disagree about where the same line is drawn; it is arithmetic on the INSERT's own fields, with nothing to guess. Distance, intersection, hit-testing, rendering and editing stay in the consumers.
+The arithmetic that lives here is the coordinate arithmetic the format itself defines on an entity's own fields, and nothing else:
+
+- the placement a block reference applies to its block -- the map from a block definition's coordinates to the drawing's, composed across nested references (`Affine2`, from the INSERT's 10/20, 41/42, 50);
+- the coordinate system an entity is written in -- its axes from its extrusion by the arbitrary axis algorithm (`Ocs`, from 210/220/230);
+- the arc a polyline vertex's bulge describes -- its center, radius and sweep from the two vertices and the bulge (`BulgeArc`, from 42).
+
+Each is a function of fields the entity carries, with nothing to choose and nothing to guess. Every consumer that draws, measures or points at the entity needs exactly this arithmetic, and if two consumers computed it separately they could disagree about where the same line is -- which is why it is here once rather than in each of them. A tolerance this crate adds on top (when a composed placement still counts as a similarity, when an extrusion counts as the world's) is named and documented where it is defined, apart from the format's own constants.
+
+Distance, intersection, hit-testing, curve sampling, rendering and editing stay in the consumers: they choose something (a precision, a view, a policy for what a degenerate input means) that the format does not.
 
 The dependency tree is permissive-only (MIT / Apache-2.0 / BSD), and this crate depends on none of its consumers.
 

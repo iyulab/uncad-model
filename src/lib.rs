@@ -5,28 +5,34 @@
 //! dependencies: a parser fills a [`CadDatabase`], and a summarizer, an
 //! editor, a differ or a renderer reads it. What it offers beyond the data
 //! is serialization -- [`CadDatabase::to_json`] and the `serde` derives on
-//! every type, the public contract (see [`json`]) -- and the arithmetic
-//! every consumer of a block reference needs alike: the placement an INSERT
-//! applies to its block ([`Affine2`]), so that nested references compose
-//! the same way for all of them.
+//! every type, the public contract (see [`json`]) -- and the coordinate
+//! arithmetic the format itself defines on an entity's own fields, which
+//! every consumer needs alike and must compute the same way: the placement
+//! an INSERT applies to its block ([`Affine2`]), the coordinate system an
+//! entity is written in ([`Ocs`]), and the arc a polyline vertex's bulge
+//! describes ([`BulgeArc`]).
 //!
 //! The rules the model follows are in `docs/principles.md` alongside this
 //! crate; the shape of each type follows the DXF reference.
 
 #![forbid(unsafe_code)]
 
+pub mod bulge;
 pub mod color;
 pub mod json;
 pub mod model;
+pub mod ocs;
 pub mod tables;
 pub mod transform;
 
 use serde::{Deserialize, Serialize};
 
+pub use bulge::BulgeArc;
 pub use json::{JsonError, ToJsonOptions};
 pub use model::{
     Confidence, Entity, EntityCommon, EntityId, Origin, Point2D, Point3D, PolylineVertex, Ref,
 };
+pub use ocs::Ocs;
 pub use tables::Tables;
 pub use transform::Affine2;
 
