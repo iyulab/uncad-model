@@ -651,6 +651,133 @@ pub fn g3_offset(i: usize, per_row: usize) -> (f64, f64) {
     (col as f64 * PITCH_X, row as f64 * PITCH_Y)
 }
 
+/// G11, a mirrored part: the kinds the format states in an object
+/// coordinate system -- a circle, an arc, a bulged polyline at an
+/// elevation, a text, a solid and a block reference -- each written in the
+/// OCS whose normal is (0, 0, -1), which is what AutoCAD's MIRROR leaves
+/// behind, next to one circle in the world's own axes.
+///
+/// The case is about what a reader must *not* do: the coordinates are the
+/// ones the file states, so the mirrored circle stated at (30, 20) is
+/// carried at (30, 20) with its normal, not at the (-30, 20) it lies at in
+/// the world; the polyline's bulge keeps its stated sign. Taking them to
+/// the world is a consumer's step -- except for the block reference, whose
+/// placement ([`uncad_model::Affine2::from_insert`]) the model computes.
+pub fn g11_mirrored_part() -> Spec {
+    let layer = "MIRROR".to_string();
+    let mirrored = |elevation: f64, entity: EntitySpec| EntitySpec::Mirrored {
+        elevation,
+        entity: Box::new(entity),
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 4,
+            state: LayerState::default(),
+        }],
+        blocks: vec![BlockSpec {
+            name: "MARK".to_string(),
+            entities: vec![
+                EntitySpec::Line {
+                    layer: "0".to_string(),
+                    start: Xy::new(0.0, 0.0),
+                    end: Xy::new(10.0, 0.0),
+                },
+                EntitySpec::Circle {
+                    layer: "0".to_string(),
+                    center: Xy::new(10.0, 0.0),
+                    radius: 2.0,
+                },
+            ],
+        }],
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            EntitySpec::Circle {
+                layer: layer.clone(),
+                center: Xy::new(30.0, 20.0),
+                radius: 5.0,
+            },
+            mirrored(
+                0.0,
+                EntitySpec::Circle {
+                    layer: layer.clone(),
+                    center: Xy::new(30.0, 20.0),
+                    radius: 5.0,
+                },
+            ),
+            mirrored(
+                0.0,
+                EntitySpec::Arc {
+                    layer: layer.clone(),
+                    center: Xy::new(30.0, 50.0),
+                    radius: 10.0,
+                    start_deg: 0.0,
+                    end_deg: 90.0,
+                },
+            ),
+            // A rectangle whose right side bulges out into a half circle,
+            // at an elevation: the bulge (1) keeps its sign and the
+            // elevation its value, as stated.
+            mirrored(
+                2.5,
+                EntitySpec::LwPolyline {
+                    layer: layer.clone(),
+                    vertices: vec![
+                        Xy::new(20.0, 0.0),
+                        Xy::new(40.0, 0.0),
+                        Xy::new(40.0, 10.0),
+                        Xy::new(20.0, 10.0),
+                    ],
+                    closed: true,
+                    bulges: vec![0.0, 1.0, 0.0, 0.0],
+                    widths: Vec::new(),
+                    const_width: 0.0,
+                },
+            ),
+            mirrored(
+                0.0,
+                EntitySpec::Text {
+                    layer: layer.clone(),
+                    insert: Xy::new(20.0, -10.0),
+                    height: 2.5,
+                    text: "MIRRORED".to_string(),
+                    rotation_deg: 0.0,
+                },
+            ),
+            mirrored(
+                0.0,
+                EntitySpec::Solid {
+                    layer: layer.clone(),
+                    corners: [
+                        Xy::new(20.0, -30.0),
+                        Xy::new(30.0, -30.0),
+                        Xy::new(20.0, -20.0),
+                        Xy::new(30.0, -20.0),
+                    ],
+                },
+            ),
+            // Placed at (50, 0) in the mirrored OCS and turned 30 degrees
+            // there: in the world the block's line runs from (-50, 0)
+            // towards the upper left.
+            mirrored(
+                0.0,
+                EntitySpec::Insert {
+                    layer,
+                    block: "MARK".to_string(),
+                    insert: Xy::new(50.0, 0.0),
+                    scale: 1.0,
+                    rotation_deg: 30.0,
+                    attribs: Vec::new(),
+                },
+            ),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -662,6 +789,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g9" => g9_two_drawing_numbers(),
         "g5" => g5_dense_dimensions(),
         "g10" => g10_unreferenced_insert(),
+        "g11" => g11_mirrored_part(),
         _ => return None,
     })
 }
@@ -671,4 +799,4 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 8] = ["g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10"];
+pub const NAMES: [&str; 9] = ["g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11"];

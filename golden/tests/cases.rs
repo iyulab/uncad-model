@@ -1,7 +1,8 @@
 //! Each named case has the shape its description promises, stated once so
 //! consumers can rely on it.
 
-use uncad_model::model::{Entity, Ref};
+use uncad_model::model::{Entity, Point2D, Point3D, Ref};
+use uncad_model::Affine2;
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
 
@@ -237,4 +238,53 @@ fn g3_writes_and_reads_back_every_copy() {
         model.tables.layers.len(),
         expected::model(&one, &write(&one)).tables.layers.len()
     );
+}
+
+/// G11 keeps every mirrored coordinate as the file states it, with the
+/// normal beside it, and a mirrored block reference lands where its
+/// placement -- the one OCS step the model takes -- puts it.
+#[test]
+fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_normal() {
+    let spec = cases::g11_mirrored_part();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let mirrored = Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: -1.0,
+    };
+
+    // Six entities written with the normal (0, 0, -1), one without it.
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches("210\n0.0\n220\n0.0\n230\n-1.0\n").count(), 6);
+
+    let Entity::Circle(plain) = &model.entities[0] else {
+        panic!("the first entity is the unmirrored circle");
+    };
+    let Entity::Circle(circle) = &model.entities[1] else {
+        panic!("the second entity is the mirrored circle");
+    };
+    assert_eq!(plain.center, circle.center, "the same stated centre");
+    assert_eq!(circle.extrusion, mirrored);
+    assert_ne!(plain.extrusion, circle.extrusion);
+
+    let Entity::LwPolyline(polyline) = &model.entities[3] else {
+        panic!("the fourth entity is the polyline");
+    };
+    assert_eq!(polyline.bulges, [0.0, 1.0, 0.0, 0.0], "the stated sign");
+    assert_eq!(polyline.elevation, 2.5);
+
+    let Entity::Insert(insert) = &model.entities[6] else {
+        panic!("the last entity is the block reference");
+    };
+    assert_eq!(insert.extrusion, mirrored);
+    let placement = Affine2::from_insert(insert);
+    let at = |x: f64, y: f64| placement.apply(Point2D { x, y });
+    let close = |p: Point2D, x: f64, y: f64| (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9;
+    // The block's origin at the stated (50, 0), mirrored to (-50, 0); its
+    // line's end, turned 30 degrees in the OCS, up and to the left of it.
+    assert!(close(at(0.0, 0.0), -50.0, 0.0));
+    let (sin, cos) = 30f64.to_radians().sin_cos();
+    assert!(close(at(10.0, 0.0), -50.0 - 10.0 * cos, 10.0 * sin));
+    assert!(placement.determinant() < 0.0, "a mirror image");
 }
