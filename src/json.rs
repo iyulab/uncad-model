@@ -175,6 +175,7 @@ mod tests {
                 common: c.clone(),
                 center: p3(0.0, 0.0, 0.0),
                 radius: 1.0,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Text(TextEntity {
                 common: c.clone(),
@@ -190,6 +191,7 @@ mod tests {
                 radius: 1.0,
                 start_angle: 0.0,
                 end_angle: 1.0,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Ellipse(EllipseEntity {
                 common: c.clone(),
@@ -497,6 +499,7 @@ mod tests {
             common: common("2B"),
             center: p3(0.0, 0.0, 0.0),
             radius: f64::NAN,
+            extrusion: p3(0.0, 0.0, 1.0),
         });
         let text =
             serde_json::to_string(&e).expect("serde_json writes null for NaN, it does not fail");

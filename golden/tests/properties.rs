@@ -44,29 +44,32 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
             start,
             end
         }),
-        (layer_name(), xy(), 0.01f64..500.0).prop_map(|(layer, center, radius)| {
-            EntitySpec::Circle {
+        (layer_name(), xy(), 0.01f64..500.0, any::<bool>()).prop_map(
+            |(layer, center, radius, mirrored)| EntitySpec::Circle {
                 layer,
                 center,
                 radius,
+                mirrored,
             }
-        }),
+        ),
         (
             layer_name(),
             xy(),
             0.01f64..500.0,
             0.0f64..360.0,
-            0.0f64..360.0
+            0.0f64..360.0,
+            any::<bool>()
         )
-            .prop_map(
-                |(layer, center, radius, start_deg, end_deg)| EntitySpec::Arc {
+            .prop_map(|(layer, center, radius, start_deg, end_deg, mirrored)| {
+                EntitySpec::Arc {
                     layer,
                     center,
                     radius,
                     start_deg,
-                    end_deg
+                    end_deg,
+                    mirrored,
                 }
-            ),
+            }),
         (
             layer_name(),
             prop::collection::vec(xy(), 2..12),
@@ -160,6 +163,7 @@ fn spec() -> impl Strategy<Value = Spec> {
                 layer: "0".to_string(),
                 center: Xy::new(0.0, 0.0),
                 radius: 1.0,
+                mirrored: false,
             }],
         }],
         entities,

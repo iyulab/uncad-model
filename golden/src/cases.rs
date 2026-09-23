@@ -39,6 +39,7 @@ pub fn g1_general_part() -> Spec {
             layer: holes.clone(),
             center: c,
             radius: 5.0,
+            mirrored: false,
         });
     }
     entities.push(EntitySpec::LinearDimension {
@@ -432,6 +433,24 @@ pub fn g7_loose_text_title_block() -> Spec {
         text(130.0, -52.0, "B"),
         text(102.0, -59.0, "MATERIAL"),
         text(130.0, -59.0, "SS400"),
+        // A mirror copy: extrusion (0, 0, -1), so the centers are written
+        // in a coordinate system whose x runs the other way -- the circle
+        // is drawn at (170, -50) and the arc about (110, -50), turning
+        // clockwise in the world from its start to its end.
+        EntitySpec::Circle {
+            layer: title.clone(),
+            center: Xy::new(-170.0, -50.0),
+            radius: 3.0,
+            mirrored: true,
+        },
+        EntitySpec::Arc {
+            layer: title.clone(),
+            center: Xy::new(-110.0, -50.0),
+            radius: 4.0,
+            start_deg: 30.0,
+            end_deg: 150.0,
+            mirrored: true,
+        },
     ];
     Spec {
         dim_styles: Vec::new(),

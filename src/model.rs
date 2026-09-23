@@ -225,8 +225,16 @@ pub struct LineEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CircleEntity {
     pub common: EntityCommon,
+    /// In the circle's own coordinate system, whose Z axis is `extrusion`
+    /// (DXF: the center is an OCS point). With the default extrusion that
+    /// system is the world's; a mirrored circle has (0, 0, -1), and its world
+    /// center is found through the format's arbitrary axis algorithm.
     pub center: Point3D,
     pub radius: f64,
+    /// The normal of the circle's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -253,12 +261,19 @@ pub struct LwPolylineEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArcEntity {
     pub common: EntityCommon,
+    /// In the arc's own coordinate system, whose Z axis is `extrusion`, as
+    /// for [`CircleEntity::center`].
     pub center: Point3D,
     pub radius: f64,
-    /// Radians.
+    /// Radians, measured counter-clockwise about `extrusion` in the arc's own
+    /// coordinate system -- a mirrored arc runs the other way in the world.
     pub start_angle: f64,
-    /// Radians.
+    /// Radians, as `start_angle`.
     pub end_angle: f64,
+    /// The normal of the arc's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

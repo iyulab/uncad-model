@@ -110,6 +110,16 @@ impl Writer {
         self.pair(code, format!("{value:?}"));
     }
 
+    /// The extrusion group (210/220/230), written only when it is not the
+    /// default -- as AutoCAD writes it.
+    fn extrusion(&mut self, mirrored: bool) {
+        if mirrored {
+            self.num(210, 0.0);
+            self.num(220, 0.0);
+            self.num(230, -1.0);
+        }
+    }
+
     fn xy(&mut self, base: u16, p: Xy) {
         self.num(base, p.x);
         self.num(base + 10, p.y);
@@ -385,12 +395,14 @@ impl Writer {
                 layer,
                 center,
                 radius,
+                mirrored,
             } => {
                 self.pair(0, "CIRCLE");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbCircle");
                 self.xy(10, *center);
                 self.num(40, *radius);
+                self.extrusion(*mirrored);
             }
             EntitySpec::Arc {
                 layer,
@@ -398,12 +410,14 @@ impl Writer {
                 radius,
                 start_deg,
                 end_deg,
+                mirrored,
             } => {
                 self.pair(0, "ARC");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbCircle");
                 self.xy(10, *center);
                 self.num(40, *radius);
+                self.extrusion(*mirrored);
                 self.pair(100, "AcDbArc");
                 self.num(50, *start_deg);
                 self.num(51, *end_deg);

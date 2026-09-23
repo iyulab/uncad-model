@@ -235,10 +235,12 @@ fn convert(
             layer,
             center,
             radius,
+            mirrored,
         } => Entity::Circle(CircleEntity {
             common: common(handle, layer),
             center: p3(*center),
             radius: *radius,
+            extrusion: extrusion(*mirrored),
         }),
         EntitySpec::Arc {
             layer,
@@ -246,7 +248,9 @@ fn convert(
             radius,
             start_deg,
             end_deg,
+            mirrored,
         } => Entity::Arc(ArcEntity {
+            extrusion: extrusion(*mirrored),
             common: common(handle, layer),
             center: p3(*center),
             radius: *radius,
@@ -418,5 +422,14 @@ fn convert(
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
         }),
+    }
+}
+
+/// The extrusion a mirrored entity writes, or the default.
+fn extrusion(mirrored: bool) -> Point3D {
+    Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: if mirrored { -1.0 } else { 1.0 },
     }
 }

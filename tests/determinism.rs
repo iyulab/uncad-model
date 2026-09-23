@@ -66,6 +66,11 @@ fn drawing() -> CadDatabase {
             common: common(&format!("{:X}", 0x30 + i), name),
             center: p(x, 10.0),
             radius: 2.5,
+            extrusion: Point3D {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
         }));
     }
 

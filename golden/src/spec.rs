@@ -119,16 +119,23 @@ pub enum EntitySpec {
     },
     Circle {
         layer: String,
+        /// In the circle's own coordinate system: for a mirrored circle
+        /// (extrusion (0, 0, -1)) the world x is the negative of this x.
         center: Xy,
         radius: f64,
+        /// Extrusion (0, 0, -1) rather than the default (0, 0, 1) -- what a
+        /// mirror copy writes.
+        mirrored: bool,
     },
     Arc {
         layer: String,
+        /// As for `Circle`.
         center: Xy,
         radius: f64,
-        /// Degrees, as DXF stores them.
+        /// Degrees, as DXF stores them, counter-clockwise about the extrusion.
         start_deg: f64,
         end_deg: f64,
+        mirrored: bool,
     },
     LwPolyline {
         layer: String,
@@ -229,10 +236,12 @@ impl EntitySpec {
                 layer,
                 center,
                 radius,
+                mirrored,
             } => EntitySpec::Circle {
                 layer: layer.clone(),
-                center: m(center),
+                center: moved_ocs(center, *mirrored, dx, dy),
                 radius: *radius,
+                mirrored: *mirrored,
             },
             EntitySpec::Arc {
                 layer,
@@ -240,12 +249,14 @@ impl EntitySpec {
                 radius,
                 start_deg,
                 end_deg,
+                mirrored,
             } => EntitySpec::Arc {
                 layer: layer.clone(),
-                center: m(center),
+                center: moved_ocs(center, *mirrored, dx, dy),
                 radius: *radius,
                 start_deg: *start_deg,
                 end_deg: *end_deg,
+                mirrored: *mirrored,
             },
             EntitySpec::LwPolyline {
                 layer,
@@ -344,5 +355,15 @@ impl EntitySpec {
             | EntitySpec::ArcDimension { layer, .. }
             | EntitySpec::DiameterDimension { layer, .. } => layer,
         }
+    }
+}
+
+/// An own-coordinate-system center moved by (`dx`, `dy`) in the world: a
+/// mirrored entity's own x axis is the world's negative x.
+fn moved_ocs(center: &Xy, mirrored: bool, dx: f64, dy: f64) -> Xy {
+    if mirrored {
+        center.moved(-dx, dy)
+    } else {
+        center.moved(dx, dy)
     }
 }
