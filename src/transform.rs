@@ -5,10 +5,10 @@
 //! Every consumer that follows an INSERT into its block -- a renderer, a
 //! pointer, an editor -- needs this same map and needs nested references to
 //! compose the same way, so it lives with the model rather than in each of
-//! them. It is arithmetic on the INSERT's own fields (DXF 10/20, 41/42, 50)
-//! and nothing else; there is no guessing in it.
+//! them. It is arithmetic on the INSERT's own fields (DXF 10/20/30, 41/42,
+//! 50, 210) and nothing else; there is no guessing in it.
 
-use crate::model::{InsertEntity, Point2D};
+use crate::model::{InsertEntity, Point2D, Point3D};
 use serde::{Deserialize, Serialize};
 
 /// Relative tolerance under which a placement's linear part counts as a
@@ -16,6 +16,19 @@ use serde::{Deserialize, Serialize};
 /// similarities in floating point leaves residues of this order; a real
 /// shear or per-axis scale is many orders larger.
 const SIMILARITY_TOLERANCE: f64 = 1e-9;
+
+/// The world's z axis: the OCS normal whose object coordinates are world
+/// coordinates.
+const WORLD_Z: Point3D = Point3D {
+    x: 0.0,
+    y: 0.0,
+    z: 1.0,
+};
+
+/// The DXF reference's threshold in its arbitrary axis algorithm: a normal
+/// this close to the world z axis takes its OCS x axis from the world y
+/// axis, any other from the world z axis.
+const ARBITRARY_AXIS_THRESHOLD: f64 = 1.0 / 64.0;
 
 /// A 2D affine map, `world = [a c; b d] · local + [e f]`: the six numbers of
 /// an SVG `matrix(a b c d e f)`, in that order and with that meaning.
@@ -42,10 +55,17 @@ impl Affine2 {
 
     /// The placement an INSERT applies to its block's entities: scale by
     /// the per-axis factors, rotate, then translate to the insertion point
-    /// -- the DXF order. The `z` components (43, 30) are not part of a 2D
-    /// placement and are ignored.
+    /// -- the DXF order, all of it in the INSERT's object coordinate system
+    /// -- and then take that system to the world's (x, y) by the DXF
+    /// reference's arbitrary axis algorithm. That last step is where the
+    /// normal (210) and the insertion point's OCS z (30) come in: it is the
+    /// identity for the usual normal (0, 0, 1), a mirror across the y axis
+    /// for (0, 0, -1), and for a tilted normal the view of the tilted plane
+    /// from above. The z scale (43) is not part of a 2D placement and is
+    /// ignored. A normal of zero length, or one that is not finite, is not
+    /// a direction; it places the block as (0, 0, 1) would.
     pub fn from_insert(insert: &InsertEntity) -> Affine2 {
-        Affine2::placement(
+        let in_ocs = Affine2::placement(
             Point2D {
                 x: insert.insertion_point.x,
                 y: insert.insertion_point.y,
@@ -53,7 +73,11 @@ impl Affine2 {
             insert.scale.x,
             insert.scale.y,
             insert.rotation,
-        )
+        );
+        match ocs_to_world(insert.extrusion, insert.insertion_point.z) {
+            Some(to_world) => in_ocs.then(&to_world),
+            None => in_ocs,
+        }
     }
 
     /// Scale by `(x_scale, y_scale)`, rotate by `rotation` radians, then
@@ -140,6 +164,54 @@ impl InsertEntity {
     }
 }
 
+/// The map from the (x, y) of an object coordinate system -- at height `z`
+/// in it -- to the world's (x, y): the DXF reference's arbitrary axis
+/// algorithm, seen from above. `None` when there is nothing to map: the
+/// normal is the world z axis, or it is not a direction at all.
+fn ocs_to_world(normal: Point3D, z: f64) -> Option<Affine2> {
+    if normal == WORLD_Z {
+        return None;
+    }
+    let n = normalized(normal)?;
+    let seed = if n.x.abs() < ARBITRARY_AXIS_THRESHOLD && n.y.abs() < ARBITRARY_AXIS_THRESHOLD {
+        Point3D {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        }
+    } else {
+        WORLD_Z
+    };
+    let x_axis = normalized(cross(seed, n))?;
+    let y_axis = normalized(cross(n, x_axis))?;
+    Some(Affine2 {
+        a: x_axis.x,
+        b: x_axis.y,
+        c: y_axis.x,
+        d: y_axis.y,
+        e: n.x * z,
+        f: n.y * z,
+    })
+}
+
+fn cross(u: Point3D, v: Point3D) -> Point3D {
+    Point3D {
+        x: u.y * v.z - u.z * v.y,
+        y: u.z * v.x - u.x * v.z,
+        z: u.x * v.y - u.y * v.x,
+    }
+}
+
+/// `v` scaled to unit length, or `None` when it has no direction.
+fn normalized(v: Point3D) -> Option<Point3D> {
+    let length = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
+    (length > 0.0 && length.is_finite()).then(|| Point3D {
+        x: v.x / length,
+        y: v.y / length,
+        z: v.z / length,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +276,102 @@ mod tests {
         let stepwise = outer.apply(inner.apply(q));
         assert!((composed.x - stepwise.x).abs() < 1e-12);
         assert!((composed.y - stepwise.y).abs() < 1e-12);
+    }
+
+    fn insert(at: Point3D, rotation: f64, extrusion: Point3D) -> InsertEntity {
+        use crate::model::{Confidence, EntityCommon, EntityId, Origin, Ref};
+        InsertEntity {
+            common: EntityCommon {
+                id: EntityId::new(1),
+                origin: Origin::Vector,
+                confidence: Confidence::High,
+                source_handle: Ref::Absent,
+                layer: Ref::Resolved("0".to_string()),
+                color_index: 256,
+                true_color: None,
+                invisible: false,
+            },
+            block_name: Ref::Resolved("B".to_string()),
+            insertion_point: at,
+            scale: Point3D {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            rotation,
+            attribs: Vec::new(),
+            extrusion,
+        }
+    }
+
+    fn v(x: f64, y: f64, z: f64) -> Point3D {
+        Point3D { x, y, z }
+    }
+
+    fn close(a: Point2D, b: Point2D) -> bool {
+        (a.x - b.x).abs() < 1e-12 && (a.y - b.y).abs() < 1e-12
+    }
+
+    #[test]
+    fn an_insert_with_the_usual_normal_is_placed_in_the_world_axes() {
+        let i = insert(v(10.0, 5.0, 3.0), FRAC_PI_2, WORLD_Z);
+        assert_eq!(
+            Affine2::from_insert(&i),
+            Affine2::placement(p(10.0, 5.0), 1.0, 1.0, FRAC_PI_2)
+        );
+    }
+
+    #[test]
+    fn a_mirrored_insert_lands_across_the_y_axis() {
+        // The OCS of normal (0, 0, -1) has its x axis along world -x: the
+        // stated insertion point (10, 5) is (-10, 5) in the world, and a
+        // block point one unit along the block's x axis goes one unit
+        // further left.
+        let t = Affine2::from_insert(&insert(v(10.0, 5.0, 0.0), 0.0, v(0.0, 0.0, -1.0)));
+        assert!(close(t.apply(p(0.0, 0.0)), p(-10.0, 5.0)));
+        assert!(close(t.apply(p(1.0, 0.0)), p(-11.0, 5.0)));
+        assert!(t.determinant() < 0.0, "a mirror image");
+        // Turned a quarter in its OCS, the block's x axis runs up the world
+        // y axis still, since the mirror leaves y alone.
+        let t = Affine2::from_insert(&insert(v(10.0, 5.0, 0.0), FRAC_PI_2, v(0.0, 0.0, -1.0)));
+        assert!(close(t.apply(p(1.0, 0.0)), p(-10.0, 6.0)));
+        // A stated normal that is not of unit length names the same OCS.
+        let long = Affine2::from_insert(&insert(v(10.0, 5.0, 0.0), 0.0, v(0.0, 0.0, -4.0)));
+        assert!(close(long.apply(p(1.0, 0.0)), p(-11.0, 5.0)));
+    }
+
+    #[test]
+    fn a_tilted_insert_is_seen_from_above_and_its_elevation_counts() {
+        // Normal (1, 0, 0): the OCS x axis is world y, its y axis world z
+        // and its z axis world x. From above, a block point (1, 0) placed at
+        // OCS height 7 is at world (7, 1); the block's y axis points
+        // straight up and flattens away.
+        let t = Affine2::from_insert(&insert(v(0.0, 0.0, 7.0), 0.0, v(1.0, 0.0, 0.0)));
+        assert!(close(t.apply(p(1.0, 0.0)), p(7.0, 1.0)));
+        assert!(close(t.apply(p(0.0, 1.0)), p(7.0, 0.0)));
+        assert_eq!(t.similarity_scale(), None);
+    }
+
+    #[test]
+    fn a_normal_that_is_not_a_direction_places_like_the_usual_one() {
+        let usual = Affine2::from_insert(&insert(v(10.0, 5.0, 0.0), 0.3, WORLD_Z));
+        for bad in [v(0.0, 0.0, 0.0), v(f64::NAN, 0.0, 1.0)] {
+            assert_eq!(
+                Affine2::from_insert(&insert(v(10.0, 5.0, 0.0), 0.3, bad)),
+                usual
+            );
+        }
+    }
+
+    #[test]
+    fn a_mirrored_block_inside_a_mirrored_block_is_the_right_way_round_again() {
+        let inner = Affine2::from_insert(&insert(v(1.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0)));
+        let outer = Affine2::from_insert(&insert(v(10.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0)));
+        let world = inner.then(&outer);
+        assert!(world.determinant() > 0.0);
+        // Inner: (2, 0) -> OCS (3, 0) -> (-3, 0) in the outer block; outer:
+        // -> OCS (7, 0) -> world (-7, 0).
+        assert!(close(world.apply(p(2.0, 0.0)), p(-7.0, 0.0)));
     }
 
     #[test]

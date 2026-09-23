@@ -20,7 +20,10 @@
 //! TEXT, ATTRIB, ATTDEF, INSERT, SOLID and TRACE -- state OCS coordinates
 //! and carry the OCS's normal as `extrusion` (see
 //! [`CircleEntity::extrusion`]). Taking those to world coordinates is a
-//! consumer's step, the reference's "arbitrary axis algorithm".
+//! consumer's step, the reference's "arbitrary axis algorithm" -- except
+//! for a block reference's placement, which the model carries as the one
+//! piece of arithmetic every consumer needs alike
+//! ([`crate::Affine2::from_insert`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -405,7 +408,9 @@ pub struct InsertEntity {
     pub attribs: Vec<AttribEntity>,
     /// DXF 210, the normal of the OCS the insertion point and rotation are
     /// stated in -- see [`CircleEntity::extrusion`]. A block mirrored with
-    /// the reference has (0, 0, -1) here and its scale as stated.
+    /// the reference has (0, 0, -1) here and its scale as stated;
+    /// [`crate::Affine2::from_insert`] is the placement that follows from
+    /// all of them.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
