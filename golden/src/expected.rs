@@ -202,6 +202,7 @@ fn common(handle: u32, layer: &str) -> EntityCommon {
         layer: Ref::Resolved(layer.to_string()),
         color_index: 256,
         true_color: None,
+        invisible: false,
     }
 }
 

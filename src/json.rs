@@ -118,6 +118,7 @@ mod tests {
             layer: Ref::Resolved("0".to_string()),
             color_index: 256,
             true_color: Some(0x12_34_56),
+            invisible: false,
         }
     }
 

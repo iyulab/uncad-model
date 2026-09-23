@@ -185,6 +185,12 @@ pub struct EntityCommon {
     /// opted into a direct RGB color; it then takes precedence over
     /// `color_index`.
     pub true_color: Option<u32>,
+    /// DXF 60: the file marks the entity invisible -- it is in the drawing
+    /// but not drawn (a dynamic block's hidden visibility states are the
+    /// common case). An optional group the file writes only when it is set,
+    /// so an absent one is visible.
+    #[serde(default)]
+    pub invisible: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
