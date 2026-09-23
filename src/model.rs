@@ -822,6 +822,37 @@ pub struct HatchEntity {
     /// world x is reversed, and so is the turn of every arc edge and bulge.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
+    /// Which of the areas the boundary paths enclose are filled (DXF 75).
+    /// `None` when the file does not say, or says a value the format does
+    /// not define.
+    #[serde(default)]
+    pub style: Option<HatchStyle>,
+}
+
+/// Which areas a HATCH fills among nested boundary paths (DXF 75).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HatchStyle {
+    /// 0: alternate areas from the outside in -- an island is left empty,
+    /// an island within it filled again.
+    Normal,
+    /// 1: only the outermost area; everything inside the first island is
+    /// left empty.
+    Outer,
+    /// 2: the whole outermost area, islands ignored.
+    Ignore,
+}
+
+impl HatchStyle {
+    /// The style DXF group 75 names, `None` for a value outside the three.
+    pub fn from_code(code: i64) -> Option<HatchStyle> {
+        match code {
+            0 => Some(HatchStyle::Normal),
+            1 => Some(HatchStyle::Outer),
+            2 => Some(HatchStyle::Ignore),
+            _ => None,
+        }
+    }
 }
 
 /// What a dimension measures, as the file states it (DXF 70, low three

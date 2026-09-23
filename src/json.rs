@@ -374,6 +374,7 @@ mod tests {
                 }],
                 elevation: 2.5,
                 extrusion: p3(0.0, 0.0, -1.0),
+                style: Some(HatchStyle::Outer),
             }),
             Entity::Solid3D(solid3d.clone()),
             Entity::Leader(LeaderEntity {
