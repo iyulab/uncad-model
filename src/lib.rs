@@ -32,8 +32,8 @@ pub use transform::Affine2;
 ///
 /// `entities` holds what the drawing shows (everything owned by the
 /// `*Model_Space`/`*Paper_Space*` blocks, see [`model`]) and `tables` the
-/// LAYER / BLOCK / MLINESTYLE tables it resolves against. This is what
-/// [`to_json`](Self::to_json) serializes verbatim.
+/// tables it resolves against and its layouts (see [`Tables`]). This is
+/// what [`to_json`](Self::to_json) serializes verbatim.
 ///
 /// It is a plain Rust value: `Clone`/`PartialEq`/`Send`/`Sync` without
 /// ceremony, constructible directly or deserialized from the JSON `to_json`

@@ -1,11 +1,12 @@
-//! The tables an entity resolves its references against: LAYER, BLOCK
-//! (block definitions) and MLINESTYLE.
+//! The tables an entity resolves its references against -- LAYER, BLOCK
+//! (block definitions), DIMSTYLE and MLINESTYLE -- and the drawing's
+//! layouts, which say what each of its tabs shows.
 //!
-//! The three maps are `BTreeMap`s, not hash maps, so iteration -- and
-//! therefore JSON key order -- is deterministic: the same drawing serializes
-//! to the same bytes on every run and every machine.
+//! The maps are `BTreeMap`s, not hash maps, so iteration -- and therefore
+//! JSON key order -- is deterministic: the same drawing serializes to the
+//! same bytes on every run and every machine.
 
-use crate::model::{absent, Entity, Ref};
+use crate::model::{absent, Entity, Point2D, Ref};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -115,6 +116,91 @@ pub struct BlockRecord {
     pub entities: Vec<Entity>,
 }
 
+/// One LAYOUT object: a tab of the drawing -- the model tab, or a sheet of
+/// paper space -- the block it shows, and the paper it is set up to be
+/// printed on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LayoutRecord {
+    /// DXF 1: the layout's name, as its tab shows it (`Model`, `Layout1`).
+    pub name: String,
+    /// DXF 71: the tab's place in the order of tabs; the model tab's is 0.
+    pub tab_order: i32,
+    /// DXF 330 of the layout's own part: the block record whose entities
+    /// the layout shows -- `*Model_Space` for the model tab, a
+    /// `*Paper_Space` block for a sheet -- which, resolved, is a key of
+    /// [`Tables::block_records`].
+    pub block_name: Ref<String>,
+    /// DXF 10: the lower-left corner of the layout's limits, in its own
+    /// space (paper space for a sheet).
+    pub limits_min: Point2D,
+    /// DXF 11: the upper-right corner of the layout's limits.
+    pub limits_max: Point2D,
+    /// How the layout is set up to print.
+    pub plot_settings: PlotSettings,
+}
+
+/// The plot settings a layout carries (the object's `AcDbPlotSettings`
+/// part): the paper, and where the layout is put on it. The reference
+/// states every distance here in millimetres, whatever
+/// [`Self::paper_units`] says.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlotSettings {
+    /// DXF 4: the paper size's name (`ISO_A4_(210.00_x_297.00_MM)`);
+    /// empty when none is set.
+    pub paper_name: String,
+    /// DXF 44: the paper's width as its size defines it, before
+    /// [`Self::rotation`]; 0 when no paper is set.
+    pub paper_width: f64,
+    /// DXF 45: the paper's height, likewise.
+    pub paper_height: f64,
+    /// DXF 40: the unprintable margin at the paper's left edge.
+    pub margin_left: f64,
+    /// DXF 41: the unprintable margin at the paper's bottom edge.
+    pub margin_bottom: f64,
+    /// DXF 42: the unprintable margin at the paper's right edge.
+    pub margin_right: f64,
+    /// DXF 43: the unprintable margin at the paper's top edge.
+    pub margin_top: f64,
+    /// DXF 46 and 47: the plot origin's offset.
+    pub plot_origin: Point2D,
+    /// DXF 72: the unit the layout is drawn in on paper. `None` when the
+    /// file states a value outside the format's three.
+    pub paper_units: Option<PlotPaperUnits>,
+    /// DXF 73: how the layout is turned on the paper. `None` when the file
+    /// states a value outside the format's four.
+    pub rotation: Option<PlotRotation>,
+    /// DXF 142: the paper-units side of the custom print scale.
+    pub scale_numerator: f64,
+    /// DXF 143: the drawing-units side of the custom print scale.
+    pub scale_denominator: f64,
+}
+
+/// The unit a layout is drawn in on paper (DXF 72, 0 to 2 in this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlotPaperUnits {
+    /// 0: inches.
+    Inches,
+    /// 1: millimetres.
+    Millimeters,
+    /// 2: pixels, for a raster device.
+    Pixels,
+}
+
+/// How a layout is turned on its paper (DXF 73, 0 to 3 in this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlotRotation {
+    /// 0: not turned.
+    Unrotated,
+    /// 1: a quarter turn counter-clockwise.
+    Counterclockwise90,
+    /// 2: upside down.
+    UpsideDown,
+    /// 3: a quarter turn clockwise.
+    Clockwise90,
+}
+
 /// The tables of a drawing.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Tables {
@@ -136,4 +222,11 @@ pub struct Tables {
     /// correspondence between a style's lines and an MLINE's vertices.
     /// Per-line color and linetype are not carried.
     pub mlinestyles: BTreeMap<String, Vec<f64>>,
+    /// Layout name -> record: every LAYOUT object, the model tab's
+    /// included. Empty for a file that has none -- one older than R2000, or
+    /// a DXF without an OBJECTS section -- whose paper space blocks are
+    /// still in [`Self::block_records`], and for a document written before
+    /// this field existed.
+    #[serde(default)]
+    pub layouts: BTreeMap<String, LayoutRecord>,
 }

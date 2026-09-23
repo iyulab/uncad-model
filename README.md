@@ -18,7 +18,8 @@ depend on it alone.
 
 - **Entities** — `Entity` and one struct per kind, each carrying a reference ID, a provenance and
   a confidence, with a three-state `Ref` for every reference and plain `Point2D` / `Point3D`.
-- **Tables** — `Tables`: layers, block definitions, dimension styles, mline styles.
+- **Tables** — `Tables`: layers, block definitions, dimension styles, mline styles, and the
+  layouts with their plot settings.
 - **Placement** — `Affine2`, the transform a block reference applies to its block, composed across
   nested references.
 - **Palette and diagnostics** — the ACI colour table and the reader diagnostics a drawing carries.

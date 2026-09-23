@@ -37,6 +37,7 @@ fn a_document_written_by_0_1_0_loads() {
     assert_eq!(db.tables.block_records["TITLE"].entities.len(), 1);
     assert_eq!(db.tables.dim_styles["ISO-25"].decimal_places, Some(2));
     assert_eq!(db.tables.mlinestyles["STANDARD"], [0.5, -0.5]);
+    assert!(db.tables.layouts.is_empty());
 }
 
 #[test]

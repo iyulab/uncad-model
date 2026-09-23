@@ -166,6 +166,9 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             layers,
             block_records,
             mlinestyles: BTreeMap::new(),
+            // The writer writes no OBJECTS section, so there is no LAYOUT
+            // object to read.
+            layouts: BTreeMap::new(),
         },
         read_diagnostics: ReadDiagnostics::default(),
     }

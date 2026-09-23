@@ -106,7 +106,9 @@ impl CadDatabase {
 mod tests {
     use super::*;
     use crate::model::*;
-    use crate::tables::{BlockRecord, LayerRecord, Tables};
+    use crate::tables::{
+        BlockRecord, LayerRecord, LayoutRecord, PlotPaperUnits, PlotRotation, PlotSettings, Tables,
+    };
     use std::collections::BTreeMap;
 
     fn common(handle: &str) -> EntityCommon {
@@ -626,6 +628,31 @@ mod tests {
         );
         let mut mlinestyles = BTreeMap::new();
         mlinestyles.insert("STANDARD".to_string(), vec![0.5, -0.5]);
+        let mut layouts = BTreeMap::new();
+        layouts.insert(
+            "Layout1".to_string(),
+            LayoutRecord {
+                name: "Layout1".to_string(),
+                tab_order: 1,
+                block_name: Ref::Resolved("*Paper_Space".to_string()),
+                limits_min: p2(0.0, 0.0),
+                limits_max: p2(420.0, 297.0),
+                plot_settings: PlotSettings {
+                    paper_name: "ISO_A3_(420.00_x_297.00_MM)".to_string(),
+                    paper_width: 297.0,
+                    paper_height: 420.0,
+                    margin_left: 7.5,
+                    margin_bottom: 20.0,
+                    margin_right: 7.5,
+                    margin_top: 20.0,
+                    plot_origin: p2(-7.5, -20.0),
+                    paper_units: Some(PlotPaperUnits::Millimeters),
+                    rotation: Some(PlotRotation::Counterclockwise90),
+                    scale_numerator: 1.0,
+                    scale_denominator: 1.0,
+                },
+            },
+        );
         let db = CadDatabase {
             entities: one_of_each(),
             tables: Tables {
@@ -633,6 +660,7 @@ mod tests {
                 layers,
                 block_records,
                 mlinestyles,
+                layouts,
             },
             read_diagnostics: Default::default(),
         };
