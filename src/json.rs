@@ -33,8 +33,12 @@
 //!   `{"type":"RESOLVED","data":"0"}`, `{"type":"ABSENT"}` or
 //!   `{"type":"UNRESOLVED","data":"2A"}` -- never a bare string, so a name that
 //!   could not be read is not mistaken for a name that is empty.
+//! - A polyline's vertices -- an LWPOLYLINE's, a POLYLINE_2D's, a HATCH
+//!   polyline path's -- are objects of their own,
+//!   `{"point":{"x":..,"y":..},"bulge":..,"start_width":..,"end_width":..}`,
+//!   not bare points.
 //! - HATCH: each item of `boundary_paths` is `{"type":"POLYLINE","data":
-//!   [pt,..]}` or `{"type":"EDGES","data":[edge,..]}`, and each edge is
+//!   [vertex,..]}` or `{"type":"EDGES","data":[edge,..]}`, and each edge is
 //!   `{"type":"LINE"|"ARC"|"ELLIPSE"|"SPLINE", ...}` with the edge's own fields
 //!   beside the tag. Upper-case like the entity tags, but these are path/edge
 //!   kinds, not DXF entity names.
@@ -170,25 +174,27 @@ mod tests {
         };
         let lwpoly = LwPolylineEntity {
             common: c.clone(),
-            vertices: vec![p2(0.0, 0.0), p2(1.0, 0.0), p2(1.0, 1.0)],
-            closed: true,
-            bulges: vec![0.0, 1.0, -0.4142135623730951],
-            widths: vec![
-                SegmentWidth {
-                    start: 0.0,
-                    end: 2.0,
+            vertices: vec![
+                PolylineVertex {
+                    start_width: 0.0,
+                    end_width: 2.0,
+                    ..PolylineVertex::straight(p2(0.0, 0.0))
                 },
-                SegmentWidth {
-                    start: 2.0,
-                    end: 2.0,
+                PolylineVertex {
+                    point: p2(1.0, 0.0),
+                    bulge: -0.5,
+                    start_width: 2.0,
+                    end_width: 2.0,
                 },
-                SegmentWidth {
-                    start: 0.5,
-                    end: 0.0,
+                PolylineVertex {
+                    start_width: 0.5,
+                    end_width: 0.0,
+                    ..PolylineVertex::straight(p2(1.0, 1.0))
                 },
             ],
+            closed: true,
             const_width: 0.25,
-            elevation: 5.0,
+            elevation: 2.0,
             extrusion: p3(0.0, 0.0, -1.0),
         };
         let solid3d = Solid3DEntity {
@@ -230,7 +236,7 @@ mod tests {
                 radius: 1.0,
                 start_angle: 0.0,
                 end_angle: 1.0,
-                extrusion: p3(0.0, 0.0, -1.0),
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Ellipse(EllipseEntity {
                 common: c.clone(),
@@ -251,7 +257,7 @@ mod tests {
                 corner2: p2(1.0, 0.0),
                 corner3: p2(1.0, 1.0),
                 corner4: p2(0.0, 1.0),
-                elevation: 0.0,
+                elevation: 3.0,
                 extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Trace(SolidEntity {
@@ -260,7 +266,7 @@ mod tests {
                 corner2: p2(1.0, 0.0),
                 corner3: p2(0.0, 0.2),
                 corner4: p2(1.0, 0.2),
-                elevation: 2.0,
+                elevation: 0.0,
                 extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Ray(ray.clone()),
@@ -323,6 +329,7 @@ mod tests {
                 corner2: p3(1.0, 0.0, 0.0),
                 corner3: p3(1.0, 1.0, 0.0),
                 corner4: p3(0.0, 1.0, 0.0),
+                invisible_edges: [false, true, false, false],
             }),
             Entity::Spline(SplineEntity {
                 common: c.clone(),
@@ -376,7 +383,16 @@ mod tests {
             Entity::Hatch(HatchEntity {
                 common: c.clone(),
                 boundary_paths: vec![
-                    HatchBoundaryPath::Polyline(vec![p2(0.0, 0.0), p2(1.0, 0.0), p2(0.0, 1.0)]),
+                    HatchBoundaryPath::Polyline(vec![
+                        PolylineVertex::straight(p2(0.0, 0.0)),
+                        PolylineVertex {
+                            point: p2(1.0, 0.0),
+                            bulge: 1.0,
+                            start_width: 0.0,
+                            end_width: 0.0,
+                        },
+                        PolylineVertex::straight(p2(0.0, 1.0)),
+                    ]),
                     HatchBoundaryPath::Edges(vec![
                         HatchEdge::Line {
                             start: p2(0.0, 0.0),

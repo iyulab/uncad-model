@@ -158,6 +158,51 @@ impl Xy {
     }
 }
 
+/// One polyline vertex: where it is and the bulge of the segment that
+/// leaves it (DXF 42 -- `0` is straight, otherwise the tangent of a quarter
+/// of the arc's included angle, positive counter-clockwise), and that
+/// segment's widths.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Vertex {
+    pub at: Xy,
+    pub bulge: f64,
+    /// DXF 40 and 41: the segment's width where it leaves this vertex and
+    /// where it reaches the next. The writer states them on every vertex of
+    /// a polyline any vertex of which has a width, and on none otherwise.
+    pub start_width: f64,
+    pub end_width: f64,
+}
+
+impl Vertex {
+    pub const fn bulged(at: Xy, bulge: f64) -> Self {
+        Vertex {
+            at,
+            bulge,
+            start_width: 0.0,
+            end_width: 0.0,
+        }
+    }
+
+    /// This vertex with its segment `start_width` wide where it leaves the
+    /// vertex and `end_width` wide where it reaches the next.
+    pub const fn wide(self, start_width: f64, end_width: f64) -> Self {
+        Vertex {
+            at: self.at,
+            bulge: self.bulge,
+            start_width,
+            end_width,
+        }
+    }
+}
+
+impl From<Xy> for Vertex {
+    /// A vertex whose outgoing segment is straight and has no width of its
+    /// own.
+    fn from(at: Xy) -> Self {
+        Vertex::bulged(at, 0.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntitySpec {
     Line {
@@ -167,35 +212,45 @@ pub enum EntitySpec {
     },
     Circle {
         layer: String,
+        /// In the circle's own coordinate system: for a mirrored circle
+        /// (extrusion (0, 0, -1)) the world x is the negative of this x.
         center: Xy,
         radius: f64,
+        /// Extrusion (0, 0, -1) rather than the default (0, 0, 1) -- what a
+        /// mirror copy writes.
+        mirrored: bool,
     },
     Arc {
         layer: String,
+        /// As for `Circle`.
         center: Xy,
         radius: f64,
-        /// Degrees, as DXF stores them.
+        /// Degrees, as DXF stores them, counter-clockwise about the extrusion.
         start_deg: f64,
         end_deg: f64,
+        mirrored: bool,
     },
     LwPolyline {
         layer: String,
-        vertices: Vec<Xy>,
+        /// In the polyline's own coordinate system, as for `Circle`.
+        vertices: Vec<Vertex>,
         closed: bool,
-        /// DXF 42 per vertex when not empty (one per vertex).
-        bulges: Vec<f64>,
-        /// DXF 40 and 41 per vertex when not empty (one pair per vertex).
-        widths: Vec<(f64, f64)>,
         /// DXF 43 when not 0.
         const_width: f64,
+        /// DXF 38 when not 0: the z of every vertex in the polyline's own
+        /// coordinate system.
+        elevation: f64,
+        mirrored: bool,
     },
     Text {
         layer: String,
+        /// In the text's own coordinate system, as for `Circle`.
         insert: Xy,
         height: f64,
         text: String,
         /// Degrees.
         rotation_deg: f64,
+        mirrored: bool,
     },
     /// A TEXT with every placement group the plain [`EntitySpec::Text`]
     /// leaves at the format's defaults.
@@ -220,20 +275,12 @@ pub enum EntitySpec {
         /// DXF 7 when set.
         style: Option<String>,
     },
-    /// A SOLID: four corners in DXF order.
+    /// A SOLID: four corners in DXF order, in its own coordinate system as
+    /// for `Circle`.
     Solid {
         layer: String,
         corners: [Xy; 4],
-    },
-    /// The entity inside, written in the object coordinate system whose
-    /// normal (DXF 210) is (0, 0, -1) -- the mirror image across the y axis
-    /// that AutoCAD's MIRROR makes of an entity -- at `elevation`, its z in
-    /// that system. Its coordinates are written as they stand, so the same
-    /// numbers describe the mirror image of the unmirrored entity. Only
-    /// the kinds the format defines in an OCS can be mirrored this way.
-    Mirrored {
-        elevation: f64,
-        entity: Box<EntitySpec>,
+        mirrored: bool,
     },
     /// A polygon mesh (POLYLINE with group 70 bit 16): `m` rows of `n`
     /// vertices, row by row.
@@ -295,12 +342,16 @@ pub enum EntitySpec {
     Insert {
         layer: String,
         block: String,
+        /// In the reference's own coordinate system, as for `Circle`; the
+        /// rotation turns about that system's Z axis.
         insert: Xy,
         scale: f64,
         /// Degrees.
         rotation_deg: f64,
-        /// Attribute values; each becomes an ATTRIB after the INSERT.
+        /// Attribute values; each becomes an ATTRIB after the INSERT, in
+        /// the world's own axes whatever the INSERT's.
         attribs: Vec<AttribSpec>,
+        mirrored: bool,
     },
     /// A linear (rotated) dimension between two definition points, with its
     /// drawn geometry in an anonymous `*D<n>` block the writer produces.
@@ -369,10 +420,12 @@ impl EntitySpec {
                 layer,
                 center,
                 radius,
+                mirrored,
             } => EntitySpec::Circle {
                 layer: layer.clone(),
-                center: m(center),
+                center: moved_ocs(center, *mirrored, dx, dy),
                 radius: *radius,
+                mirrored: *mirrored,
             },
             EntitySpec::Arc {
                 layer,
@@ -380,27 +433,35 @@ impl EntitySpec {
                 radius,
                 start_deg,
                 end_deg,
+                mirrored,
             } => EntitySpec::Arc {
                 layer: layer.clone(),
-                center: m(center),
+                center: moved_ocs(center, *mirrored, dx, dy),
                 radius: *radius,
                 start_deg: *start_deg,
                 end_deg: *end_deg,
+                mirrored: *mirrored,
             },
             EntitySpec::LwPolyline {
                 layer,
                 vertices,
                 closed,
-                bulges,
-                widths,
                 const_width,
+                elevation,
+                mirrored,
             } => EntitySpec::LwPolyline {
                 layer: layer.clone(),
-                vertices: vertices.iter().map(m).collect(),
+                vertices: vertices
+                    .iter()
+                    .map(|v| Vertex {
+                        at: moved_ocs(&v.at, *mirrored, dx, dy),
+                        ..*v
+                    })
+                    .collect(),
                 closed: *closed,
-                bulges: bulges.clone(),
-                widths: widths.clone(),
                 const_width: *const_width,
+                elevation: *elevation,
+                mirrored: *mirrored,
             },
             EntitySpec::Text {
                 layer,
@@ -408,12 +469,14 @@ impl EntitySpec {
                 height,
                 text,
                 rotation_deg,
+                mirrored,
             } => EntitySpec::Text {
                 layer: layer.clone(),
-                insert: m(insert),
+                insert: moved_ocs(insert, *mirrored, dx, dy),
                 height: *height,
                 text: text.clone(),
                 rotation_deg: *rotation_deg,
+                mirrored: *mirrored,
             },
             EntitySpec::Attdef {
                 layer,
@@ -437,13 +500,15 @@ impl EntitySpec {
                 scale,
                 rotation_deg,
                 attribs,
+                mirrored,
             } => EntitySpec::Insert {
                 layer: layer.clone(),
                 block: block.clone(),
-                insert: m(insert),
+                insert: moved_ocs(insert, *mirrored, dx, dy),
                 scale: *scale,
                 rotation_deg: *rotation_deg,
                 attribs: attribs.clone(),
+                mirrored: *mirrored,
             },
             EntitySpec::JustifiedText {
                 layer,
@@ -470,15 +535,14 @@ impl EntitySpec {
                 oblique_deg: *oblique_deg,
                 style: style.clone(),
             },
-            EntitySpec::Solid { layer, corners } => EntitySpec::Solid {
+            EntitySpec::Solid {
+                layer,
+                corners,
+                mirrored,
+            } => EntitySpec::Solid {
                 layer: layer.clone(),
-                corners: corners.map(|c| c.moved(dx, dy)),
-            },
-            // Mirrored, the entity's own x runs the other way: moving it by
-            // dx in the drawing moves its stated x by -dx.
-            EntitySpec::Mirrored { elevation, entity } => EntitySpec::Mirrored {
-                elevation: *elevation,
-                entity: Box::new(entity.moved(-dx, dy)),
+                corners: corners.map(|c| moved_ocs(&c, *mirrored, dx, dy)),
+                mirrored: *mirrored,
             },
             EntitySpec::PolygonMesh {
                 layer,
@@ -579,7 +643,6 @@ impl EntitySpec {
             | EntitySpec::DiameterDimension { layer, .. }
             | EntitySpec::OrdinateDimension { layer, .. }
             | EntitySpec::Viewport { layer, .. } => layer,
-            EntitySpec::Mirrored { entity, .. } => entity.layer(),
         }
     }
 
@@ -593,5 +656,15 @@ impl EntitySpec {
                 | EntitySpec::DiameterDimension { .. }
                 | EntitySpec::OrdinateDimension { .. }
         )
+    }
+}
+
+/// An own-coordinate-system point moved by (`dx`, `dy`) in the world: a
+/// mirrored entity's own x axis is the world's negative x.
+fn moved_ocs(center: &Xy, mirrored: bool, dx: f64, dy: f64) -> Xy {
+    if mirrored {
+        center.moved(-dx, dy)
+    } else {
+        center.moved(dx, dy)
     }
 }

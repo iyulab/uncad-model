@@ -64,8 +64,7 @@ pub struct Written {
 /// string under [`Codepage::Ascii`], or a character the codepage has no
 /// byte sequence for. A case that cannot be written faithfully is not an
 /// oracle for anything. Likewise when a spec asks for something the format
-/// cannot say: a mirrored entity of a kind that has no object coordinate
-/// system, or a viewport frozen on a layer the spec does not declare.
+/// cannot say: a viewport frozen on a layer the spec does not declare.
 pub fn write(spec: &Spec) -> Written {
     let mut w = Writer {
         codepage: spec.codepage,
@@ -96,9 +95,6 @@ struct Writer {
     layer_handles: Vec<(String, u32)>,
     /// Set while writing paper-space entities, which carry DXF 67.
     paper_space: bool,
-    /// Set while writing the entity inside [`EntitySpec::Mirrored`]: its
-    /// elevation, the z of its points in its (mirrored) OCS.
-    mirrored: Option<f64>,
 }
 
 impl Writer {
@@ -137,6 +133,16 @@ impl Writer {
         self.pair(code, format!("{value:?}"));
     }
 
+    /// The extrusion group (210/220/230), written only when it is not the
+    /// default -- as AutoCAD writes it.
+    fn extrusion(&mut self, mirrored: bool) {
+        if mirrored {
+            self.num(210, 0.0);
+            self.num(220, 0.0);
+            self.num(230, -1.0);
+        }
+    }
+
     fn xy(&mut self, base: u16, p: Xy) {
         self.xyz(base, p, 0.0);
     }
@@ -145,22 +151,6 @@ impl Writer {
         self.num(base, p.x);
         self.num(base + 10, p.y);
         self.num(base + 20, z);
-    }
-
-    /// The z of an OCS entity's points: its elevation when it is written
-    /// mirrored, 0 otherwise.
-    fn elevation(&self) -> f64 {
-        self.mirrored.unwrap_or(0.0)
-    }
-
-    /// DXF 210/220/230 for an OCS entity written mirrored; nothing for one
-    /// in the world's own axes, the reference's default.
-    fn normal(&mut self) {
-        if self.mirrored.is_some() {
-            self.num(210, 0.0);
-            self.num(220, 0.0);
-            self.num(230, -1.0);
-        }
     }
 
     fn handle(&mut self) -> u32 {
@@ -519,28 +509,8 @@ impl Writer {
     /// anonymous block a dimension refers to; `owner` is the BLOCK_RECORD
     /// that owns the entity (DXF 330).
     fn entity(&mut self, e: &EntitySpec, dim_block: Option<&str>, owner: u32) -> u32 {
-        if let EntitySpec::Mirrored { elevation, entity } = e {
-            assert!(
-                matches!(
-                    **entity,
-                    EntitySpec::Circle { .. }
-                        | EntitySpec::Arc { .. }
-                        | EntitySpec::LwPolyline { .. }
-                        | EntitySpec::Text { .. }
-                        | EntitySpec::JustifiedText { .. }
-                        | EntitySpec::Solid { .. }
-                        | EntitySpec::Insert { .. }
-                ),
-                "{entity:?} has no object coordinate system to mirror"
-            );
-            self.mirrored = Some(*elevation);
-            let h = self.entity(entity, dim_block, owner);
-            self.mirrored = None;
-            return h;
-        }
         let h = self.handle();
         let hex = format!("{h:X}");
-        let z = self.elevation();
         match e {
             EntitySpec::Line { layer, start, end } => {
                 self.pair(0, "LINE");
@@ -553,13 +523,14 @@ impl Writer {
                 layer,
                 center,
                 radius,
+                mirrored,
             } => {
                 self.pair(0, "CIRCLE");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbCircle");
-                self.xyz(10, *center, z);
+                self.xy(10, *center);
                 self.num(40, *radius);
-                self.normal();
+                self.extrusion(*mirrored);
             }
             EntitySpec::Arc {
                 layer,
@@ -567,13 +538,14 @@ impl Writer {
                 radius,
                 start_deg,
                 end_deg,
+                mirrored,
             } => {
                 self.pair(0, "ARC");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbCircle");
-                self.xyz(10, *center, z);
+                self.xy(10, *center);
                 self.num(40, *radius);
-                self.normal();
+                self.extrusion(*mirrored);
                 self.pair(100, "AcDbArc");
                 self.num(50, *start_deg);
                 self.num(51, *end_deg);
@@ -582,12 +554,10 @@ impl Writer {
                 layer,
                 vertices,
                 closed,
-                bulges,
-                widths,
                 const_width,
+                elevation,
+                mirrored,
             } => {
-                assert!(bulges.is_empty() || bulges.len() == vertices.len());
-                assert!(widths.is_empty() || widths.len() == vertices.len());
                 self.pair(0, "LWPOLYLINE");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbPolyline");
@@ -596,21 +566,28 @@ impl Writer {
                 if *const_width != 0.0 {
                     self.num(43, *const_width);
                 }
-                if z != 0.0 {
-                    self.num(38, z);
+                if *elevation != 0.0 {
+                    self.num(38, *elevation);
                 }
-                for (i, v) in vertices.iter().enumerate() {
-                    self.num(10, v.x);
-                    self.num(20, v.y);
-                    if let Some((start, end)) = widths.get(i) {
-                        self.num(40, *start);
-                        self.num(41, *end);
+                // A polyline with widths states them on every vertex, as a
+                // file with variable widths does; one without states none.
+                let wide = vertices
+                    .iter()
+                    .any(|v| v.start_width != 0.0 || v.end_width != 0.0);
+                for v in vertices {
+                    self.num(10, v.at.x);
+                    self.num(20, v.at.y);
+                    if wide {
+                        self.num(40, v.start_width);
+                        self.num(41, v.end_width);
                     }
-                    if let Some(bulge) = bulges.get(i) {
-                        self.num(42, *bulge);
+                    // Written only when the segment is an arc, as AutoCAD
+                    // writes it: an absent 42 is a straight segment.
+                    if v.bulge != 0.0 {
+                        self.num(42, v.bulge);
                     }
                 }
-                self.normal();
+                self.extrusion(*mirrored);
             }
             EntitySpec::Text {
                 layer,
@@ -618,15 +595,16 @@ impl Writer {
                 height,
                 text,
                 rotation_deg,
+                mirrored,
             } => {
                 self.pair(0, "TEXT");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbText");
-                self.xyz(10, *insert, z);
+                self.xy(10, *insert);
                 self.num(40, *height);
                 self.pair(1, text);
                 self.num(50, *rotation_deg);
-                self.normal();
+                self.extrusion(*mirrored);
                 self.pair(100, "AcDbText");
             }
             EntitySpec::JustifiedText {
@@ -645,7 +623,7 @@ impl Writer {
                 self.pair(0, "TEXT");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbText");
-                self.xyz(10, *insert, z);
+                self.xy(10, *insert);
                 self.num(40, *height);
                 self.pair(1, text);
                 self.num(50, *rotation_deg);
@@ -664,22 +642,25 @@ impl Writer {
                     self.pair(72, horizontal_code(*horizontal));
                 }
                 if justified {
-                    self.xyz(11, *alignment, z);
+                    self.xy(11, *alignment);
                 }
-                self.normal();
                 self.pair(100, "AcDbText");
                 if *vertical != VerticalJustification::Baseline {
                     self.pair(73, vertical_code(*vertical));
                 }
             }
-            EntitySpec::Solid { layer, corners } => {
+            EntitySpec::Solid {
+                layer,
+                corners,
+                mirrored,
+            } => {
                 self.pair(0, "SOLID");
                 self.common(&hex, layer, owner);
                 self.pair(100, "AcDbTrace");
                 for (i, corner) in (0u16..).zip(corners) {
-                    self.xyz(10 + i, *corner, z);
+                    self.xy(10 + i, *corner);
                 }
-                self.normal();
+                self.extrusion(*mirrored);
             }
             EntitySpec::Attdef {
                 layer,
@@ -707,6 +688,7 @@ impl Writer {
                 scale,
                 rotation_deg,
                 attribs,
+                mirrored,
             } => {
                 self.pair(0, "INSERT");
                 self.common(&hex, layer, owner);
@@ -715,21 +697,19 @@ impl Writer {
                 }
                 self.pair(100, "AcDbBlockReference");
                 self.pair(2, block);
-                self.xyz(10, *insert, z);
+                self.xy(10, *insert);
                 self.num(41, *scale);
                 self.num(42, *scale);
                 self.num(43, *scale);
                 self.num(50, *rotation_deg);
-                self.normal();
+                self.extrusion(*mirrored);
                 if !attribs.is_empty() {
                     // The attributes and the SEQEND are owned by the INSERT,
                     // and are in the world's own axes whatever the INSERT's.
-                    let mirrored = self.mirrored.take();
                     let mut attrib_handles = Vec::new();
                     for a in attribs {
                         attrib_handles.push(self.attrib(a, layer, h));
                     }
-                    self.mirrored = mirrored;
                     self.seqend(layer, h);
                     self.handles.attribs.push((h, attrib_handles));
                 }
@@ -936,7 +916,6 @@ impl Writer {
                 self.pair(79, 0);
                 self.num(146, 0.0);
             }
-            EntitySpec::Mirrored { .. } => unreachable!("handled above"),
         }
         h
     }
@@ -1188,6 +1167,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: 0.0,
+                    mirrored: false,
                 },
             ]
         }
@@ -1249,6 +1229,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: text_rotation,
+                    mirrored: false,
                 },
             ]
         }
@@ -1271,6 +1252,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: 0.0,
+                    mirrored: false,
                 },
             ];
             entities
@@ -1294,6 +1276,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: 0.0,
+                    mirrored: false,
                 },
             ]
         }

@@ -18,8 +18,8 @@ use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
     DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
     HorizontalJustification, InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D,
-    Ref, SegmentWidth, Solid3DEntity, SolidEntity, TextEntity, TextOverride, VerticalJustification,
-    ViewportEntity, ViewportView,
+    PolylineVertex, Ref, Solid3DEntity, SolidEntity, TextEntity, TextOverride,
+    VerticalJustification, ViewportEntity, ViewportView,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -277,11 +277,11 @@ fn common(handle: u32, layer: &str) -> EntityCommon {
 }
 
 fn p3(p: Xy) -> Point3D {
-    at(p, 0.0)
-}
-
-fn at(p: Xy, z: f64) -> Point3D {
-    Point3D { x: p.x, y: p.y, z }
+    Point3D {
+        x: p.x,
+        y: p.y,
+        z: 0.0,
+    }
 }
 
 /// The OCS normal of an entity whose file writes no group 210: the
@@ -290,27 +290,6 @@ const Z_AXIS: Point3D = Point3D {
     x: 0.0,
     y: 0.0,
     z: 1.0,
-};
-
-/// The OCS normal [`EntitySpec::Mirrored`] writes.
-const MIRRORED: Point3D = Point3D {
-    x: 0.0,
-    y: 0.0,
-    z: -1.0,
-};
-
-/// The object coordinate system an entity is written in: its normal and
-/// its elevation in it.
-#[derive(Clone, Copy)]
-struct Ocs {
-    extrusion: Point3D,
-    elevation: f64,
-}
-
-/// The world's own axes, what every entity not written mirrored is in.
-const WORLD: Ocs = Ocs {
-    extrusion: Z_AXIS,
-    elevation: 0.0,
 };
 
 fn p2(p: Xy) -> Point2D {
@@ -324,29 +303,7 @@ fn convert(
     dim_block: Option<&str>,
     spec: &Spec,
 ) -> Entity {
-    convert_in(e, handle, attrib_handles, dim_block, spec, WORLD)
-}
-
-fn convert_in(
-    e: &EntitySpec,
-    handle: u32,
-    attrib_handles: &[u32],
-    dim_block: Option<&str>,
-    spec: &Spec,
-    ocs: Ocs,
-) -> Entity {
     match e {
-        EntitySpec::Mirrored { elevation, entity } => convert_in(
-            entity,
-            handle,
-            attrib_handles,
-            dim_block,
-            spec,
-            Ocs {
-                extrusion: MIRRORED,
-                elevation: *elevation,
-            },
-        ),
         EntitySpec::Line { layer, start, end } => Entity::Line(LineEntity {
             common: common(handle, layer),
             start_point: p3(*start),
@@ -356,11 +313,12 @@ fn convert_in(
             layer,
             center,
             radius,
+            mirrored,
         } => Entity::Circle(CircleEntity {
             common: common(handle, layer),
-            center: at(*center, ocs.elevation),
+            center: p3(*center),
             radius: *radius,
-            extrusion: ocs.extrusion,
+            extrusion: extrusion(*mirrored),
         }),
         EntitySpec::Arc {
             layer,
@@ -368,54 +326,53 @@ fn convert_in(
             radius,
             start_deg,
             end_deg,
+            mirrored,
         } => Entity::Arc(ArcEntity {
+            extrusion: extrusion(*mirrored),
             common: common(handle, layer),
-            center: at(*center, ocs.elevation),
+            center: p3(*center),
             radius: *radius,
             start_angle: start_deg.to_radians(),
             end_angle: end_deg.to_radians(),
-            extrusion: ocs.extrusion,
         }),
         EntitySpec::LwPolyline {
             layer,
             vertices,
             closed,
-            bulges,
-            widths,
             const_width,
-        } => Entity::LwPolyline(LwPolylineEntity {
-            common: common(handle, layer),
-            vertices: vertices.iter().copied().map(p2).collect(),
-            closed: *closed,
-            // Two spellings of one polyline are one model: every bulge 0 is
-            // no bulge at all, and every segment as wide as the constant
-            // width is no per-vertex width at all.
-            bulges: if bulges.iter().all(|b| *b == 0.0) {
-                Vec::new()
-            } else {
-                bulges.clone()
-            },
-            widths: if widths
+            elevation,
+            mirrored,
+        } => {
+            // Two spellings of one polyline are one model: every segment
+            // stated as wide as the constant width, at both ends, is no
+            // width of the vertices' own.
+            let constant = vertices
                 .iter()
-                .all(|&(start, end)| start == *const_width && end == *const_width)
-            {
-                Vec::new()
-            } else {
-                widths
+                .all(|v| v.start_width == *const_width && v.end_width == *const_width);
+            Entity::LwPolyline(LwPolylineEntity {
+                common: common(handle, layer),
+                vertices: vertices
                     .iter()
-                    .map(|&(start, end)| SegmentWidth { start, end })
-                    .collect()
-            },
-            const_width: *const_width,
-            elevation: ocs.elevation,
-            extrusion: ocs.extrusion,
-        }),
+                    .map(|v| PolylineVertex {
+                        point: p2(v.at),
+                        bulge: v.bulge,
+                        start_width: if constant { 0.0 } else { v.start_width },
+                        end_width: if constant { 0.0 } else { v.end_width },
+                    })
+                    .collect(),
+                closed: *closed,
+                const_width: *const_width,
+                elevation: *elevation,
+                extrusion: extrusion(*mirrored),
+            })
+        }
         EntitySpec::Text {
             layer,
             insert,
             height,
             text,
             rotation_deg,
+            mirrored,
         } => Entity::Text(TextEntity {
             common: common(handle, layer),
             start_point: p2(*insert),
@@ -428,8 +385,8 @@ fn convert_in(
             width_factor: 1.0,
             oblique_angle: 0.0,
             style_name: text_style_ref(&None, spec),
-            elevation: ocs.elevation,
-            extrusion: ocs.extrusion,
+            elevation: 0.0,
+            extrusion: extrusion(*mirrored),
         }),
         EntitySpec::JustifiedText {
             layer,
@@ -458,10 +415,14 @@ fn convert_in(
             width_factor: *width_factor,
             oblique_angle: oblique_deg.to_radians(),
             style_name: text_style_ref(style, spec),
-            elevation: ocs.elevation,
-            extrusion: ocs.extrusion,
+            elevation: 0.0,
+            extrusion: Z_AXIS,
         }),
-        EntitySpec::Solid { layer, corners } => {
+        EntitySpec::Solid {
+            layer,
+            corners,
+            mirrored,
+        } => {
             let [corner1, corner2, corner3, corner4] = corners.map(p2);
             Entity::Solid(SolidEntity {
                 common: common(handle, layer),
@@ -469,8 +430,8 @@ fn convert_in(
                 corner2,
                 corner3,
                 corner4,
-                elevation: ocs.elevation,
-                extrusion: ocs.extrusion,
+                elevation: 0.0,
+                extrusion: extrusion(*mirrored),
             })
         }
         EntitySpec::Attdef {
@@ -504,6 +465,7 @@ fn convert_in(
             scale,
             rotation_deg,
             attribs,
+            mirrored,
         } => Entity::Insert(InsertEntity {
             common: common(handle, layer),
             // A reference to a block the file never defines. The file names
@@ -516,7 +478,7 @@ fn convert_in(
             } else {
                 Ref::Unresolved(block.clone())
             },
-            insertion_point: at(*insert, ocs.elevation),
+            insertion_point: p3(*insert),
             scale: Point3D {
                 x: *scale,
                 y: *scale,
@@ -528,7 +490,7 @@ fn convert_in(
                 .zip(attrib_handles)
                 .map(|(a, &h)| attrib(a, h, layer, spec))
                 .collect(),
-            extrusion: ocs.extrusion,
+            extrusion: extrusion(*mirrored),
         }),
         EntitySpec::PolygonMesh {
             layer,
@@ -748,4 +710,13 @@ fn mesh_wireframe(
         }
     }
     edges
+}
+
+/// The extrusion a mirrored entity writes, or the default.
+fn extrusion(mirrored: bool) -> Point3D {
+    Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: if mirrored { -1.0 } else { 1.0 },
+    }
 }

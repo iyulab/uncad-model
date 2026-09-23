@@ -15,11 +15,11 @@
 //! consumer's decision and is not encoded here.
 //!
 //! Coordinates are the ones the file states. Most entities state world
-//! coordinates; the planar ones the reference defines in an *object
-//! coordinate system* (OCS) -- CIRCLE, ARC, LWPOLYLINE and POLYLINE_2D,
-//! TEXT, ATTRIB, ATTDEF, INSERT, SOLID and TRACE -- state OCS coordinates
-//! and carry the OCS's normal as `extrusion` (see
-//! [`CircleEntity::extrusion`]). Taking those to world coordinates is a
+//! coordinates; the planar ones the reference defines in an object
+//! coordinate system -- CIRCLE, ARC, LWPOLYLINE and POLYLINE_2D, TEXT,
+//! ATTRIB, ATTDEF, INSERT, SOLID and TRACE -- state points of their own
+//! coordinate system, whose Z axis is the entity's `extrusion` (DXF 210;
+//! see [`CircleEntity::extrusion`]). Taking those to world coordinates is a
 //! consumer's step, the reference's "arbitrary axis algorithm" -- except
 //! for a block reference's placement, which the model carries as the one
 //! piece of arithmetic every consumer needs alike
@@ -43,6 +43,49 @@ pub struct Point3D {
 pub struct Point2D {
     pub x: f64,
     pub y: f64,
+}
+
+/// One vertex of a 2D polyline -- an LWPOLYLINE, a 2D POLYLINE, or a HATCH
+/// boundary path given as a polyline.
+///
+/// `bulge` (DXF 42) describes the segment from this vertex to the next one
+/// (for the last vertex of a closed polyline, back to the first): `0` is a
+/// straight segment; otherwise the segment is a circular arc and `bulge` is
+/// the tangent of a quarter of its included angle, positive when the arc
+/// turns counter-clockwise from this vertex to the next. A file that does
+/// not write the group states a straight segment, so its absence is `0`.
+///
+/// `start_width` and `end_width` (DXF 40 and 41) are the same segment's
+/// width where it leaves this vertex and where it reaches the next, in
+/// drawing units; they differ for a tapered segment, such as an arrowhead
+/// drawn as a polyline. A file that does not write them gives the vertex no
+/// width of its own, so their absence is `0` -- and an LWPOLYLINE none of
+/// whose vertices has one is as wide as its
+/// [`LwPolylineEntity::const_width`]. A HATCH boundary has no widths; its
+/// vertices carry `0`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PolylineVertex {
+    pub point: Point2D,
+    pub bulge: f64,
+    /// DXF 40. An absent key reads as `0`.
+    #[serde(default)]
+    pub start_width: f64,
+    /// DXF 41. An absent key reads as `0`.
+    #[serde(default)]
+    pub end_width: f64,
+}
+
+impl PolylineVertex {
+    /// A vertex whose outgoing segment is straight and has no width of its
+    /// own.
+    pub fn straight(point: Point2D) -> Self {
+        Self {
+            point,
+            bulge: 0.0,
+            start_width: 0.0,
+            end_width: 0.0,
+        }
+    }
 }
 
 /// A value this model reached by following what the source file points with
@@ -214,19 +257,14 @@ pub struct LineEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CircleEntity {
     pub common: EntityCommon,
-    /// DXF 10, in the OCS [`Self::extrusion`] defines; its `z` is the
-    /// circle's elevation in that system.
+    /// In the circle's own coordinate system, whose Z axis is `extrusion`
+    /// (DXF: the center is an OCS point). With the default extrusion that
+    /// system is the world's; a mirrored circle has (0, 0, -1), and its world
+    /// center is found through the format's arbitrary axis algorithm.
     pub center: Point3D,
     pub radius: f64,
-    /// DXF 210: the normal of the object coordinate system the entity's
-    /// coordinates are stated in. (0, 0, 1) makes that system the world's
-    /// own axes; a mirrored entity has (0, 0, -1), whose x axis points the
-    /// other way, so the same stated centre lies on the other side of the y
-    /// axis. Carried as the file states it: taking the coordinates to the
-    /// world is the consumer's step (the DXF reference's arbitrary axis
-    /// algorithm). Optional in the reference, with (0, 0, 1) as its
-    /// default, so an absent group -- and a document written before this
-    /// field existed -- reads as (0, 0, 1).
+    /// The normal of the circle's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -277,99 +315,72 @@ pub struct TextEntity {
     /// before this field existed.
     #[serde(default = "absent")]
     pub style_name: Ref<String>,
-    /// The z of the text's points in its OCS (DXF 30; the binary format
-    /// stores it once, as the text's elevation). The points are 2D here,
-    /// so this is where the third coordinate the file states is kept. 0
-    /// for a document written before this field existed.
+    /// The text's points are points of its own coordinate system, whose Z
+    /// axis is `extrusion`; this is their z there (DXF 30 -- the binary
+    /// format stores it once, as the text's elevation). An absent group is
+    /// `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// DXF 210, the normal of the OCS the text's points are stated in --
-    /// see [`CircleEntity::extrusion`].
+    /// The normal of the text's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
 
 /// LWPOLYLINE, and POLYLINE_2D ([`Entity::Polyline2D`]), which has the same
-/// shape: a POLYLINE_2D's vertices, bulges and widths are its VERTEX
-/// records' (DXF 10/20, 42, 40/41), and its elevation is the z of its own
-/// group 10 (DXF 30), where an LWPOLYLINE has a group of its own for it
-/// (DXF 38).
+/// shape: a POLYLINE_2D's vertices are its VERTEX records (DXF 10/20, 42 and
+/// 40/41 on each) -- a DXF's POLYLINE record states default widths (its own
+/// 40/41) for the vertices that state none, and a reader gives those
+/// vertices the defaults -- and its elevation is the z of its own group 10
+/// (DXF 30), where an LWPOLYLINE has a group of its own for it (DXF 38).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
-    /// The vertices' positions (DXF 10/20), in the OCS [`Self::extrusion`]
-    /// defines, at [`Self::elevation`]. What runs between two of them --
-    /// a straight segment or an arc, and how wide -- is
-    /// [`Self::bulges`] and [`Self::widths`].
-    pub vertices: Vec<Point2D>,
+    /// The vertices in order, each with the bulge and the widths of the
+    /// segment that leaves it (see [`PolylineVertex`]). Points of the
+    /// polyline's own coordinate system, whose Z axis is `extrusion`; with
+    /// the default extrusion that system is the world's.
+    pub vertices: Vec<PolylineVertex>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
-    /// DXF 42, one per vertex in vertex order: the bulge of the segment
-    /// that leaves the vertex -- the tangent of a quarter of the arc's
-    /// included angle, negative when the arc turns clockwise in the OCS, 0
-    /// for a straight segment (1 is a half circle). The last vertex's
-    /// bulge is the closing segment's when the polyline is closed and
-    /// belongs to no segment when it is open.
+    /// DXF 43: the width of every segment when no vertex has a width of its
+    /// own (every vertex's `start_width` and `end_width` is `0`) -- the
+    /// reference does not use it once a vertex states one. `0` is a line
+    /// with no width. An absent group is `0`.
     ///
-    /// Empty when every segment is straight: a file that states only
-    /// zeros and one that states nothing are the same polyline, and a
-    /// reader gives the empty list for both, so that the two compare
-    /// equal. A document written before this field existed reads as empty.
-    #[serde(default)]
-    pub bulges: Vec<f64>,
-    /// DXF 40 and 41, one per vertex in vertex order: the width of the
-    /// segment that leaves the vertex, at its start and at its end.
-    ///
-    /// Empty when every segment is [`Self::const_width`] wide at both ends,
-    /// whether the file states no per-vertex widths or states that width
-    /// for every vertex: the two are the same polyline, and a reader gives
-    /// the empty list for both. A document written before this field
-    /// existed reads as empty.
-    #[serde(default)]
-    pub widths: Vec<SegmentWidth>,
-    /// DXF 43: the width of every segment when [`Self::widths`] is empty;
-    /// 0 is a line with no width. Optional in the reference, with 0 as its
-    /// default, so an absent group -- and a document written before this
-    /// field existed -- reads as 0. A POLYLINE_2D has no such group, its
-    /// widths are its vertices' own, and it carries 0 here.
+    /// A file that states this width again on every vertex, at both ends,
+    /// draws the same polyline as one that states it only here, and a
+    /// reader gives the two the same model: vertices with no width of their
+    /// own. A POLYLINE_2D has no such group -- its widths are its vertices'
+    /// -- and carries `0` here.
     #[serde(default)]
     pub const_width: f64,
-    /// DXF 38: the z of every vertex in the OCS. Optional in the
-    /// reference, with 0 as its default, so an absent group -- and a
-    /// document written before this field existed -- reads as 0.
+    /// The z of every vertex in the polyline's own coordinate system (DXF 38
+    /// for an LWPOLYLINE, the POLYLINE record's 30 for a 2D POLYLINE). An
+    /// absent group is `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// DXF 210, the normal of the OCS the vertices are stated in -- see
-    /// [`CircleEntity::extrusion`].
+    /// The normal of the polyline's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1). A mirror copy writes (0, 0, -1): its vertices'
+    /// world x is reversed, and so is the turn of every bulge.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
-}
-
-/// The width of one polyline segment where it starts and where it ends
-/// (DXF 40 and 41 of the vertex it leaves), in drawing units. The two
-/// differ for a tapered segment, such as an arrowhead drawn as a polyline.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct SegmentWidth {
-    /// DXF 40.
-    pub start: f64,
-    /// DXF 41.
-    pub end: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArcEntity {
     pub common: EntityCommon,
-    /// DXF 10, in the OCS [`Self::extrusion`] defines.
+    /// In the arc's own coordinate system, whose Z axis is `extrusion`, as
+    /// for [`CircleEntity::center`].
     pub center: Point3D,
     pub radius: f64,
-    /// Radians, measured in the OCS: counter-clockwise from its x axis as
-    /// seen from the side the normal points to. An arc whose normal is
-    /// (0, 0, -1) therefore runs clockwise in the world.
+    /// Radians, measured counter-clockwise about `extrusion` in the arc's own
+    /// coordinate system -- a mirrored arc runs the other way in the world.
     pub start_angle: f64,
-    /// Radians, like [`Self::start_angle`].
+    /// Radians, as `start_angle`.
     pub end_angle: f64,
-    /// DXF 210, the normal of the OCS the arc is stated in -- see
-    /// [`CircleEntity::extrusion`].
+    /// The normal of the arc's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -460,20 +471,20 @@ pub struct PointEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SolidEntity {
     pub common: EntityCommon,
-    /// Corners in DXF order (group codes 10, 11, 12, 13), in the OCS
-    /// [`Self::extrusion`] defines. The 1-2-4-3 reordering a filled
-    /// rendering needs is the renderer's concern, not part of the data.
+    /// Corners in DXF order (group codes 10, 11, 12, 13). The 1-2-4-3
+    /// reordering a filled rendering needs is the renderer's concern, not
+    /// part of the data.
     pub corner1: Point2D,
     pub corner2: Point2D,
     pub corner3: Point2D,
     pub corner4: Point2D,
-    /// The corners' z in the OCS (DXF 30; the binary format stores one
-    /// elevation for all four). 0 for a document written before this field
-    /// existed.
+    /// The corners are points of the entity's own coordinate system, whose Z
+    /// axis is `extrusion`; this is their z there (DXF 30 -- the four corners
+    /// share it). An absent group is `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// DXF 210, the normal of the OCS the corners are stated in -- see
-    /// [`CircleEntity::extrusion`].
+    /// The normal of the entity's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -543,12 +554,12 @@ pub struct AttribEntity {
     /// before this field existed.
     #[serde(default = "absent")]
     pub style_name: Ref<String>,
-    /// The z of the attribute's points in its OCS, as
-    /// [`TextEntity::elevation`].
+    /// The z of the attribute's points in its own coordinate system, as
+    /// [`TextEntity::elevation`]. An absent group is `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// DXF 210, the normal of the OCS the attribute's points are stated in
-    /// -- see [`CircleEntity::extrusion`].
+    /// The normal of the attribute's plane (DXF 210). An absent group is
+    /// the default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -588,11 +599,11 @@ pub struct InsertEntity {
     /// [`Entity::Attrib`] entries in `CadDatabase::entities`; a consumer that
     /// draws `entities` gets them from there.
     pub attribs: Vec<AttribEntity>,
-    /// DXF 210, the normal of the OCS the insertion point and rotation are
-    /// stated in -- see [`CircleEntity::extrusion`]. A block mirrored with
-    /// the reference has (0, 0, -1) here and its scale as stated;
-    /// [`crate::Affine2::from_insert`] is the placement that follows from
-    /// all of them.
+    /// The normal of the plane the insertion point and rotation are stated
+    /// in (DXF 210). An absent group is the default (0, 0, 1). A block
+    /// mirrored with the reference has (0, 0, -1) here and its scale as
+    /// stated; [`crate::Affine2::from_insert`] is the placement that
+    /// follows from all of them.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -718,12 +729,12 @@ pub struct AttdefEntity {
     /// before this field existed.
     #[serde(default = "absent")]
     pub style_name: Ref<String>,
-    /// The z of the definition's points in its OCS, as
-    /// [`TextEntity::elevation`].
+    /// The z of the definition's points in its own coordinate system, as
+    /// [`TextEntity::elevation`]. An absent group is `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// DXF 210, the normal of the OCS the definition's points are stated
-    /// in -- see [`CircleEntity::extrusion`].
+    /// The normal of the definition's plane (DXF 210). An absent group is
+    /// the default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -795,6 +806,19 @@ pub struct Face3DEntity {
     pub corner2: Point3D,
     pub corner3: Point3D,
     pub corner4: Point3D,
+    /// Which edges the file marks invisible (DXF 70, bits 1, 2, 4 and 8):
+    /// edge `i` runs from corner `i + 1` to the next, the fourth back to the
+    /// first. A mesh of faces hides the edges it shares inside so that only
+    /// its outline shows. An absent group is every edge visible.
+    #[serde(default)]
+    pub invisible_edges: [bool; 4],
+}
+
+impl Face3DEntity {
+    /// The four edge flags of DXF group 70, bit `i` for edge `i`.
+    pub fn invisible_edges_from_bits(bits: u32) -> [bool; 4] {
+        [bits & 1 != 0, bits & 2 != 0, bits & 4 != 0, bits & 8 != 0]
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -920,15 +944,16 @@ pub enum HatchEdge {
     },
 }
 
-/// One HATCH boundary path -- either an explicit polyline (vertices only;
-/// bulge/arc segments are dropped) or a list of curved/straight edges.
+/// One HATCH boundary path -- either an explicit polyline (its vertices
+/// carry their bulge, see [`PolylineVertex`]) or a list of curved/straight
+/// edges. A polyline path is a closed loop.
 // JSON: adjacently tagged, because the payload is a sequence rather than a
 // struct -- `{"type":"POLYLINE","data":[pt,..]}` / `{"type":"EDGES","data":
 // [edge,..]}` -- keeping the `type` key every other tagged object uses.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "UPPERCASE")]
 pub enum HatchBoundaryPath {
-    Polyline(Vec<Point2D>),
+    Polyline(Vec<PolylineVertex>),
     Edges(Vec<HatchEdge>),
 }
 

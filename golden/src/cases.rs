@@ -3,7 +3,7 @@
 
 use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
-    Spec, Xy,
+    Spec, Vertex, Xy,
 };
 use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
 use uncad_model::tables::{
@@ -32,21 +32,22 @@ pub fn g1_general_part() -> Spec {
     let mut entities = vec![EntitySpec::LwPolyline {
         layer: outline.clone(),
         vertices: vec![
-            Xy::new(0.0, 0.0),
-            Xy::new(200.0, 0.0),
-            Xy::new(200.0, 100.0),
-            Xy::new(0.0, 100.0),
+            Xy::new(0.0, 0.0).into(),
+            Xy::new(200.0, 0.0).into(),
+            Xy::new(200.0, 100.0).into(),
+            Xy::new(0.0, 100.0).into(),
         ],
         closed: true,
-        bulges: Vec::new(),
-        widths: Vec::new(),
         const_width: 0.0,
+        elevation: 0.0,
+        mirrored: false,
     }];
     for c in hole_centers {
         entities.push(EntitySpec::Circle {
             layer: holes.clone(),
             center: c,
             radius: 5.0,
+            mirrored: false,
         });
     }
     entities.push(EntitySpec::LinearDimension {
@@ -113,6 +114,7 @@ pub fn g1_general_part() -> Spec {
                 invisible: false,
             },
         ],
+        mirrored: false,
     });
 
     Spec {
@@ -146,15 +148,15 @@ pub fn g1_general_part() -> Spec {
                 EntitySpec::LwPolyline {
                     layer: "0".to_string(),
                     vertices: vec![
-                        Xy::new(0.0, 0.0),
-                        Xy::new(80.0, 0.0),
-                        Xy::new(80.0, 20.0),
-                        Xy::new(0.0, 20.0),
+                        Xy::new(0.0, 0.0).into(),
+                        Xy::new(80.0, 0.0).into(),
+                        Xy::new(80.0, 20.0).into(),
+                        Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
-                    bulges: Vec::new(),
-                    widths: Vec::new(),
                     const_width: 0.0,
+                    elevation: 0.0,
+                    mirrored: false,
                 },
                 EntitySpec::Attdef {
                     layer: "0".to_string(),
@@ -218,6 +220,7 @@ pub fn g2_nested_blocks() -> Spec {
                     scale: 1.0,
                     rotation_deg: 90.0,
                     attribs: Vec::new(),
+                    mirrored: false,
                 }],
             },
             BlockSpec {
@@ -229,6 +232,7 @@ pub fn g2_nested_blocks() -> Spec {
                     scale: 2.0,
                     rotation_deg: 0.0,
                     attribs: Vec::new(),
+                    mirrored: false,
                 }],
             },
         ],
@@ -239,6 +243,7 @@ pub fn g2_nested_blocks() -> Spec {
             scale: 1.0,
             rotation_deg: 0.0,
             attribs: Vec::new(),
+            mirrored: false,
         }],
         text_styles: Vec::new(),
         paper_space: Vec::new(),
@@ -289,6 +294,7 @@ pub fn g9_two_drawing_numbers() -> Spec {
             height: 3.5,
             invisible: false,
         }],
+        mirrored: false,
     };
     Spec {
         dim_styles: Vec::new(),
@@ -431,6 +437,7 @@ pub fn g10_unreferenced_insert() -> Spec {
                 scale: 1.0,
                 rotation_deg: 0.0,
                 attribs: Vec::new(),
+                mirrored: false,
             },
         ],
         text_styles: Vec::new(),
@@ -450,20 +457,25 @@ pub fn g7_loose_text_title_block() -> Spec {
         height: 3.5,
         text: s.to_string(),
         rotation_deg: 0.0,
+        mirrored: false,
     };
     let entities = vec![
         EntitySpec::LwPolyline {
             layer: title.clone(),
+            // Two arc segments, so a reader that drops the bulge is caught:
+            // the right edge bows outwards (counter-clockwise), and the
+            // closing segment -- the last vertex back to the first -- bows
+            // the other way.
             vertices: vec![
-                Xy::new(100.0, -60.0),
-                Xy::new(180.0, -60.0),
-                Xy::new(180.0, -40.0),
-                Xy::new(100.0, -40.0),
+                Xy::new(100.0, -60.0).into(),
+                Vertex::bulged(Xy::new(180.0, -60.0), 0.5),
+                Xy::new(180.0, -40.0).into(),
+                Vertex::bulged(Xy::new(100.0, -40.0), -0.5),
             ],
             closed: true,
-            bulges: Vec::new(),
-            widths: Vec::new(),
             const_width: 0.0,
+            elevation: 0.0,
+            mirrored: false,
         },
         text(102.0, -45.0, "DWG NO"),
         text(130.0, -45.0, "BP-1042"),
@@ -471,6 +483,40 @@ pub fn g7_loose_text_title_block() -> Spec {
         text(130.0, -52.0, "B"),
         text(102.0, -59.0, "MATERIAL"),
         text(130.0, -59.0, "SS400"),
+        // A mirror copy: extrusion (0, 0, -1), so the centers are written
+        // in a coordinate system whose x runs the other way -- the circle
+        // is drawn at (170, -50) and the arc about (110, -50), turning
+        // clockwise in the world from its start to its end.
+        EntitySpec::Circle {
+            layer: title.clone(),
+            center: Xy::new(-170.0, -50.0),
+            radius: 3.0,
+            mirrored: true,
+        },
+        EntitySpec::Arc {
+            layer: title.clone(),
+            center: Xy::new(-110.0, -50.0),
+            radius: 4.0,
+            start_deg: 30.0,
+            end_deg: 150.0,
+            mirrored: true,
+        },
+        // A mirrored triangle with one arc segment: drawn with its vertices
+        // at (150, -58), (140, -58) and (145, -53), the arc from the second
+        // turning the other way in the world than its bulge says in its own
+        // system.
+        EntitySpec::LwPolyline {
+            layer: title.clone(),
+            vertices: vec![
+                Xy::new(-150.0, -58.0).into(),
+                Vertex::bulged(Xy::new(-140.0, -58.0), 0.5),
+                Xy::new(-145.0, -53.0).into(),
+            ],
+            closed: true,
+            const_width: 0.0,
+            elevation: 0.0,
+            mirrored: true,
+        },
     ];
     Spec {
         dim_styles: Vec::new(),
@@ -535,15 +581,15 @@ pub fn g8_korean_title_block() -> Spec {
                 EntitySpec::LwPolyline {
                     layer: "0".to_string(),
                     vertices: vec![
-                        Xy::new(0.0, 0.0),
-                        Xy::new(80.0, 0.0),
-                        Xy::new(80.0, 20.0),
-                        Xy::new(0.0, 20.0),
+                        Xy::new(0.0, 0.0).into(),
+                        Xy::new(80.0, 0.0).into(),
+                        Xy::new(80.0, 20.0).into(),
+                        Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
-                    bulges: Vec::new(),
-                    widths: Vec::new(),
                     const_width: 0.0,
+                    elevation: 0.0,
+                    mirrored: false,
                 },
                 attdef(15.0, "DWGNO", ""),
                 attdef(8.0, "MATERIAL", "SS400"),
@@ -554,15 +600,15 @@ pub fn g8_korean_title_block() -> Spec {
             EntitySpec::LwPolyline {
                 layer: outline_layer,
                 vertices: vec![
-                    Xy::new(0.0, 0.0),
-                    Xy::new(200.0, 0.0),
-                    Xy::new(200.0, 100.0),
-                    Xy::new(0.0, 100.0),
+                    Xy::new(0.0, 0.0).into(),
+                    Xy::new(200.0, 0.0).into(),
+                    Xy::new(200.0, 100.0).into(),
+                    Xy::new(0.0, 100.0).into(),
                 ],
                 closed: true,
-                bulges: Vec::new(),
-                widths: Vec::new(),
                 const_width: 0.0,
+                elevation: 0.0,
+                mirrored: false,
             },
             EntitySpec::Insert {
                 layer: title_layer.clone(),
@@ -593,6 +639,7 @@ pub fn g8_korean_title_block() -> Spec {
                         invisible: false,
                     },
                 ],
+                mirrored: false,
             },
             EntitySpec::Text {
                 layer: title_layer,
@@ -600,6 +647,7 @@ pub fn g8_korean_title_block() -> Spec {
                 height: 3.5,
                 text: scale.to_string(),
                 rotation_deg: 0.0,
+                mirrored: false,
             },
         ],
         text_styles: Vec::new(),
@@ -659,21 +707,18 @@ pub fn g3_offset(i: usize, per_row: usize) -> (f64, f64) {
 /// G11, a mirrored part: the kinds the format states in an object
 /// coordinate system -- a circle, an arc, a bulged polyline at an
 /// elevation, a text, a solid and a block reference -- each written in the
-/// OCS whose normal is (0, 0, -1), which is what AutoCAD's MIRROR leaves
-/// behind, next to one circle in the world's own axes.
+/// coordinate system whose Z axis (the extrusion, DXF 210) is (0, 0, -1),
+/// which is what AutoCAD's MIRROR leaves behind, next to one circle in the
+/// world's own axes.
 ///
 /// The case is about what a reader must *not* do: the coordinates are the
 /// ones the file states, so the mirrored circle stated at (30, 20) is
-/// carried at (30, 20) with its normal, not at the (-30, 20) it lies at in
-/// the world; the polyline's bulge keeps its stated sign. Taking them to
+/// carried at (30, 20) with its extrusion, not at the (-30, 20) it lies at
+/// in the world; the polyline's bulge keeps its stated sign. Taking them to
 /// the world is a consumer's step -- except for the block reference, whose
 /// placement ([`uncad_model::Affine2::from_insert`]) the model computes.
 pub fn g11_mirrored_part() -> Spec {
     let layer = "MIRROR".to_string();
-    let mirrored = |elevation: f64, entity: EntitySpec| EntitySpec::Mirrored {
-        elevation,
-        entity: Box::new(entity),
-    };
     Spec {
         codepage: Codepage::Ascii,
         layers: vec![LayerSpec {
@@ -693,6 +738,7 @@ pub fn g11_mirrored_part() -> Spec {
                     layer: "0".to_string(),
                     center: Xy::new(10.0, 0.0),
                     radius: 2.0,
+                    mirrored: false,
                 },
             ],
         }],
@@ -703,80 +749,68 @@ pub fn g11_mirrored_part() -> Spec {
                 layer: layer.clone(),
                 center: Xy::new(30.0, 20.0),
                 radius: 5.0,
+                mirrored: false,
             },
-            mirrored(
-                0.0,
-                EntitySpec::Circle {
-                    layer: layer.clone(),
-                    center: Xy::new(30.0, 20.0),
-                    radius: 5.0,
-                },
-            ),
-            mirrored(
-                0.0,
-                EntitySpec::Arc {
-                    layer: layer.clone(),
-                    center: Xy::new(30.0, 50.0),
-                    radius: 10.0,
-                    start_deg: 0.0,
-                    end_deg: 90.0,
-                },
-            ),
+            EntitySpec::Circle {
+                layer: layer.clone(),
+                center: Xy::new(30.0, 20.0),
+                radius: 5.0,
+                mirrored: true,
+            },
+            EntitySpec::Arc {
+                layer: layer.clone(),
+                center: Xy::new(30.0, 50.0),
+                radius: 10.0,
+                start_deg: 0.0,
+                end_deg: 90.0,
+                mirrored: true,
+            },
             // A rectangle whose right side bulges out into a half circle,
             // at an elevation: the bulge (1) keeps its sign and the
             // elevation its value, as stated.
-            mirrored(
-                2.5,
-                EntitySpec::LwPolyline {
-                    layer: layer.clone(),
-                    vertices: vec![
-                        Xy::new(20.0, 0.0),
-                        Xy::new(40.0, 0.0),
-                        Xy::new(40.0, 10.0),
-                        Xy::new(20.0, 10.0),
-                    ],
-                    closed: true,
-                    bulges: vec![0.0, 1.0, 0.0, 0.0],
-                    widths: Vec::new(),
-                    const_width: 0.0,
-                },
-            ),
-            mirrored(
-                0.0,
-                EntitySpec::Text {
-                    layer: layer.clone(),
-                    insert: Xy::new(20.0, -10.0),
-                    height: 2.5,
-                    text: "MIRRORED".to_string(),
-                    rotation_deg: 0.0,
-                },
-            ),
-            mirrored(
-                0.0,
-                EntitySpec::Solid {
-                    layer: layer.clone(),
-                    corners: [
-                        Xy::new(20.0, -30.0),
-                        Xy::new(30.0, -30.0),
-                        Xy::new(20.0, -20.0),
-                        Xy::new(30.0, -20.0),
-                    ],
-                },
-            ),
-            // Placed at (50, 0) in the mirrored OCS and turned 30 degrees
-            // there: in the world the block's line runs from (-50, 0)
-            // towards the upper left.
-            mirrored(
-                0.0,
-                EntitySpec::Insert {
-                    layer,
-                    block: "MARK".to_string(),
-                    insert: Xy::new(50.0, 0.0),
-                    scale: 1.0,
-                    rotation_deg: 30.0,
-                    attribs: Vec::new(),
-                },
-            ),
+            EntitySpec::LwPolyline {
+                layer: layer.clone(),
+                vertices: vec![
+                    Xy::new(20.0, 0.0).into(),
+                    Vertex::bulged(Xy::new(40.0, 0.0), 1.0),
+                    Xy::new(40.0, 10.0).into(),
+                    Xy::new(20.0, 10.0).into(),
+                ],
+                closed: true,
+                const_width: 0.0,
+                elevation: 2.5,
+                mirrored: true,
+            },
+            EntitySpec::Text {
+                layer: layer.clone(),
+                insert: Xy::new(20.0, -10.0),
+                height: 2.5,
+                text: "MIRRORED".to_string(),
+                rotation_deg: 0.0,
+                mirrored: true,
+            },
+            EntitySpec::Solid {
+                layer: layer.clone(),
+                corners: [
+                    Xy::new(20.0, -30.0),
+                    Xy::new(30.0, -30.0),
+                    Xy::new(20.0, -20.0),
+                    Xy::new(30.0, -20.0),
+                ],
+                mirrored: true,
+            },
+            // Placed at (50, 0) in the mirrored coordinate system and turned
+            // 30 degrees there: in the world the block's line runs from
+            // (-50, 0) towards the upper left.
+            EntitySpec::Insert {
+                layer,
+                block: "MARK".to_string(),
+                insert: Xy::new(50.0, 0.0),
+                scale: 1.0,
+                rotation_deg: 30.0,
+                attribs: Vec::new(),
+                mirrored: true,
+            },
         ],
         paper_space: Vec::new(),
         layouts: Vec::new(),
@@ -787,27 +821,23 @@ pub fn g11_mirrored_part() -> Spec {
 /// are half circles (bulges of 1), a tapered arrow (per-vertex widths), a
 /// constant-width polyline with a quarter-circle corner, a DONUT (two
 /// vertices, both bulges 1, a constant width), and a polyline whose file
-/// states zero bulges and widths equal to its constant width.
+/// states, on every vertex, widths equal to its constant width.
 ///
-/// The last one is the same polyline as one that states nothing: a reader
-/// gives the empty lists for both, so that two spellings of one drawing
-/// compare equal.
+/// The last one is the same polyline as one that states the constant width
+/// alone: a reader gives its vertices no width of their own, so that two
+/// spellings of one drawing compare equal.
 pub fn g12_curved_and_wide_polylines() -> Spec {
     let layer = "OUTLINE".to_string();
     // tan(22.5 degrees): the bulge of a quarter circle, negative for one
     // that turns clockwise.
     let quarter = -0.41421356237309503;
-    let polyline = |vertices: Vec<Xy>,
-                    closed: bool,
-                    bulges: Vec<f64>,
-                    widths: Vec<(f64, f64)>,
-                    const_width: f64| EntitySpec::LwPolyline {
+    let polyline = |vertices: Vec<Vertex>, closed: bool, const_width: f64| EntitySpec::LwPolyline {
         layer: layer.clone(),
         vertices,
         closed,
-        bulges,
-        widths,
         const_width,
+        elevation: 0.0,
+        mirrored: false,
     };
     Spec {
         codepage: Codepage::Ascii,
@@ -822,42 +852,46 @@ pub fn g12_curved_and_wide_polylines() -> Spec {
         entities: vec![
             polyline(
                 vec![
-                    Xy::new(0.0, 0.0),
-                    Xy::new(40.0, 0.0),
-                    Xy::new(40.0, 10.0),
-                    Xy::new(0.0, 10.0),
+                    Xy::new(0.0, 0.0).into(),
+                    Vertex::bulged(Xy::new(40.0, 0.0), 1.0),
+                    Xy::new(40.0, 10.0).into(),
+                    Vertex::bulged(Xy::new(0.0, 10.0), 1.0),
                 ],
                 true,
-                vec![0.0, 1.0, 0.0, 1.0],
-                Vec::new(),
                 0.0,
             ),
             polyline(
-                vec![Xy::new(0.0, 30.0), Xy::new(30.0, 30.0), Xy::new(40.0, 30.0)],
+                vec![
+                    Vertex::from(Xy::new(0.0, 30.0)).wide(2.0, 2.0),
+                    Vertex::from(Xy::new(30.0, 30.0)).wide(4.0, 0.0),
+                    Xy::new(40.0, 30.0).into(),
+                ],
                 false,
-                Vec::new(),
-                vec![(2.0, 2.0), (4.0, 0.0), (0.0, 0.0)],
                 0.0,
             ),
             polyline(
-                vec![Xy::new(0.0, 50.0), Xy::new(40.0, 50.0), Xy::new(50.0, 60.0)],
+                vec![
+                    Xy::new(0.0, 50.0).into(),
+                    Vertex::bulged(Xy::new(40.0, 50.0), quarter),
+                    Xy::new(50.0, 60.0).into(),
+                ],
                 false,
-                vec![0.0, quarter, 0.0],
-                Vec::new(),
                 1.5,
             ),
             polyline(
-                vec![Xy::new(60.0, 20.0), Xy::new(70.0, 20.0)],
+                vec![
+                    Vertex::bulged(Xy::new(60.0, 20.0), 1.0),
+                    Vertex::bulged(Xy::new(70.0, 20.0), 1.0),
+                ],
                 true,
-                vec![1.0, 1.0],
-                Vec::new(),
                 2.0,
             ),
             polyline(
-                vec![Xy::new(0.0, 90.0), Xy::new(40.0, 90.0)],
+                vec![
+                    Vertex::from(Xy::new(0.0, 90.0)).wide(1.0, 1.0),
+                    Vertex::from(Xy::new(40.0, 90.0)).wide(1.0, 1.0),
+                ],
                 false,
-                vec![0.0, 0.0],
-                vec![(1.0, 1.0), (1.0, 1.0)],
                 1.0,
             ),
         ],
@@ -933,6 +967,7 @@ pub fn g13_justified_text() -> Spec {
                 height: 2.5,
                 text: "LEFT".to_string(),
                 rotation_deg: 0.0,
+                mirrored: false,
             },
             justified(
                 Xy::new(43.0, 0.0),
@@ -1016,6 +1051,7 @@ pub fn g13_justified_text() -> Spec {
                         invisible: true,
                     },
                 ],
+                mirrored: false,
             },
         ],
         paper_space: Vec::new(),
@@ -1102,15 +1138,15 @@ pub fn g14_sheet_with_viewports() -> Spec {
             EntitySpec::LwPolyline {
                 layer: "0".to_string(),
                 vertices: vec![
-                    Xy::new(0.0, 0.0),
-                    Xy::new(420.0, 0.0),
-                    Xy::new(420.0, 297.0),
-                    Xy::new(0.0, 297.0),
+                    Xy::new(0.0, 0.0).into(),
+                    Xy::new(420.0, 0.0).into(),
+                    Xy::new(420.0, 297.0).into(),
+                    Xy::new(0.0, 297.0).into(),
                 ],
                 closed: true,
-                bulges: Vec::new(),
-                widths: Vec::new(),
                 const_width: 0.0,
+                elevation: 0.0,
+                mirrored: false,
             },
             EntitySpec::Text {
                 layer: "0".to_string(),
@@ -1118,6 +1154,7 @@ pub fn g14_sheet_with_viewports() -> Spec {
                 height: 5.0,
                 text: "SHEET 1".to_string(),
                 rotation_deg: 0.0,
+                mirrored: false,
             },
             viewport(
                 Xy::new(210.0, 148.5),
@@ -1298,15 +1335,15 @@ pub fn g16_ordinate_dimensions() -> Spec {
             EntitySpec::LwPolyline {
                 layer: "0".to_string(),
                 vertices: vec![
-                    Xy::new(0.0, 0.0),
-                    Xy::new(120.0, 0.0),
-                    Xy::new(120.0, 60.0),
-                    Xy::new(0.0, 60.0),
+                    Xy::new(0.0, 0.0).into(),
+                    Xy::new(120.0, 0.0).into(),
+                    Xy::new(120.0, 60.0).into(),
+                    Xy::new(0.0, 60.0).into(),
                 ],
                 closed: true,
-                bulges: Vec::new(),
-                widths: Vec::new(),
                 const_width: 0.0,
+                elevation: 0.0,
+                mirrored: false,
             },
             ordinate(
                 Xy::new(0.0, 0.0),

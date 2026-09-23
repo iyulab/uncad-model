@@ -2,8 +2,8 @@
 //! consumers can rely on it.
 
 use uncad_model::model::{
-    DimensionKind, Entity, HorizontalJustification, OrdinateAxis, Point2D, Point3D, Ref,
-    SegmentWidth, VerticalJustification,
+    DimensionKind, Entity, HorizontalJustification, LwPolylineEntity, OrdinateAxis, Point2D,
+    Point3D, Ref, VerticalJustification,
 };
 use uncad_model::tables::{
     AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
@@ -217,8 +217,8 @@ fn g3_grows_linearly_and_lands_where_its_index_says() {
             EntitySpec::LwPolyline { vertices: b, .. },
         ) => {
             assert_eq!(a.len(), b.len());
-            assert_eq!(b[0].x, a[0].x + dx);
-            assert_eq!(b[0].y, a[0].y + dy);
+            assert_eq!(b[0].at.x, a[0].at.x + dx);
+            assert_eq!(b[0].at.y, a[0].at.y + dy);
         }
         (a, b) => panic!("expected the same kind, got {a:?} and {b:?}"),
     }
@@ -247,8 +247,8 @@ fn g3_writes_and_reads_back_every_copy() {
 }
 
 /// G11 keeps every mirrored coordinate as the file states it, with the
-/// normal beside it, and a mirrored block reference lands where its
-/// placement -- the one OCS step the model takes -- puts it.
+/// extrusion beside it, and a mirrored block reference lands where its
+/// placement -- the one step into the world the model takes -- puts it.
 #[test]
 fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_normal() {
     let spec = cases::g11_mirrored_part();
@@ -277,8 +277,10 @@ fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_nor
     let Entity::LwPolyline(polyline) = &model.entities[3] else {
         panic!("the fourth entity is the polyline");
     };
-    assert_eq!(polyline.bulges, [0.0, 1.0, 0.0, 0.0], "the stated sign");
+    let bulges: Vec<f64> = polyline.vertices.iter().map(|v| v.bulge).collect();
+    assert_eq!(bulges, [0.0, 1.0, 0.0, 0.0], "the stated sign");
     assert_eq!(polyline.elevation, 2.5);
+    assert_eq!(polyline.extrusion, mirrored);
 
     let Entity::Insert(insert) = &model.entities[6] else {
         panic!("the last entity is the block reference");
@@ -295,9 +297,9 @@ fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_nor
     assert!(placement.determinant() < 0.0, "a mirror image");
 }
 
-/// G12's polylines carry their bulges and widths, and the one whose file
-/// spells "straight, constant width" out in full reads as the one that
-/// states nothing.
+/// G12's polylines carry their bulges and widths on their vertices, and
+/// the one whose file spells "constant width" out on every vertex reads as
+/// the one that states it once.
 #[test]
 fn g12_carries_bulges_and_widths_and_folds_their_spellings() {
     let spec = cases::g12_curved_and_wide_polylines();
@@ -312,31 +314,33 @@ fn g12_carries_bulges_and_widths_and_folds_their_spellings() {
         })
         .collect();
     assert_eq!(polylines.len(), 5);
+    let bulges = |p: &LwPolylineEntity| p.vertices.iter().map(|v| v.bulge).collect::<Vec<_>>();
+    let widths = |p: &LwPolylineEntity| {
+        p.vertices
+            .iter()
+            .map(|v| (v.start_width, v.end_width))
+            .collect::<Vec<_>>()
+    };
 
     let [slot, arrow, bend, donut, spelled] = polylines.as_slice() else {
         unreachable!()
     };
-    assert_eq!(slot.bulges, [0.0, 1.0, 0.0, 1.0]);
-    assert!(slot.widths.is_empty());
-    assert_eq!(
-        arrow.widths[1],
-        SegmentWidth {
-            start: 4.0,
-            end: 0.0
-        }
-    );
-    assert!(arrow.bulges.is_empty());
+    assert_eq!(bulges(slot), [0.0, 1.0, 0.0, 1.0]);
+    assert_eq!(widths(slot), [(0.0, 0.0); 4]);
+    assert_eq!(widths(arrow), [(2.0, 2.0), (4.0, 0.0), (0.0, 0.0)]);
+    assert_eq!(bulges(arrow), [0.0; 3]);
     assert_eq!(bend.const_width, 1.5);
-    assert!(bend.bulges[1] < 0.0, "the corner turns clockwise");
+    assert!(bend.vertices[1].bulge < 0.0, "the corner turns clockwise");
     assert_eq!((donut.vertices.len(), donut.closed), (2, true));
-    assert_eq!(donut.bulges, [1.0, 1.0]);
+    assert_eq!(bulges(donut), [1.0, 1.0]);
 
-    // The file does state zero bulges and constant widths for the last one.
+    // The file does state the constant width on each vertex of the last
+    // one, and no bulge at all: an absent 42 is a straight segment.
     let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
     let last = &dxf[dxf.rfind("LWPOLYLINE").unwrap()..];
-    assert_eq!(last.matches(" 42\n0.0\n").count(), 2);
     assert_eq!(last.matches(" 40\n1.0\n").count(), 2);
-    assert!(spelled.bulges.is_empty() && spelled.widths.is_empty());
+    assert_eq!(last.matches(" 42\n").count(), 0);
+    assert_eq!(widths(spelled), [(0.0, 0.0); 2]);
     assert_eq!(spelled.const_width, 1.0);
 }
 

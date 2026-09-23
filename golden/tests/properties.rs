@@ -13,7 +13,7 @@ use proptest::prelude::*;
 use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
 use uncad_model::ToJsonOptions;
 use uncad_model_golden::spec::{
-    AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, LayerState, Spec, Xy,
+    AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, LayerState, Spec, Vertex, Xy,
 };
 use uncad_model_golden::{expected, write};
 
@@ -47,29 +47,32 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
             start,
             end
         }),
-        (layer_name(), xy(), 0.01f64..500.0).prop_map(|(layer, center, radius)| {
-            EntitySpec::Circle {
+        (layer_name(), xy(), 0.01f64..500.0, any::<bool>()).prop_map(
+            |(layer, center, radius, mirrored)| EntitySpec::Circle {
                 layer,
                 center,
                 radius,
+                mirrored,
             }
-        }),
+        ),
         (
             layer_name(),
             xy(),
             0.01f64..500.0,
             0.0f64..360.0,
-            0.0f64..360.0
+            0.0f64..360.0,
+            any::<bool>()
         )
-            .prop_map(
-                |(layer, center, radius, start_deg, end_deg)| EntitySpec::Arc {
+            .prop_map(|(layer, center, radius, start_deg, end_deg, mirrored)| {
+                EntitySpec::Arc {
                     layer,
                     center,
                     radius,
                     start_deg,
-                    end_deg
+                    end_deg,
+                    mirrored,
                 }
-            ),
+            }),
         (
             layer_name(),
             prop::collection::vec((xy(), bulge(), width(), width()), 2..12),
@@ -81,19 +84,21 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
             .prop_map(|(layer, points, closed, curved, wide, const_width)| {
                 EntitySpec::LwPolyline {
                     layer,
-                    vertices: points.iter().map(|p| p.0).collect(),
+                    vertices: points
+                        .iter()
+                        .map(|&(at, bulge, start_width, end_width)| {
+                            let vertex = Vertex::bulged(at, if curved { bulge } else { 0.0 });
+                            if wide {
+                                vertex.wide(start_width, end_width)
+                            } else {
+                                vertex
+                            }
+                        })
+                        .collect(),
                     closed,
-                    bulges: if curved {
-                        points.iter().map(|p| p.1).collect()
-                    } else {
-                        Vec::new()
-                    },
-                    widths: if wide {
-                        points.iter().map(|p| (p.2, p.3)).collect()
-                    } else {
-                        Vec::new()
-                    },
                     const_width,
+                    elevation: 0.0,
+                    mirrored: false,
                 }
             }),
         (layer_name(), xy(), 0.5f64..50.0, text(), 0.0f64..360.0).prop_map(
@@ -102,7 +107,8 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                 insert,
                 height,
                 text,
-                rotation_deg
+                rotation_deg,
+                mirrored: false,
             }
         ),
         (layer_name(), xy(), xy(), xy(), text()).prop_map(|(layer, from, to, line_point, text)| {
@@ -151,6 +157,7 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                             invisible,
                         })
                         .collect(),
+                    mirrored: false,
                 }
             ),
         later_entity(),
@@ -169,8 +176,8 @@ fn width() -> impl Strategy<Value = f64> {
 }
 
 /// The kinds the golden writer learned after the first cases: justified
-/// text, solids, mirrored OCS entities, ordinate dimensions and polygon
-/// meshes.
+/// text, solids, polylines at an elevation, ordinate dimensions and
+/// polygon meshes.
 fn later_entity() -> impl Strategy<Value = EntitySpec> {
     const HORIZONTAL: [HorizontalJustification; 6] = [
         HorizontalJustification::Left,
@@ -211,49 +218,34 @@ fn later_entity() -> impl Strategy<Value = EntitySpec> {
                 style,
             }
         });
-    let solid =
-        (layer_name(), xy(), xy(), xy(), xy()).prop_map(|(layer, a, b, c, d)| EntitySpec::Solid {
+    let solid = (layer_name(), xy(), xy(), xy(), xy(), any::<bool>()).prop_map(
+        |(layer, a, b, c, d, mirrored)| EntitySpec::Solid {
             layer,
             corners: [a, b, c, d],
-        });
-    let mirrored = (
+            mirrored,
+        },
+    );
+    // A mirrored polyline at an elevation: the two fields a polyline states
+    // its own coordinate system with.
+    let lifted = (
+        layer_name(),
+        prop::collection::vec((xy(), bulge()), 2..8),
+        any::<bool>(),
         -100i32..=100,
-        prop_oneof![
-            (layer_name(), xy(), 0.01f64..500.0).prop_map(|(layer, center, radius)| {
-                EntitySpec::Circle {
-                    layer,
-                    center,
-                    radius,
-                }
-            }),
-            (
-                layer_name(),
-                xy(),
-                0.01f64..500.0,
-                0.0f64..360.0,
-                0.0f64..360.0
-            )
-                .prop_map(|(layer, center, radius, start_deg, end_deg)| {
-                    EntitySpec::Arc {
-                        layer,
-                        center,
-                        radius,
-                        start_deg,
-                        end_deg,
-                    }
-                }),
-            (layer_name(), xy(), xy(), xy(), xy()).prop_map(|(layer, a, b, c, d)| {
-                EntitySpec::Solid {
-                    layer,
-                    corners: [a, b, c, d],
-                }
-            }),
-        ],
     )
-        .prop_map(|(elevation, entity)| EntitySpec::Mirrored {
-            elevation: f64::from(elevation),
-            entity: Box::new(entity),
-        });
+        .prop_map(
+            |(layer, points, closed, elevation)| EntitySpec::LwPolyline {
+                layer,
+                vertices: points
+                    .into_iter()
+                    .map(|(at, bulge)| Vertex::bulged(at, bulge))
+                    .collect(),
+                closed,
+                const_width: 0.0,
+                elevation: f64::from(elevation),
+                mirrored: true,
+            },
+        );
     let ordinate = (layer_name(), xy(), xy(), xy(), any::<bool>(), text()).prop_map(
         |(layer, datum, feature, leader_end, x, text)| EntitySpec::OrdinateDimension {
             layer,
@@ -290,7 +282,7 @@ fn later_entity() -> impl Strategy<Value = EntitySpec> {
                 vertices,
             },
         );
-    prop_oneof![justified, solid, mirrored, ordinate, mesh]
+    prop_oneof![justified, solid, lifted, ordinate, mesh]
 }
 
 fn spec() -> impl Strategy<Value = Spec> {
@@ -320,6 +312,7 @@ fn spec() -> impl Strategy<Value = Spec> {
                 layer: "0".to_string(),
                 center: Xy::new(0.0, 0.0),
                 radius: 1.0,
+                mirrored: false,
             }],
         }],
         entities,

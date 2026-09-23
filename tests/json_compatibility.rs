@@ -1,20 +1,24 @@
 //! A document an earlier version of this crate wrote still loads.
 //!
 //! `data/model-0.1.0.json` is the output of `uncad-model` 0.1.0 as published
-//! on crates.io, unedited: a drawing with one entity of every kind that
-//! version knew, a block, a layer that is off, a dimension style and an
-//! mline style. A field added since then is absent from it, and each such
-//! field says in its own documentation what a document without it reads
-//! as -- this test holds every one of them to that.
+//! on crates.io, unedited: a drawing with one entity of nearly every kind
+//! that version knew, a block, a layer that is off, a dimension style and
+//! an mline style. A field added since then is absent from it, and each
+//! such field says in its own documentation what a document without it
+//! reads as -- this test holds every one of them to that.
 //!
-//! Two kinds are not in the document. A SPLINE's and a LEADER's shape
-//! changed after 0.1.0 (a spline gained the degree and knots that define
-//! its curve, a leader's annotation became a three-state reference), so a
-//! 0.1.0 document carrying either is not expected to load.
+//! What is not in the document is what changed shape after 0.1.0, so that
+//! a 0.1.0 document carrying it is not expected to load: a SPLINE (it
+//! gained the degree and knots that define its curve), a LEADER (its
+//! annotation became a three-state reference), and a polyline's vertices
+//! -- an LWPOLYLINE's, a POLYLINE_2D's and a HATCH polyline path's -- which
+//! became objects of their own carrying each vertex's bulge and widths.
+//! The document's HATCH therefore has no boundary path; 0.1.0 wrote it that
+//! way for a hatch without one.
 
 use uncad_model::model::{
-    AttributeFlags, DimensionKind, Entity, HorizontalJustification, Point3D, Ref,
-    VerticalJustification,
+    AttributeFlags, DimensionKind, Entity, HatchBoundaryPath, HorizontalJustification, Point3D,
+    PolylineVertex, Ref, VerticalJustification,
 };
 use uncad_model::CadDatabase;
 
@@ -32,7 +36,7 @@ fn load() -> CadDatabase {
 #[test]
 fn a_document_written_by_0_1_0_loads() {
     let db = load();
-    assert_eq!(db.entities.len(), 31, "every entity comes back");
+    assert_eq!(db.entities.len(), 29, "every entity comes back");
     assert!(db.read_diagnostics.is_clean());
     assert_eq!(db.tables.layers.len(), 2);
     assert_eq!(db.tables.block_records["TITLE"].entities.len(), 1);
@@ -85,7 +89,7 @@ fn an_ocs_entity_without_a_stated_normal_is_in_world_axes_at_elevation_zero() {
         assert_eq!((extrusion, elevation), (Z_AXIS, 0.0), "{}", e.type_name());
         seen += 1;
     }
-    assert_eq!(seen, 10, "every OCS kind the document holds");
+    assert_eq!(seen, 8, "every OCS kind the document holds");
 }
 
 #[test]
@@ -207,20 +211,28 @@ fn an_mline_without_its_scale_does_not_claim_one() {
     assert_eq!(m.scale, None);
 }
 
+/// A polyline as 0.1.0 wrote it -- its vertices bare points -- does not
+/// load: a vertex is an object of its own now. Pinned so that the day it
+/// loads again is noticed, and the document above can carry polylines
+/// again.
 #[test]
-fn a_polyline_without_bulges_or_widths_is_straight_and_constant() {
-    let db = load();
-    let polylines: Vec<_> = db
-        .entities
-        .iter()
-        .filter_map(|e| match e {
-            Entity::LwPolyline(p) | Entity::Polyline2D(p) => Some(p),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(polylines.len(), 2);
-    for p in polylines {
-        assert!(p.bulges.is_empty() && p.widths.is_empty());
-        assert_eq!(p.const_width, 0.0);
-    }
+fn a_polyline_0_1_0_wrote_does_not_load() {
+    let lwpolyline = r#"{"type":"LWPOLYLINE","common":{"id":35,"origin":"VECTOR",
+        "confidence":"HIGH","source_handle":{"type":"RESOLVED","data":"23"},
+        "layer":{"type":"RESOLVED","data":"0"},"color_index":256,"true_color":null},
+        "vertices":[{"x":0.0,"y":0.0},{"x":10.0,"y":0.0},{"x":10.0,"y":5.0}],
+        "closed":true}"#;
+    assert!(serde_json::from_str::<Entity>(lwpolyline).is_err());
+    let path = r#"{"type":"POLYLINE","data":[{"x":0.0,"y":0.0},{"x":1.0,"y":0.0}]}"#;
+    assert!(serde_json::from_str::<HatchBoundaryPath>(path).is_err());
+}
+
+/// A polyline written before a vertex carried its widths: the vertex has
+/// none of its own.
+#[test]
+fn a_vertex_without_widths_has_none_of_its_own() {
+    let vertex: PolylineVertex =
+        serde_json::from_str(r#"{"point":{"x":1.0,"y":2.0},"bulge":0.5}"#).unwrap();
+    assert_eq!((vertex.start_width, vertex.end_width), (0.0, 0.0));
+    assert_eq!(vertex.bulge, 0.5);
 }

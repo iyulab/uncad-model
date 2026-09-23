@@ -78,39 +78,6 @@
       "rotation": 0.0
     },
     {
-      "type": "LWPOLYLINE",
-      "common": {
-        "id": 35,
-        "origin": "VECTOR",
-        "confidence": "HIGH",
-        "source_handle": {
-          "type": "RESOLVED",
-          "data": "23"
-        },
-        "layer": {
-          "type": "RESOLVED",
-          "data": "0"
-        },
-        "color_index": 256,
-        "true_color": null
-      },
-      "vertices": [
-        {
-          "x": 0.0,
-          "y": 0.0
-        },
-        {
-          "x": 10.0,
-          "y": 0.0
-        },
-        {
-          "x": 10.0,
-          "y": 5.0
-        }
-      ],
-      "closed": true
-    },
-    {
       "type": "ARC",
       "common": {
         "id": 36,
@@ -620,25 +587,7 @@
         "color_index": 256,
         "true_color": null
       },
-      "boundary_paths": [
-        {
-          "type": "POLYLINE",
-          "data": [
-            {
-              "x": 0.0,
-              "y": 0.0
-            },
-            {
-              "x": 1.0,
-              "y": 0.0
-            },
-            {
-              "x": 0.0,
-              "y": 1.0
-            }
-          ]
-        }
-      ],
+      "boundary_paths": [],
       "solid_fill": true,
       "gradient": null,
       "pattern_lines": []
@@ -810,39 +759,6 @@
         ]
       ],
       "skipped_edges": 0
-    },
-    {
-      "type": "POLYLINE_2D",
-      "common": {
-        "id": 67,
-        "origin": "VECTOR",
-        "confidence": "HIGH",
-        "source_handle": {
-          "type": "RESOLVED",
-          "data": "43"
-        },
-        "layer": {
-          "type": "RESOLVED",
-          "data": "0"
-        },
-        "color_index": 256,
-        "true_color": null
-      },
-      "vertices": [
-        {
-          "x": 0.0,
-          "y": 0.0
-        },
-        {
-          "x": 10.0,
-          "y": 0.0
-        },
-        {
-          "x": 10.0,
-          "y": 5.0
-        }
-      ],
-      "closed": true
     },
     {
       "type": "TOLERANCE",

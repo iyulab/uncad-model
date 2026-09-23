@@ -84,6 +84,8 @@ A reader fills this model from a file, and a file's text is not always Unicode. 
 
 None of this reaches the model's types — a string field is a string. What it fixes is the one question every reader of a pre-Unicode format has to answer, answered the same way by all of them.
 
+Decoding stops at the bytes. What the text itself encodes is carried as written: MTEXT formatting codes, `\U+XXXX` escapes and `%%` codes stay in the string, so two files that write the same character two ways carry two different strings. Reading them is a consumer's job.
+
 ## 7. Compatibility
 
 The crate is in 0.x. When a more correct shape is found, a breaking change is the normal way to adopt it; it is not deferred for migration cost. Breaking changes bump the minor version. The major version is not bumped without an explicit maintainer decision.
