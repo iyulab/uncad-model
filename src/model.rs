@@ -246,6 +246,65 @@ pub struct TextEntity {
     /// Radians (DXF 50). TEXT stores this as a plain angle, unlike MTEXT,
     /// whose rotation is a direction vector (see [`MTextEntity::rotation`]).
     pub rotation: f64,
+    /// How the text lines up with its alignment point horizontally (DXF 72).
+    /// An absent group is `Left`, the format's default -- a file writes the
+    /// group only when the text is aligned otherwise.
+    #[serde(default)]
+    pub horizontal_alignment: TextHorizontalAlignment,
+    /// How the text lines up with its alignment point vertically (DXF 73).
+    /// An absent group is `Baseline`, as for `horizontal_alignment`.
+    #[serde(default)]
+    pub vertical_alignment: TextVerticalAlignment,
+    /// The point the text is aligned on (DXF 11), stated only when either
+    /// alignment is not the default; `None` otherwise, or when the file
+    /// leaves it out. With it, `start_point` is where the writing program
+    /// computed the text to begin from its own font, and this point is the
+    /// one the text answers to: its center, its right end, its middle -- or,
+    /// for `Aligned` and `Fit`, the end of the baseline that runs from
+    /// `start_point`.
+    #[serde(default)]
+    pub alignment_point: Option<Point2D>,
+    /// The width of the characters as a fraction of their normal width (DXF
+    /// 41). A fraction *of* the normal width is 1 when the group is absent.
+    #[serde(default = "unit_ratio")]
+    pub width_factor: f64,
+}
+
+/// Where a TEXT's alignment point is along the text (DXF 72, 0 to 5 in this
+/// order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TextHorizontalAlignment {
+    /// The text starts at `start_point`; no alignment point.
+    #[default]
+    Left,
+    Center,
+    Right,
+    /// The text runs from `start_point` to the alignment point, its height
+    /// scaled to keep its proportions.
+    Aligned,
+    /// Centered both ways on the alignment point.
+    Middle,
+    /// The text runs from `start_point` to the alignment point at its own
+    /// height, its width stretched to fit.
+    Fit,
+}
+
+/// Where a TEXT's alignment point is across the text (DXF 73, 0 to 3 in this
+/// order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TextVerticalAlignment {
+    #[default]
+    Baseline,
+    Bottom,
+    Middle,
+    Top,
+}
+
+/// The default of a ratio to a normal size: 1.
+fn unit_ratio() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

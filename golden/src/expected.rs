@@ -17,7 +17,8 @@ use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, CircleEntity, Confidence, DimensionEntity,
     DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId, InsertEntity, LineEntity,
-    LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref, TextEntity, TextOverride,
+    LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref, TextEntity,
+    TextHorizontalAlignment, TextOverride, TextVerticalAlignment,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -281,12 +282,32 @@ fn convert(
             height,
             text,
             rotation_deg,
+            align,
+            width_factor,
         } => Entity::Text(TextEntity {
             common: common(handle, layer),
             start_point: p2(*insert),
             text_height: *height,
             text: text.clone(),
             rotation: rotation_deg.to_radians(),
+            horizontal_alignment: match align.map(|a| a.horizontal) {
+                None | Some(0) => TextHorizontalAlignment::Left,
+                Some(1) => TextHorizontalAlignment::Center,
+                Some(2) => TextHorizontalAlignment::Right,
+                Some(3) => TextHorizontalAlignment::Aligned,
+                Some(4) => TextHorizontalAlignment::Middle,
+                Some(5) => TextHorizontalAlignment::Fit,
+                Some(other) => panic!("a spec states horizontal alignment {other}"),
+            },
+            vertical_alignment: match align.map(|a| a.vertical) {
+                None | Some(0) => TextVerticalAlignment::Baseline,
+                Some(1) => TextVerticalAlignment::Bottom,
+                Some(2) => TextVerticalAlignment::Middle,
+                Some(3) => TextVerticalAlignment::Top,
+                Some(other) => panic!("a spec states vertical alignment {other}"),
+            },
+            alignment_point: align.map(|a| p2(a.at)),
+            width_factor: *width_factor,
         }),
         EntitySpec::Attdef {
             layer,

@@ -2,7 +2,8 @@
 //! consumer can pick the ones its role is measured by.
 
 use crate::spec::{
-    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, Vertex, Xy,
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, TextAlign, Vertex,
+    Xy,
 };
 
 /// G1, a general machined part: a closed outline, four holes, three linear
@@ -413,6 +414,8 @@ pub fn g7_loose_text_title_block() -> Spec {
         height: 3.5,
         text: s.to_string(),
         rotation_deg: 0.0,
+        align: None,
+        width_factor: 1.0,
     };
     let entities = vec![
         EntitySpec::LwPolyline {
@@ -467,6 +470,23 @@ pub fn g7_loose_text_title_block() -> Spec {
             ],
             closed: true,
             mirrored: true,
+        },
+        // A caption centered on (140, -67) both ways, drawn at 0.8 of its
+        // normal width: the point the text answers to is the alignment
+        // point, and the start point is what the writer computed from its
+        // font.
+        EntitySpec::Text {
+            layer: title.clone(),
+            insert: Xy::new(128.8, -68.75),
+            height: 3.5,
+            text: "PLATE".to_string(),
+            rotation_deg: 0.0,
+            align: Some(TextAlign {
+                horizontal: 1,
+                vertical: 2,
+                at: Xy::new(140.0, -67.0),
+            }),
+            width_factor: 0.8,
         },
     ];
     Spec {
@@ -584,6 +604,8 @@ pub fn g8_korean_title_block() -> Spec {
                 height: 3.5,
                 text: scale.to_string(),
                 rotation_deg: 0.0,
+                align: None,
+                width_factor: 1.0,
             },
         ],
     }

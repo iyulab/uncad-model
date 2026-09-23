@@ -151,6 +151,11 @@ pub enum EntitySpec {
         text: String,
         /// Degrees.
         rotation_deg: f64,
+        /// An alignment other than left and baseline; `None` writes neither
+        /// 72, 73 nor 11.
+        align: Option<TextAlign>,
+        /// DXF 41, written only when it is not 1.
+        width_factor: f64,
     },
     /// An attribute definition -- only meaningful inside a block definition.
     Attdef {
@@ -280,12 +285,16 @@ impl EntitySpec {
                 height,
                 text,
                 rotation_deg,
+                align,
+                width_factor,
             } => EntitySpec::Text {
                 layer: layer.clone(),
                 insert: m(insert),
                 height: *height,
                 text: text.clone(),
                 rotation_deg: *rotation_deg,
+                align: align.map(|a| TextAlign { at: m(&a.at), ..a }),
+                width_factor: *width_factor,
             },
             EntitySpec::Attdef {
                 layer,
@@ -335,6 +344,15 @@ pub struct DimStyleSpec {
     pub decimal_places: Option<i32>,
     /// DXF 140.
     pub text_height: Option<f64>,
+}
+
+/// A TEXT's alignment: its two DXF codes (72 horizontal 0 to 5, 73
+/// vertical 0 to 3) and the alignment point (11).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextAlign {
+    pub horizontal: u8,
+    pub vertical: u8,
+    pub at: Xy,
 }
 
 #[derive(Debug, Clone, PartialEq)]

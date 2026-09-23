@@ -11,7 +11,9 @@
 
 use proptest::prelude::*;
 use uncad_model::ToJsonOptions;
-use uncad_model_golden::spec::{AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, Spec, Xy};
+use uncad_model_golden::spec::{
+    AttribSpec, BlockSpec, Codepage, EntitySpec, LayerSpec, Spec, TextAlign, Xy,
+};
 use uncad_model_golden::{expected, write};
 
 /// A coordinate that stays out of the ranges where `{:?}` formatting would
@@ -81,15 +83,36 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                 closed,
                 mirrored: false
             }),
-        (layer_name(), xy(), 0.5f64..50.0, text(), 0.0f64..360.0).prop_map(
-            |(layer, insert, height, text, rotation_deg)| EntitySpec::Text {
-                layer,
-                insert,
-                height,
-                text,
-                rotation_deg
-            }
-        ),
+        (
+            layer_name(),
+            xy(),
+            0.5f64..50.0,
+            text(),
+            0.0f64..360.0,
+            prop::option::of((0u8..=5, 0u8..=3, xy())),
+            prop_oneof![Just(1.0), 0.25f64..4.0],
+        )
+            .prop_map(
+                |(layer, insert, height, text, rotation_deg, align, width_factor)| {
+                    EntitySpec::Text {
+                        layer,
+                        insert,
+                        height,
+                        text,
+                        rotation_deg,
+                        // Left and baseline is no alignment at all: the
+                        // format writes no alignment point for it.
+                        align: align.filter(|&(h, v, _)| (h, v) != (0, 0)).map(
+                            |(horizontal, vertical, at)| TextAlign {
+                                horizontal,
+                                vertical,
+                                at,
+                            },
+                        ),
+                        width_factor,
+                    }
+                },
+            ),
         (layer_name(), xy(), xy(), xy(), text()).prop_map(|(layer, from, to, line_point, text)| {
             EntitySpec::LinearDimension {
                 layer,

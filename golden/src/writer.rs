@@ -450,6 +450,8 @@ impl Writer {
                 height,
                 text,
                 rotation_deg,
+                align,
+                width_factor,
             } => {
                 self.pair(0, "TEXT");
                 self.common(&hex, layer, owner);
@@ -458,7 +460,17 @@ impl Writer {
                 self.num(40, *height);
                 self.pair(1, text);
                 self.num(50, *rotation_deg);
+                if *width_factor != 1.0 {
+                    self.num(41, *width_factor);
+                }
+                if let Some(a) = align {
+                    self.pair(72, a.horizontal);
+                    self.xy(11, a.at);
+                }
                 self.pair(100, "AcDbText");
+                if let Some(a) = align {
+                    self.pair(73, a.vertical);
+                }
             }
             EntitySpec::Attdef {
                 layer,
@@ -670,6 +682,8 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: 0.0,
+                    align: None,
+                    width_factor: 1.0,
                 },
             ]
         }
@@ -731,6 +745,8 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: text_rotation,
+                    align: None,
+                    width_factor: 1.0,
                 },
             ]
         }
@@ -753,6 +769,8 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     height: 2.5,
                     text: text.clone(),
                     rotation_deg: 0.0,
+                    align: None,
+                    width_factor: 1.0,
                 },
             ];
             entities

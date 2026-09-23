@@ -185,6 +185,10 @@ mod tests {
                 text_height: 2.5,
                 text: "hi".to_string(),
                 rotation: 0.2,
+                horizontal_alignment: TextHorizontalAlignment::Middle,
+                vertical_alignment: TextVerticalAlignment::Middle,
+                alignment_point: Some(p2(1.0, 0.5)),
+                width_factor: 0.8,
             }),
             Entity::LwPolyline(lwpoly.clone()),
             Entity::Arc(ArcEntity {

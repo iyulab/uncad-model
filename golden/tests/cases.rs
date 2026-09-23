@@ -1,7 +1,7 @@
 //! Each named case has the shape its description promises, stated once so
 //! consumers can rely on it.
 
-use uncad_model::model::{Entity, Ref};
+use uncad_model::model::{Entity, Point2D, Ref, TextHorizontalAlignment, TextVerticalAlignment};
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
 
@@ -124,8 +124,29 @@ fn g7_is_a_title_block_of_loose_texts_and_no_block() {
         .collect();
     assert_eq!(
         texts,
-        ["DWG NO", "BP-1042", "REV", "B", "MATERIAL", "SS400"]
+        ["DWG NO", "BP-1042", "REV", "B", "MATERIAL", "SS400", "PLATE"]
     );
+    // The caption is centered on its alignment point, narrowed.
+    let caption = model
+        .entities
+        .iter()
+        .find_map(|e| match e {
+            Entity::Text(t) if t.text == "PLATE" => Some(t),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        (caption.horizontal_alignment, caption.vertical_alignment),
+        (
+            TextHorizontalAlignment::Center,
+            TextVerticalAlignment::Middle
+        )
+    );
+    assert_eq!(
+        caption.alignment_point,
+        Some(Point2D { x: 140.0, y: -67.0 })
+    );
+    assert_eq!(caption.width_factor, 0.8);
 }
 
 #[test]
