@@ -413,9 +413,26 @@ pub struct Face3DEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SplineEntity {
     pub common: EntityCommon,
-    /// Points that lie exactly on the curve -- preferred over
-    /// `control_points` when present.
+    /// Degree of the curve's polynomial pieces (DXF 71).
+    pub degree: u32,
+    /// Whether the file declares the curve closed (DXF 70, bit 1). `None`
+    /// when the record does not say -- a spline stored by its fit points
+    /// does not, in the formats that predate the flag on that form.
+    pub closed: Option<bool>,
+    /// Whether the file declares the curve periodic (DXF 70, bit 2). `None`
+    /// under the same condition as `closed`.
+    pub periodic: Option<bool>,
+    /// The knot vector, in file order (DXF 40). Empty when the file defines
+    /// the spline by its fit points and stores no knots.
+    pub knots: Vec<f64>,
+    /// One weight per control point (DXF 41). Empty when the file gives no
+    /// weights, which means every weight is 1 -- the curve is not rational.
+    pub weights: Vec<f64>,
+    /// Points that lie exactly on the curve (DXF 11). Empty when the file
+    /// defines the spline by its control points alone.
     pub fit_points: Vec<Point3D>,
+    /// Control points (DXF 10). With `degree`, `knots` and `weights` they
+    /// define the curve; they do not lie on it.
     pub control_points: Vec<Point3D>,
 }
 

@@ -243,6 +243,11 @@ mod tests {
             }),
             Entity::Spline(SplineEntity {
                 common: c.clone(),
+                degree: 3,
+                closed: Some(false),
+                periodic: None,
+                knots: vec![0.0, 0.0, 1.0, 1.0],
+                weights: vec![],
                 fit_points: vec![p3(0.0, 0.0, 0.0), p3(1.0, 1.0, 0.0)],
                 control_points: vec![p3(0.5, 0.5, 0.0)],
             }),
