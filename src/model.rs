@@ -635,6 +635,13 @@ pub struct MTextEntity {
     /// point is the block's top-left corner, its middle or its bottom-right,
     /// depending on this. `None` when the file does not state it.
     pub attachment: Option<MTextAttachment>,
+    /// The width of the box the text is laid out in (DXF 41, the reference
+    /// rectangle's width): the writing program wraps each paragraph at it.
+    /// `0` -- also what an absent group means -- is no box, and each
+    /// paragraph is one line. The box's height is not stated by the format
+    /// for a drawn text; it follows from the lines.
+    #[serde(default)]
+    pub reference_width: f64,
 }
 
 /// Which point of an MTEXT block its insertion point is (DXF 71, 1 to 9 in
