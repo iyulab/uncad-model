@@ -761,10 +761,13 @@ pub struct ViewportEntity {
     /// extended data, which the model does not read. A document written
     /// before this field existed reads as `None` too.
     pub view: Option<ViewportView>,
-    /// Whether the viewport is on, showing its view (DXF 68, where 0 is
-    /// off). The binary format states the same thing as bit 0x20000 of the
-    /// viewport's status flags (DXF 90), set when it is off. `None` when
-    /// the file does not state it.
+    /// Whether the viewport is on, showing its view: bit 0x20000 of the
+    /// viewport's status flags (DXF 90), set when it is off, which both
+    /// formats state from R2000 on. A DXF older than that says it with
+    /// group 68, where 0 is off; a later DXF writes 68 as well, but there 0
+    /// is also the value of every viewport of a layout that is not the
+    /// current one, on or not, so it is not what says it. `None` when the
+    /// file does not state it.
     pub on: Option<bool>,
     /// DXF 69: the viewport's number within its layout. 1 is the layout's
     /// own overall viewport -- the one that is the sheet itself rather than

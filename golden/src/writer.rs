@@ -915,12 +915,11 @@ impl Writer {
         }
         self.pair(100, "AcDbAttribute");
         self.pair(2, &a.tag);
-        self.pair(70, 0);
+        // Bit 1: the attribute is invisible.
+        self.pair(70, u8::from(a.invisible));
         if let Some(al) = a.align {
             self.pair(74, al.vertical);
         }
-        // Bit 1: the attribute is invisible.
-        self.pair(70, u8::from(a.invisible));
         h
     }
 
