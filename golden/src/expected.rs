@@ -54,6 +54,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
         LayerRecord {
             name: "0".to_string(),
             color_index: 7,
+            ..layer_state()
         },
     );
     for l in &spec.layers {
@@ -62,6 +63,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             LayerRecord {
                 name: l.name.clone(),
                 color_index: l.color_index,
+                ..layer_state()
             },
         );
     }
@@ -192,6 +194,22 @@ fn dimension_block_entities(spec: &Spec, name: &str) -> Vec<EntitySpec> {
         .nth(n - 1)
         .expect("the n-th dimension exists");
     crate::writer::dimension_geometry(dim)
+}
+
+/// A layer as the writer declares every one: on, thawed, unlocked, with
+/// the CONTINUOUS linetype, and without the plot flag (290) or the
+/// lineweight (370), which it does not write.
+fn layer_state() -> LayerRecord {
+    LayerRecord {
+        name: String::new(),
+        color_index: 7,
+        off: false,
+        frozen: false,
+        locked: false,
+        plot: None,
+        lineweight: None,
+        linetype: Ref::Resolved("CONTINUOUS".to_string()),
+    }
 }
 
 fn common(handle: u32, layer: &str) -> EntityCommon {

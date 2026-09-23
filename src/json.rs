@@ -616,6 +616,12 @@ mod tests {
             LayerRecord {
                 name: "0".to_string(),
                 color_index: 7,
+                off: false,
+                frozen: true,
+                locked: false,
+                plot: Some(false),
+                lineweight: Some(25),
+                linetype: Ref::Resolved("CONTINUOUS".to_string()),
             },
         );
         let mut mlinestyles = BTreeMap::new();

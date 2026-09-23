@@ -161,6 +161,23 @@ fn a_viewport_without_view_fields_states_no_view() {
 }
 
 #[test]
+fn a_layer_without_state_fields_is_on_thawed_unlocked_and_unstated() {
+    let db = load();
+    for layer in db.tables.layers.values() {
+        assert!(
+            !layer.off && !layer.frozen && !layer.locked,
+            "{}",
+            layer.name
+        );
+        assert_eq!((layer.plot, layer.lineweight), (None, None));
+        assert_eq!(layer.linetype, Ref::Absent);
+    }
+    // The document's HIDDEN layer is off the way 0.1.0 said it: by the
+    // sign of its colour, which is still there to read.
+    assert_eq!(db.tables.layers["HIDDEN"].color_index, -1);
+}
+
+#[test]
 fn a_polyline_without_bulges_or_widths_is_straight_and_constant() {
     let db = load();
     let polylines: Vec<_> = db

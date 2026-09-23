@@ -408,7 +408,7 @@ fn one() -> f64 {
 }
 
 /// What a document written before a reference field existed reads as.
-fn absent<T>() -> Ref<T> {
+pub(crate) fn absent<T>() -> Ref<T> {
     Ref::Absent
 }
 

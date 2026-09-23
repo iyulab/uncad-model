@@ -50,6 +50,12 @@ fn drawing() -> CadDatabase {
             LayerRecord {
                 name: name.to_string(),
                 color_index: i as i16 + 1,
+                off: false,
+                frozen: false,
+                locked: false,
+                plot: Some(true),
+                lineweight: Some(-3),
+                linetype: Ref::Resolved("CONTINUOUS".to_string()),
             },
         );
     }

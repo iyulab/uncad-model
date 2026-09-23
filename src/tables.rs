@@ -5,7 +5,7 @@
 //! therefore JSON key order -- is deterministic: the same drawing serializes
 //! to the same bytes on every run and every machine.
 
-use crate::model::Entity;
+use crate::model::{absent, Entity, Ref};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -16,11 +16,45 @@ pub struct LayerRecord {
     pub name: String,
     /// The layer's own AutoCAD Color Index (DXF 62), with the same raw
     /// semantics as [`crate::model::EntityCommon::color_index`]: negative
-    /// means "off", otherwise a palette index. It is never 0 or 256 in a
-    /// well-formed table (BYBLOCK/BYLAYER are entity-level values a layer
-    /// cannot resolve against itself); a parser that meets such a value
-    /// recovers or reports it before it reaches here.
+    /// means "off" (how a DXF says so -- see [`Self::off`]), otherwise a
+    /// palette index. It is never 0 or 256 in a well-formed table
+    /// (BYBLOCK/BYLAYER are entity-level values a layer cannot resolve
+    /// against itself); a parser that meets such a value recovers or
+    /// reports it before it reaches here.
     pub color_index: i16,
+    /// Whether the layer is switched off: its entities stay in the drawing
+    /// and are not shown. A DXF says so with a negative `color_index`; the
+    /// binary format has a flag of its own and keeps the colour positive,
+    /// so this field, not the sign, is what says it for every file. A
+    /// document written before this field existed reads as `false`.
+    #[serde(default)]
+    pub off: bool,
+    /// DXF 70, bit 1: the layer is frozen -- its entities are not shown and
+    /// not regenerated. `false` for a document written before this field
+    /// existed.
+    #[serde(default)]
+    pub frozen: bool,
+    /// DXF 70, bit 4: the layer is locked -- its entities are shown but
+    /// cannot be edited. `false` for a document written before this field
+    /// existed.
+    #[serde(default)]
+    pub locked: bool,
+    /// DXF 290: whether the layer is plotted. `None` when the file does not
+    /// state it -- R13 and R14 have no such flag -- or when the reader
+    /// cannot tell a stated "do not plot" from an absent group.
+    pub plot: Option<bool>,
+    /// DXF 370: the layer's lineweight in hundredths of a millimetre, or
+    /// -3 for the application's default weight (the format's other codes,
+    /// -1 and -2, are entity values a layer cannot take). `None` when the
+    /// file does not state one -- R13 and R14 have no lineweights -- or
+    /// when the reader cannot tell a stated 0 from an absent group.
+    pub lineweight: Option<i16>,
+    /// DXF 6: the layer's linetype, an entry of the drawing's LTYPE table
+    /// (which the model does not carry), as a reference like
+    /// [`crate::model::EntityCommon::layer`]. `Absent` for a document
+    /// written before this field existed.
+    #[serde(default = "absent")]
+    pub linetype: Ref<String>,
 }
 
 /// One DIMSTYLE table entry (DXF `DIMSTYLE`): the settings a dimension
