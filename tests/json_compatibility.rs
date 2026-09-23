@@ -13,7 +13,8 @@
 //! 0.1.0 document carrying either is not expected to load.
 
 use uncad_model::model::{
-    AttributeFlags, Entity, HorizontalJustification, Point3D, Ref, VerticalJustification,
+    AttributeFlags, DimensionKind, Entity, HorizontalJustification, Point3D, Ref,
+    VerticalJustification,
 };
 use uncad_model::CadDatabase;
 
@@ -176,6 +177,17 @@ fn a_layer_without_state_fields_is_on_thawed_unlocked_and_unstated() {
     // The document's HIDDEN layer is off the way 0.1.0 said it: by the
     // sign of its colour, which is still there to read.
     assert_eq!(db.tables.layers["HIDDEN"].color_index, -1);
+}
+
+#[test]
+fn an_ordinate_dimension_without_its_axis_does_not_claim_one() {
+    let db = load();
+    let Some(Entity::Dimension(d)) = db.entities.iter().find(|e| e.type_name() == "DIMENSION")
+    else {
+        panic!("the document has a DIMENSION");
+    };
+    assert_eq!(d.kind, Some(DimensionKind::Ordinate));
+    assert_eq!(d.ordinate_axis, None);
 }
 
 #[test]

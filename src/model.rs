@@ -1094,7 +1094,7 @@ pub struct DimensionEntity {
     pub text_override: TextOverride,
     /// DXF 10. What it locates depends on [`Self::kind`] -- the dimension
     /// line for a linear dimension, the far chord for a diameter, the
-    /// feature for an ordinate.
+    /// datum an ordinate measures from (its feature is group 13).
     ///
     /// `None` when the reader cannot say which of its own points is this
     /// group. Every DXF dimension carries group 10, but a backend reading
@@ -1119,6 +1119,22 @@ pub struct DimensionEntity {
     pub text_rotation: f64,
     /// DXF 3: the DIMSTYLE this dimension names.
     pub style_name: Ref<String>,
+    /// DXF 70, bit 64, on an ordinate dimension: which coordinate of its
+    /// feature it measures from the datum -- [`OrdinateAxis::X`] when the
+    /// bit is set, [`OrdinateAxis::Y`] when it is clear. `None` on every
+    /// other kind, where the bit means nothing, and for a document written
+    /// before this field existed.
+    pub ordinate_axis: Option<OrdinateAxis>,
+}
+
+/// Which coordinate an ordinate dimension measures (DXF 70, bit 64).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum OrdinateAxis {
+    /// The bit is set: the feature's x distance from the datum.
+    X,
+    /// The bit is clear: the feature's y distance from the datum.
+    Y,
 }
 
 /// A 3DSOLID reduced to a wireframe: straight chords between the two

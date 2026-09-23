@@ -423,6 +423,7 @@ fn convert(
             rotation: 0.0,
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
+            ordinate_axis: None,
         }),
         EntitySpec::ArcDimension {
             layer,
@@ -452,6 +453,7 @@ fn convert(
             rotation: 0.0,
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
+            ordinate_axis: None,
         }),
         EntitySpec::DiameterDimension {
             layer,
@@ -477,6 +479,7 @@ fn convert(
             rotation: 0.0,
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
+            ordinate_axis: None,
         }),
     }
 }

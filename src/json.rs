@@ -367,6 +367,7 @@ mod tests {
                 rotation: 0.0,
                 text_rotation: 0.25,
                 style_name: Ref::Unresolved("ISO-25".to_string()),
+                ordinate_axis: None,
             }),
             Entity::Hatch(HatchEntity {
                 common: c.clone(),
@@ -591,6 +592,14 @@ mod tests {
         ))
         .expect("a complete UNKNOWN entity deserializes");
         assert_eq!(ok.type_name(), "ACAD_PROXY_ENTITY");
+    }
+
+    #[test]
+    fn an_ordinate_axis_is_a_letter() {
+        for (axis, text) in [(OrdinateAxis::X, "\"X\""), (OrdinateAxis::Y, "\"Y\"")] {
+            assert_eq!(serde_json::to_string(&axis).unwrap(), text);
+            assert_eq!(serde_json::from_str::<OrdinateAxis>(text).unwrap(), axis);
+        }
     }
 
     #[test]
