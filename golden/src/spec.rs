@@ -156,6 +156,10 @@ pub enum EntitySpec {
         align: Option<TextAlign>,
         /// DXF 41, written only when it is not 1.
         width_factor: f64,
+        /// In the text's own coordinate system: for a mirrored text
+        /// (extrusion (0, 0, -1)) `insert` and the alignment point are
+        /// written with their x negated, and the text reads mirrored.
+        mirrored: bool,
     },
     /// An attribute definition -- only meaningful inside a block definition.
     Attdef {
@@ -291,14 +295,19 @@ impl EntitySpec {
                 rotation_deg,
                 align,
                 width_factor,
+                mirrored,
             } => EntitySpec::Text {
                 layer: layer.clone(),
-                insert: m(insert),
+                insert: moved_ocs(insert, *mirrored, dx, dy),
                 height: *height,
                 text: text.clone(),
                 rotation_deg: *rotation_deg,
-                align: align.map(|a| TextAlign { at: m(&a.at), ..a }),
+                align: align.map(|a| TextAlign {
+                    at: moved_ocs(&a.at, *mirrored, dx, dy),
+                    ..a
+                }),
                 width_factor: *width_factor,
+                mirrored: *mirrored,
             },
             EntitySpec::Attdef {
                 layer,

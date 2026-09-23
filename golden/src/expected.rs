@@ -284,6 +284,7 @@ fn convert(
             rotation_deg,
             align,
             width_factor,
+            mirrored,
         } => Entity::Text(TextEntity {
             common: common(handle, layer),
             start_point: p2(*insert),
@@ -294,6 +295,8 @@ fn convert(
             vertical_alignment: vertical(*align),
             alignment_point: align.map(|a| p2(a.at)),
             width_factor: *width_factor,
+            elevation: 0.0,
+            extrusion: extrusion(*mirrored),
         }),
         EntitySpec::Attdef {
             layer,
@@ -312,6 +315,8 @@ fn convert(
             vertical_alignment: TextVerticalAlignment::Baseline,
             alignment_point: None,
             width_factor: 1.0,
+            elevation: 0.0,
+            extrusion: extrusion(false),
             rotation: 0.0,
         }),
         EntitySpec::Insert {
@@ -355,6 +360,8 @@ fn convert(
                     vertical_alignment: vertical(a.align),
                     alignment_point: a.align.map(|al| p2(al.at)),
                     width_factor: a.width_factor,
+                    elevation: 0.0,
+                    extrusion: extrusion(false),
                 })
                 .collect(),
             extrusion: extrusion(*mirrored),

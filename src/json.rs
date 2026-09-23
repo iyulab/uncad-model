@@ -146,6 +146,8 @@ mod tests {
             vertical_alignment: TextVerticalAlignment::Top,
             alignment_point: Some(p2(9.0, 2.0)),
             width_factor: 0.9,
+            elevation: 0.0,
+            extrusion: p3(0.0, 0.0, 1.0),
         };
         let ray = RayEntity {
             common: c.clone(),
@@ -193,6 +195,8 @@ mod tests {
                 vertical_alignment: TextVerticalAlignment::Middle,
                 alignment_point: Some(p2(1.0, 0.5)),
                 width_factor: 0.8,
+                elevation: 0.0,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::LwPolyline(lwpoly.clone()),
             Entity::Arc(ArcEntity {
@@ -257,6 +261,8 @@ mod tests {
                 vertical_alignment: TextVerticalAlignment::Baseline,
                 alignment_point: None,
                 width_factor: 1.0,
+                elevation: 0.0,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Viewport(ViewportEntity {
                 common: c.clone(),

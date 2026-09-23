@@ -127,7 +127,7 @@ fn g7_is_a_title_block_of_loose_texts_and_no_block() {
         .collect();
     assert_eq!(
         texts,
-        ["DWG NO", "BP-1042", "REV", "B", "MATERIAL", "SS400", "PLATE"]
+        ["DWG NO", "BP-1042", "REV", "B", "MATERIAL", "SS400", "PLATE", "MIRROR"]
     );
     // The caption is centered on its alignment point, narrowed.
     let caption = model
@@ -157,7 +157,12 @@ fn g7_places_its_mirrored_block_where_the_world_sees_it() {
     let spec = cases::g7_loose_text_title_block();
     let written = write(&spec);
     let model = expected::model(&spec, &written);
-    let Some(Entity::Insert(mark)) = model.entities.last() else {
+    let Some(Entity::Insert(mark)) = model
+        .entities
+        .iter()
+        .rev()
+        .find(|e| matches!(e, Entity::Insert(_)))
+    else {
         panic!("the last entity is the mirrored INSERT");
     };
     assert_eq!(mark.extrusion.z, -1.0);

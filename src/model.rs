@@ -268,6 +268,16 @@ pub struct TextEntity {
     /// 41). A fraction *of* the normal width is 1 when the group is absent.
     #[serde(default = "unit_ratio")]
     pub width_factor: f64,
+    /// The start and alignment points are points of the text's own
+    /// coordinate system, whose Z axis is `extrusion`; this is their z there
+    /// (DXF 30). An absent group is `0`.
+    #[serde(default)]
+    pub elevation: f64,
+    /// The normal of the text's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1). A mirror copy writes (0, 0, -1): its points' world
+    /// x is reversed and the text reads mirrored.
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 /// Where a TEXT's alignment point is along the text (DXF 72, 0 to 5 in this
@@ -441,6 +451,12 @@ pub struct AttribEntity {
     /// As for [`TextEntity::width_factor`] (DXF 41; absent is 1).
     #[serde(default = "unit_ratio")]
     pub width_factor: f64,
+    /// As for [`TextEntity::elevation`] (DXF 30).
+    #[serde(default)]
+    pub elevation: f64,
+    /// As for [`TextEntity::extrusion`] (DXF 210).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -564,6 +580,12 @@ pub struct AttdefEntity {
     /// As for [`TextEntity::width_factor`] (DXF 41; absent is 1).
     #[serde(default = "unit_ratio")]
     pub width_factor: f64,
+    /// As for [`TextEntity::elevation`] (DXF 30).
+    #[serde(default)]
+    pub elevation: f64,
+    /// As for [`TextEntity::extrusion`] (DXF 210).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

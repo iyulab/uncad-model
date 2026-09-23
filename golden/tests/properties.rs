@@ -110,6 +110,7 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                             },
                         ),
                         width_factor,
+                        mirrored: false,
                     }
                 },
             ),

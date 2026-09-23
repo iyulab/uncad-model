@@ -426,7 +426,7 @@ pub fn g10_unreferenced_insert() -> Spec {
 /// G7, a title block drawn as loose TEXT entities rather than as a block
 /// with attributes: a frame, then label/value pairs as separate texts.
 /// Nothing but position ties a value to its label. It also carries mirror
-/// copies -- a circle, an arc, a polyline and a block reference written in
+/// copies -- a circle, an arc, a polyline, a block reference and a text written in
 /// their own coordinate systems, extrusion (0, 0, -1).
 pub fn g7_loose_text_title_block() -> Spec {
     let title = "TITLE".to_string();
@@ -438,6 +438,7 @@ pub fn g7_loose_text_title_block() -> Spec {
         rotation_deg: 0.0,
         align: None,
         width_factor: 1.0,
+        mirrored: false,
     };
     let entities = vec![
         EntitySpec::LwPolyline {
@@ -509,6 +510,7 @@ pub fn g7_loose_text_title_block() -> Spec {
                 at: Xy::new(140.0, -67.0),
             }),
             width_factor: 0.8,
+            mirrored: false,
         },
         // A mirror copy of a block: the INSERT is written at (-175, -66) in
         // a system whose x is the world's -x, turned 30 degrees there. The
@@ -521,6 +523,19 @@ pub fn g7_loose_text_title_block() -> Spec {
             scale: 1.0,
             rotation_deg: 30.0,
             attribs: Vec::new(),
+            mirrored: true,
+        },
+        // A mirror copy of a text: written at (-170, -72) in a system whose
+        // x is the world's -x, so drawn from (170, -72), reading right to
+        // left.
+        EntitySpec::Text {
+            layer: title.clone(),
+            insert: Xy::new(-170.0, -72.0),
+            height: 2.5,
+            text: "MIRROR".to_string(),
+            rotation_deg: 0.0,
+            align: None,
+            width_factor: 1.0,
             mirrored: true,
         },
     ];
@@ -655,6 +670,7 @@ pub fn g8_korean_title_block() -> Spec {
                 rotation_deg: 0.0,
                 align: None,
                 width_factor: 1.0,
+                mirrored: false,
             },
         ],
     }

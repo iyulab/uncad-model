@@ -452,6 +452,7 @@ impl Writer {
                 rotation_deg,
                 align,
                 width_factor,
+                mirrored,
             } => {
                 self.pair(0, "TEXT");
                 self.common(&hex, layer, owner);
@@ -467,6 +468,7 @@ impl Writer {
                     self.pair(72, a.horizontal);
                     self.xy(11, a.at);
                 }
+                self.extrusion(*mirrored);
                 self.pair(100, "AcDbText");
                 if let Some(a) = align {
                     self.pair(73, a.vertical);
@@ -696,6 +698,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     rotation_deg: 0.0,
                     align: None,
                     width_factor: 1.0,
+                    mirrored: false,
                 },
             ]
         }
@@ -759,6 +762,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     rotation_deg: text_rotation,
                     align: None,
                     width_factor: 1.0,
+                    mirrored: false,
                 },
             ]
         }
@@ -783,6 +787,7 @@ pub fn dimension_geometry(e: &EntitySpec) -> Vec<EntitySpec> {
                     rotation_deg: 0.0,
                     align: None,
                     width_factor: 1.0,
+                    mirrored: false,
                 },
             ];
             entities
