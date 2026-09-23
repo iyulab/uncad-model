@@ -61,12 +61,25 @@ pub struct LayerRecord {
 /// One DIMSTYLE table entry (DXF `DIMSTYLE`): the settings a dimension
 /// names rather than carries.
 ///
-/// Every field is `Option` because the format writes a style variable only
-/// when it differs from the value the application starts from. An absent
-/// variable is "this style does not state it", not a value -- what to use
-/// instead is the consumer's decision, the same way assembling the text a
-/// dimension displays is. Writing a plausible number here would make a
-/// style claim something its file never said.
+/// The format writes a style variable only when it differs from the value
+/// the application starts from. Where that starting value is the same
+/// whichever template a drawing began from, an unwritten variable *is*
+/// that value, and a reader fills it in: a tolerance of 0, a factor or
+/// scale of 1, a switch that is off, an empty pattern, the decimal and
+/// decimal-degree unit formats, a horizontal fraction, no rounding, no
+/// decimal places in an angle. Each such field says so below.
+///
+/// Where the templates start differently -- the text height, the arrow
+/// size, the decimal places of the measurement and its tolerances, which
+/// zeros are suppressed -- an unwritten variable is "this style does not
+/// state it", not a value, and the field is `None`: what to use instead is
+/// the consumer's decision, the same way assembling the text a dimension
+/// displays is. Writing a plausible number there would make a style claim
+/// something its file never said.
+///
+/// Every field stays `Option` either way: `None` is also what a reader
+/// reports when it cannot read the variable at all, and what a file from
+/// before the version that introduced a variable says about it.
 ///
 /// The set is the one the displayed text depends on, and the two sizes a
 /// dimension of the style is drawn at -- its text height and its arrow
@@ -78,23 +91,24 @@ pub struct DimStyleRecord {
     pub name: String,
     /// DXF 3 (`DIMPOST`): the pattern the measurement is placed into, with
     /// `<>` standing for the measurement -- `"<>mm"`, `"[]"`. Carried
-    /// verbatim.
+    /// verbatim. Unwritten: empty.
     pub post: Option<String>,
     /// DXF 40 (`DIMSCALE`): the overall scale applied to the dimension's
-    /// drawn sizes.
+    /// drawn sizes. Unwritten: 1.
     pub scale: Option<f64>,
     /// DXF 144 (`DIMLFAC`): the factor the measurement is multiplied by
     /// before it is displayed. A drawing measured in one unit and dimensioned
-    /// in another states it here.
+    /// in another states it here. Unwritten: 1.
     pub length_factor: Option<f64>,
     /// DXF 71 (`DIMTOL`): whether tolerances are appended to the text.
+    /// Unwritten: no.
     pub tolerances: Option<bool>,
     /// DXF 72 (`DIMLIM`): whether the text is the two limits rather than the
-    /// measurement with tolerances.
+    /// measurement with tolerances. Unwritten: no.
     pub limits: Option<bool>,
-    /// DXF 47 (`DIMTP`): the upper tolerance.
+    /// DXF 47 (`DIMTP`): the upper tolerance. Unwritten: 0.
     pub tolerance_upper: Option<f64>,
-    /// DXF 48 (`DIMTM`): the lower tolerance.
+    /// DXF 48 (`DIMTM`): the lower tolerance. Unwritten: 0.
     pub tolerance_lower: Option<f64>,
     /// DXF 271 (`DIMDEC`): decimal places in the measurement.
     pub decimal_places: Option<i32>,
@@ -106,6 +120,8 @@ pub struct DimStyleRecord {
     pub arrow_size: Option<f64>,
     /// DXF 277 (`DIMLUNIT`): how a linear measurement is written. `None`
     /// also when the style states a value outside the format's six.
+    /// Unwritten: decimal, in a file from R2000 on; the variable came
+    /// with R2000, so an earlier file does not state it.
     pub linear_unit_format: Option<LinearUnitFormat>,
     /// DXF 78 (`DIMZIN`): which zeros are left out of a linear measurement,
     /// as the format encodes it -- 0 to 3 say how zero feet and zero inches
@@ -113,16 +129,19 @@ pub struct DimStyleRecord {
     /// to them.
     pub zero_suppression: Option<i32>,
     /// DXF 45 (`DIMRND`): the step a linear measurement is rounded to; 0 is
-    /// no rounding.
+    /// no rounding. Unwritten: 0.
     pub rounding: Option<f64>,
     /// DXF 275 (`DIMAUNIT`): how an angle is written. `None` also when the
-    /// style states a value outside the format's five.
+    /// style states a value outside the format's five. Unwritten: decimal
+    /// degrees.
     pub angular_unit_format: Option<AngularUnitFormat>,
-    /// DXF 179 (`DIMADEC`): decimal places in an angle.
+    /// DXF 179 (`DIMADEC`): decimal places in an angle. Unwritten: 0, in a
+    /// file from R2000 on (as for the linear unit format).
     pub angular_decimal_places: Option<i32>,
     /// DXF 276 (`DIMFRAC`): how a fraction is written, where the linear
     /// format writes fractions. `None` also when the style states a value
-    /// outside the format's three.
+    /// outside the format's three. Unwritten: horizontal, in a file from
+    /// R2000 on (as for the linear unit format).
     pub fraction_format: Option<FractionFormat>,
 }
 

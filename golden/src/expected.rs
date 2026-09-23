@@ -62,7 +62,8 @@ fn text_override(text: &str) -> TextOverride {
     }
 }
 use uncad_model::tables::{
-    BlockRecord, DimStyleRecord, LayerRecord, LayoutRecord, PlotSettings, Tables,
+    AngularUnitFormat, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord, LayoutRecord,
+    LinearUnitFormat, PlotSettings, Tables,
 };
 use uncad_model::{CadDatabase, ReadDiagnostics};
 
@@ -155,11 +156,13 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
     CadDatabase {
         entities,
         tables: Tables {
-            // Only the variables the spec states are written, so everything
-            // else stays "this style does not state it" -- the reader must
-            // not fill those in. A spec with no styles declares no table at
-            // all, which is itself worth pinning: then a dimension naming a
-            // style is an unresolved reference.
+            // Only the variables the spec states are written. An unwritten
+            // variable whose starting value every template shares is that
+            // value; one whose starting value depends on the template stays
+            // "this style does not state it" -- the reader must not fill
+            // those in. A spec with no styles declares no table at all,
+            // which is itself worth pinning: then a dimension naming a style
+            // is an unresolved reference.
             dim_styles: spec
                 .dim_styles
                 .iter()
@@ -168,17 +171,30 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                         s.name.clone(),
                         DimStyleRecord {
                             name: s.name.clone(),
-                            post: s.post.clone(),
+                            post: Some(s.post.clone().unwrap_or_default()),
+                            scale: Some(1.0),
+                            length_factor: Some(1.0),
+                            tolerances: Some(false),
+                            limits: Some(false),
+                            tolerance_upper: Some(0.0),
+                            tolerance_lower: Some(0.0),
                             decimal_places: s.decimal_places,
+                            tolerance_decimal_places: None,
                             text_height: s.text_height,
                             arrow_size: s.arrow_size,
-                            linear_unit_format: s.linear_unit_format,
+                            linear_unit_format: Some(
+                                s.linear_unit_format.unwrap_or(LinearUnitFormat::Decimal),
+                            ),
                             zero_suppression: s.zero_suppression,
-                            rounding: s.rounding,
-                            angular_unit_format: s.angular_unit_format,
-                            angular_decimal_places: s.angular_decimal_places,
-                            fraction_format: s.fraction_format,
-                            ..DimStyleRecord::default()
+                            rounding: Some(s.rounding.unwrap_or(0.0)),
+                            angular_unit_format: Some(
+                                s.angular_unit_format
+                                    .unwrap_or(AngularUnitFormat::DecimalDegrees),
+                            ),
+                            angular_decimal_places: Some(s.angular_decimal_places.unwrap_or(0)),
+                            fraction_format: Some(
+                                s.fraction_format.unwrap_or(FractionFormat::Horizontal),
+                            ),
                         },
                     )
                 })
