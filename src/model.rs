@@ -1179,13 +1179,19 @@ pub struct MLineVertex {
 /// An MLINE is a set of parallel offset lines (wall-style multi-line). The
 /// per-line offsets live in the referenced MLINESTYLE, looked up in
 /// [`crate::tables::Tables::mlinestyles`]; the model carries the centerline
-/// vertices and the style name.
+/// vertices, the style name and the scale the style is drawn at.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MLineEntity {
     pub common: EntityCommon,
     pub vertices: Vec<MLineVertex>,
     pub closed: bool,
     pub mlinestyle_name: Ref<String>,
+    /// DXF 40: the factor the style's offsets are multiplied by for this
+    /// MLINE -- a wall 200 units thick, drawn in a style whose offsets are
+    /// 0.5 and -0.5, states 200 here. The format requires the group; `None`
+    /// is a model that was not given it, such as a document written before
+    /// this field existed.
+    pub scale: Option<f64>,
 }
 
 /// WIPEOUT's clip boundary, resolved to 2D points in the entity's own local

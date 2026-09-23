@@ -199,6 +199,15 @@ fn an_ordinate_dimension_without_its_axis_does_not_claim_one() {
 }
 
 #[test]
+fn an_mline_without_its_scale_does_not_claim_one() {
+    let db = load();
+    let Some(Entity::MLine(m)) = db.entities.iter().find(|e| e.type_name() == "MLINE") else {
+        panic!("the document has an MLINE");
+    };
+    assert_eq!(m.scale, None);
+}
+
+#[test]
 fn a_polyline_without_bulges_or_widths_is_straight_and_constant() {
     let db = load();
     let polylines: Vec<_> = db

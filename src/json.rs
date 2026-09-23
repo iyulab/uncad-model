@@ -435,6 +435,7 @@ mod tests {
                 }],
                 closed: true,
                 mlinestyle_name: Ref::Resolved("STANDARD".to_string()),
+                scale: Some(200.0),
             }),
             Entity::Region(solid3d.clone()),
             Entity::PolylinePFace(solid3d.clone()),
