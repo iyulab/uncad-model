@@ -361,6 +361,11 @@ pub struct AttribSpec {
     pub value: String,
     pub insert: Xy,
     pub height: f64,
+    /// An alignment other than left and baseline (72, and 74 -- an
+    /// attribute's vertical alignment code); `None` writes neither.
+    pub align: Option<TextAlign>,
+    /// DXF 41, written only when it is not 1.
+    pub width_factor: f64,
 }
 
 impl EntitySpec {

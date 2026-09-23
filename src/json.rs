@@ -142,6 +142,10 @@ mod tests {
             tag: "TAG".to_string(),
             text: "value".to_string(),
             rotation: 0.1,
+            horizontal_alignment: TextHorizontalAlignment::Right,
+            vertical_alignment: TextVerticalAlignment::Top,
+            alignment_point: Some(p2(9.0, 2.0)),
+            width_factor: 0.9,
         };
         let ray = RayEntity {
             common: c.clone(),
@@ -248,6 +252,10 @@ mod tests {
                 tag: "TAG".to_string(),
                 default_value: "?".to_string(),
                 rotation: 0.4,
+                horizontal_alignment: TextHorizontalAlignment::Left,
+                vertical_alignment: TextVerticalAlignment::Baseline,
+                alignment_point: None,
+                width_factor: 1.0,
             }),
             Entity::Viewport(ViewportEntity {
                 common: c.clone(),

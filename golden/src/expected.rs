@@ -11,7 +11,7 @@
 //! from them, so the same entity gets the same ID whether the drawing is read
 //! as DWG or as DXF), the origin is `Vector`, the confidence `High`.
 
-use crate::spec::{EntitySpec, Spec, Xy};
+use crate::spec::{EntitySpec, Spec, TextAlign, Xy};
 use crate::writer::{midpoint, Written};
 use std::collections::BTreeMap;
 use uncad_model::model::{
@@ -290,22 +290,8 @@ fn convert(
             text_height: *height,
             text: text.clone(),
             rotation: rotation_deg.to_radians(),
-            horizontal_alignment: match align.map(|a| a.horizontal) {
-                None | Some(0) => TextHorizontalAlignment::Left,
-                Some(1) => TextHorizontalAlignment::Center,
-                Some(2) => TextHorizontalAlignment::Right,
-                Some(3) => TextHorizontalAlignment::Aligned,
-                Some(4) => TextHorizontalAlignment::Middle,
-                Some(5) => TextHorizontalAlignment::Fit,
-                Some(other) => panic!("a spec states horizontal alignment {other}"),
-            },
-            vertical_alignment: match align.map(|a| a.vertical) {
-                None | Some(0) => TextVerticalAlignment::Baseline,
-                Some(1) => TextVerticalAlignment::Bottom,
-                Some(2) => TextVerticalAlignment::Middle,
-                Some(3) => TextVerticalAlignment::Top,
-                Some(other) => panic!("a spec states vertical alignment {other}"),
-            },
+            horizontal_alignment: horizontal(*align),
+            vertical_alignment: vertical(*align),
             alignment_point: align.map(|a| p2(a.at)),
             width_factor: *width_factor,
         }),
@@ -322,6 +308,10 @@ fn convert(
             text_height: *height,
             tag: tag.clone(),
             default_value: default.clone(),
+            horizontal_alignment: TextHorizontalAlignment::Left,
+            vertical_alignment: TextVerticalAlignment::Baseline,
+            alignment_point: None,
+            width_factor: 1.0,
             rotation: 0.0,
         }),
         EntitySpec::Insert {
@@ -360,6 +350,10 @@ fn convert(
                     tag: a.tag.clone(),
                     text: a.value.clone(),
                     rotation: 0.0,
+                    horizontal_alignment: horizontal(a.align),
+                    vertical_alignment: vertical(a.align),
+                    alignment_point: a.align.map(|al| p2(al.at)),
+                    width_factor: a.width_factor,
                 })
                 .collect(),
         }),
@@ -455,5 +449,29 @@ fn extrusion(mirrored: bool) -> Point3D {
         x: 0.0,
         y: 0.0,
         z: if mirrored { -1.0 } else { 1.0 },
+    }
+}
+
+/// The model's horizontal alignment for a spec's (DXF 72).
+fn horizontal(align: Option<TextAlign>) -> TextHorizontalAlignment {
+    match align.map(|a| a.horizontal) {
+        None | Some(0) => TextHorizontalAlignment::Left,
+        Some(1) => TextHorizontalAlignment::Center,
+        Some(2) => TextHorizontalAlignment::Right,
+        Some(3) => TextHorizontalAlignment::Aligned,
+        Some(4) => TextHorizontalAlignment::Middle,
+        Some(5) => TextHorizontalAlignment::Fit,
+        Some(other) => panic!("a spec states horizontal alignment {other}"),
+    }
+}
+
+/// The model's vertical alignment for a spec's.
+fn vertical(align: Option<TextAlign>) -> TextVerticalAlignment {
+    match align.map(|a| a.vertical) {
+        None | Some(0) => TextVerticalAlignment::Baseline,
+        Some(1) => TextVerticalAlignment::Bottom,
+        Some(2) => TextVerticalAlignment::Middle,
+        Some(3) => TextVerticalAlignment::Top,
+        Some(other) => panic!("a spec states vertical alignment {other}"),
     }
 }

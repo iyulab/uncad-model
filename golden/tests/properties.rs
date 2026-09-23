@@ -139,7 +139,16 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
             xy(),
             0.1f64..10.0,
             0.0f64..360.0,
-            prop::collection::vec((text(), xy(), 0.5f64..20.0), 0..4)
+            prop::collection::vec(
+                (
+                    text(),
+                    xy(),
+                    0.5f64..20.0,
+                    prop::option::of((0u8..=5, 0u8..=3, xy())),
+                    prop_oneof![Just(1.0), 0.25f64..4.0],
+                ),
+                0..4
+            )
         )
             .prop_map(
                 |(layer, insert, scale, rotation_deg, attribs)| EntitySpec::Insert {
@@ -151,12 +160,22 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
                     attribs: attribs
                         .into_iter()
                         .enumerate()
-                        .map(|(i, (value, insert, height))| AttribSpec {
-                            tag: format!("TAG{i}"),
-                            value,
-                            insert,
-                            height,
-                        })
+                        .map(
+                            |(i, (value, insert, height, align, width_factor))| AttribSpec {
+                                tag: format!("TAG{i}"),
+                                value,
+                                insert,
+                                height,
+                                align: align.filter(|&(h, v, _)| (h, v) != (0, 0)).map(
+                                    |(horizontal, vertical, at)| TextAlign {
+                                        horizontal,
+                                        vertical,
+                                        at,
+                                    },
+                                ),
+                                width_factor,
+                            },
+                        )
                         .collect(),
                 }
             ),

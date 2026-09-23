@@ -427,6 +427,20 @@ pub struct AttribEntity {
     pub text: String,
     /// Radians (DXF 50).
     pub rotation: f64,
+    /// How the value lines up with its alignment point, as for
+    /// [`TextEntity::horizontal_alignment`] (DXF 72; absent is `Left`).
+    #[serde(default)]
+    pub horizontal_alignment: TextHorizontalAlignment,
+    /// As for [`TextEntity::vertical_alignment`], from DXF 74 -- an
+    /// attribute's 73 is its field length, not its alignment.
+    #[serde(default)]
+    pub vertical_alignment: TextVerticalAlignment,
+    /// As for [`TextEntity::alignment_point`] (DXF 11).
+    #[serde(default)]
+    pub alignment_point: Option<Point2D>,
+    /// As for [`TextEntity::width_factor`] (DXF 41; absent is 1).
+    #[serde(default = "unit_ratio")]
+    pub width_factor: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -528,6 +542,20 @@ pub struct AttdefEntity {
     /// Radians (DXF 50). Kept for parity with ATTRIB; a template is not
     /// normally drawn.
     pub rotation: f64,
+    /// How the value lines up with its alignment point, as for
+    /// [`TextEntity::horizontal_alignment`] (DXF 72; absent is `Left`).
+    #[serde(default)]
+    pub horizontal_alignment: TextHorizontalAlignment,
+    /// As for [`TextEntity::vertical_alignment`], from DXF 74 -- an
+    /// attribute's 73 is its field length, not its alignment.
+    #[serde(default)]
+    pub vertical_alignment: TextVerticalAlignment,
+    /// As for [`TextEntity::alignment_point`] (DXF 11).
+    #[serde(default)]
+    pub alignment_point: Option<Point2D>,
+    /// As for [`TextEntity::width_factor`] (DXF 41; absent is 1).
+    #[serde(default = "unit_ratio")]
+    pub width_factor: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

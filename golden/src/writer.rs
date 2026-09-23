@@ -626,9 +626,19 @@ impl Writer {
         self.xy(10, a.insert);
         self.num(40, a.height);
         self.pair(1, &a.value);
+        if a.width_factor != 1.0 {
+            self.num(41, a.width_factor);
+        }
+        if let Some(al) = a.align {
+            self.pair(72, al.horizontal);
+            self.xy(11, al.at);
+        }
         self.pair(100, "AcDbAttribute");
         self.pair(2, &a.tag);
         self.pair(70, 0);
+        if let Some(al) = a.align {
+            self.pair(74, al.vertical);
+        }
         h
     }
 
