@@ -459,3 +459,30 @@ fn g14_is_a_sheet_of_viewports_over_layers_in_every_state() {
     assert_eq!(dxf.matches("  0\nSECTION\n").count(), 5, "OBJECTS too");
     assert_eq!(dxf.matches(" 67\n1\n").count(), 5, "paper space's five");
 }
+
+/// G15's mesh is its grid lines, in the model's stated order: between the
+/// rows first, then along them, each row closed.
+#[test]
+fn g15_is_a_mesh_carried_as_its_grid_lines_in_order() {
+    let spec = cases::g15_polygon_mesh();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let [Entity::PolylineMesh(mesh)] = model.entities.as_slice() else {
+        panic!("one polygon mesh");
+    };
+    assert_eq!(mesh.wireframe_edges.len(), 8 + 12);
+    assert_eq!(mesh.skipped_edges, 0);
+    let p = |x: f64, y: f64, z: f64| Point3D { x, y, z };
+    // The first edge joins row 0 to row 1 in column 0; the last closes row
+    // 2 from its last vertex back to its first.
+    assert_eq!(
+        mesh.wireframe_edges[0],
+        [p(0.0, 0.0, 0.0), p(0.0, 10.0, 0.5)]
+    );
+    assert_eq!(
+        mesh.wireframe_edges[19],
+        [p(30.0, 20.0, 2.0), p(0.0, 20.0, 1.0)]
+    );
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches("AcDbPolygonMeshVertex").count(), 12);
+}

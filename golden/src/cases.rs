@@ -1194,6 +1194,50 @@ pub fn g14_sheet_with_viewports() -> Spec {
     }
 }
 
+/// G15, a polygon mesh: three rows of four vertices, closed in N (each row
+/// wraps back to its first vertex, as a tube does) and open in M, its
+/// heights varying like a patch of terrain. The model carries it as its
+/// grid lines, in the order the model states for a mesh: 8 edges between
+/// the rows (two gaps, four columns), then 12 along them (three rows of
+/// four, each closed).
+pub fn g15_polygon_mesh() -> Spec {
+    let layer = "MESH".to_string();
+    let mut vertices = Vec::new();
+    for (i, z) in [
+        [0.0, 1.0, 2.0, 1.0],
+        [0.5, 1.5, 2.5, 1.5],
+        [1.0, 2.0, 3.0, 2.0],
+    ]
+    .iter()
+    .enumerate()
+    {
+        for (j, z) in z.iter().enumerate() {
+            vertices.push([10.0 * j as f64, 10.0 * i as f64, *z]);
+        }
+    }
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 5,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![EntitySpec::PolygonMesh {
+            layer,
+            m: 3,
+            n: 4,
+            closed_m: false,
+            closed_n: true,
+            vertices,
+        }],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1209,6 +1253,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g12" => g12_curved_and_wide_polylines(),
         "g13" => g13_justified_text(),
         "g14" => g14_sheet_with_viewports(),
+        "g15" => g15_polygon_mesh(),
         _ => return None,
     })
 }
@@ -1218,6 +1263,6 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 12] = [
-    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14",
+pub const NAMES: [&str; 13] = [
+    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15",
 ];
