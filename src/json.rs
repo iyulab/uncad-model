@@ -253,6 +253,7 @@ mod tests {
                 corner2: p3(1.0, 0.0, 0.0),
                 corner3: p3(1.0, 1.0, 0.0),
                 corner4: p3(0.0, 1.0, 0.0),
+                invisible_edges: [false, true, false, false],
             }),
             Entity::Spline(SplineEntity {
                 common: c.clone(),

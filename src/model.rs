@@ -478,6 +478,19 @@ pub struct Face3DEntity {
     pub corner2: Point3D,
     pub corner3: Point3D,
     pub corner4: Point3D,
+    /// Which edges the file marks invisible (DXF 70, bits 1, 2, 4 and 8):
+    /// edge `i` runs from corner `i + 1` to the next, the fourth back to the
+    /// first. A mesh of faces hides the edges it shares inside so that only
+    /// its outline shows. An absent group is every edge visible.
+    #[serde(default)]
+    pub invisible_edges: [bool; 4],
+}
+
+impl Face3DEntity {
+    /// The four edge flags of DXF group 70, bit `i` for edge `i`.
+    pub fn invisible_edges_from_bits(bits: u32) -> [bool; 4] {
+        [bits & 1 != 0, bits & 2 != 0, bits & 4 != 0, bits & 8 != 0]
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
