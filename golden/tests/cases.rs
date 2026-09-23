@@ -4,6 +4,7 @@
 use uncad_model::model::{
     Entity, HorizontalJustification, Point2D, Point3D, Ref, SegmentWidth, VerticalJustification,
 };
+use uncad_model::tables::{PlotPaperUnits, PlotRotation};
 use uncad_model::Affine2;
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
@@ -376,4 +377,85 @@ fn g13_places_justified_text_by_its_alignment_point_and_resolves_styles() {
         })
         .collect();
     assert_eq!(attribs, [("D-101", false), ("FIRE RATED", true)]);
+}
+
+/// G14 states every layer state, three layouts with their sheets, and a
+/// paper space whose viewports carry their views.
+#[test]
+fn g14_is_a_sheet_of_viewports_over_layers_in_every_state() {
+    let spec = cases::g14_sheet_with_viewports();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+
+    let layers = &model.tables.layers;
+    assert!(layers["HIDDEN"].off && layers["HIDDEN"].color_index < 0);
+    assert!(layers["FROZEN"].frozen && layers["LOCKED"].locked);
+    assert_eq!(layers["NOPLOT"].plot, Some(false));
+    assert_eq!(
+        (layers["PLOT"].plot, layers["PLOT"].lineweight),
+        (Some(true), Some(50))
+    );
+    assert_eq!(layers["DEFAULTWT"].lineweight, Some(-3));
+    assert_eq!(
+        (layers["WALLS"].plot, layers["WALLS"].lineweight),
+        (None, None)
+    );
+
+    // The model's seven lines, then paper space's border, title and three
+    // viewports; each space's block holds its own.
+    assert_eq!(model.entities.len(), 12);
+    assert_eq!(model.tables.block_records["*Model_Space"].entities.len(), 7);
+    assert_eq!(model.tables.block_records["*Paper_Space"].entities.len(), 5);
+    assert!(model.tables.block_records["*Paper_Space0"]
+        .entities
+        .is_empty());
+
+    let viewports: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Viewport(v) => Some(v),
+            _ => None,
+        })
+        .collect();
+    let ids: Vec<_> = viewports.iter().map(|v| (v.viewport_id, v.on)).collect();
+    assert_eq!(
+        ids,
+        [
+            (Some(1), Some(true)),
+            (Some(2), Some(true)),
+            (Some(3), Some(false))
+        ]
+    );
+    let detail = viewports[1]
+        .view
+        .expect("an R2000 viewport states its view");
+    assert_eq!(detail.height / viewports[1].height, 2.0, "half scale");
+    assert!((detail.twist - 30f64.to_radians()).abs() < 1e-12);
+    assert_eq!(
+        viewports[1].frozen_layers,
+        [Ref::Resolved("WALLS".to_string())]
+    );
+
+    let layouts = &model.tables.layouts;
+    assert_eq!(layouts.len(), 3);
+    assert_eq!(
+        layouts["Model"].block_name,
+        Ref::Resolved("*Model_Space".to_string())
+    );
+    assert_eq!(
+        layouts["Layout2"].block_name,
+        Ref::Resolved("*Paper_Space0".to_string())
+    );
+    let a3 = &layouts["Layout1"].plot_settings;
+    assert_eq!((a3.paper_width, a3.paper_height), (297.0, 420.0));
+    assert_eq!(a3.rotation, Some(PlotRotation::Counterclockwise90));
+    assert_eq!(
+        layouts["Layout2"].plot_settings.paper_units,
+        Some(PlotPaperUnits::Inches)
+    );
+
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches("  0\nSECTION\n").count(), 5, "OBJECTS too");
+    assert_eq!(dxf.matches(" 67\n1\n").count(), 5, "paper space's five");
 }

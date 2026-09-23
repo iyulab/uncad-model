@@ -2,9 +2,11 @@
 //! consumer can pick the ones its role is measured by.
 
 use crate::spec::{
-    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, Spec, Xy,
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
+    Spec, Xy,
 };
 use uncad_model::model::{HorizontalJustification, VerticalJustification};
+use uncad_model::tables::{PlotPaperUnits, PlotRotation};
 
 /// G1, a general machined part: a closed outline, four holes, three linear
 /// dimensions and one diameter dimension, and a title block inserted with
@@ -1019,6 +1021,179 @@ pub fn g13_justified_text() -> Spec {
     }
 }
 
+/// G14, a sheet: layers in every state the format gives one (off, frozen,
+/// locked, plotted and not, with and without a lineweight), a model drawn
+/// on them, and a paper-space sheet showing it -- a border, a title, the
+/// sheet's own overall viewport, a detail viewport at half scale, turned
+/// 30 degrees and with a layer frozen in it alone, and a viewport that is
+/// off -- set up as two layouts with their plot settings besides the model
+/// tab.
+///
+/// The detail viewport shows the model around (100, 50) in its view's own
+/// coordinates, measured from the target (10, 5): 300 drawing units of
+/// height in a 150 mm frame.
+pub fn g14_sheet_with_viewports() -> Spec {
+    let state = |f: fn(&mut LayerState)| {
+        let mut s = LayerState::default();
+        f(&mut s);
+        s
+    };
+    let layer = |name: &str, color_index: i16, state: LayerState| LayerSpec {
+        name: name.to_string(),
+        color_index,
+        state,
+    };
+    let line = |layer: &str, y: f64| EntitySpec::Line {
+        layer: layer.to_string(),
+        start: Xy::new(0.0, y),
+        end: Xy::new(200.0, y),
+    };
+    let viewport = |center: Xy,
+                    size: (f64, f64),
+                    on: bool,
+                    id: i32,
+                    view: (Xy, f64, Xy, f64),
+                    frozen_layers: &[&str]| EntitySpec::Viewport {
+        layer: "0".to_string(),
+        center,
+        width: size.0,
+        height: size.1,
+        on,
+        id,
+        view_center: view.0,
+        view_height: view.1,
+        view_target: view.2,
+        twist_deg: view.3,
+        frozen_layers: frozen_layers.iter().map(|s| s.to_string()).collect(),
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![
+            layer("WALLS", 7, LayerState::default()),
+            layer("HIDDEN", 1, state(|s| s.off = true)),
+            layer("FROZEN", 3, state(|s| s.frozen = true)),
+            layer("LOCKED", 4, state(|s| s.locked = true)),
+            layer("NOPLOT", 5, state(|s| s.plot = Some(false))),
+            layer(
+                "PLOT",
+                6,
+                state(|s| {
+                    s.plot = Some(true);
+                    s.lineweight = Some(50);
+                }),
+            ),
+            layer("DEFAULTWT", 8, state(|s| s.lineweight = Some(-3))),
+        ],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            line("WALLS", 0.0),
+            line("HIDDEN", 10.0),
+            line("FROZEN", 20.0),
+            line("LOCKED", 30.0),
+            line("NOPLOT", 40.0),
+            line("PLOT", 50.0),
+            line("DEFAULTWT", 60.0),
+        ],
+        paper_space: vec![
+            EntitySpec::LwPolyline {
+                layer: "0".to_string(),
+                vertices: vec![
+                    Xy::new(0.0, 0.0),
+                    Xy::new(420.0, 0.0),
+                    Xy::new(420.0, 297.0),
+                    Xy::new(0.0, 297.0),
+                ],
+                closed: true,
+                bulges: Vec::new(),
+                widths: Vec::new(),
+                const_width: 0.0,
+            },
+            EntitySpec::Text {
+                layer: "0".to_string(),
+                insert: Xy::new(320.0, 20.0),
+                height: 5.0,
+                text: "SHEET 1".to_string(),
+                rotation_deg: 0.0,
+            },
+            viewport(
+                Xy::new(210.0, 148.5),
+                (420.0, 297.0),
+                true,
+                1,
+                (Xy::new(210.0, 148.5), 297.0, Xy::new(0.0, 0.0), 0.0),
+                &[],
+            ),
+            viewport(
+                Xy::new(150.0, 150.0),
+                (200.0, 150.0),
+                true,
+                2,
+                (Xy::new(100.0, 50.0), 300.0, Xy::new(10.0, 5.0), 30.0),
+                &["WALLS"],
+            ),
+            viewport(
+                Xy::new(350.0, 60.0),
+                (100.0, 80.0),
+                false,
+                3,
+                (Xy::new(0.0, 0.0), 80.0, Xy::new(0.0, 0.0), 0.0),
+                &["FROZEN", "NOPLOT"],
+            ),
+        ],
+        layouts: vec![
+            LayoutSpec {
+                name: "Model".to_string(),
+                tab_order: 0,
+                block: "*Model_Space".to_string(),
+                limits_min: Xy::new(0.0, 0.0),
+                limits_max: Xy::new(420.0, 297.0),
+                paper_name: String::new(),
+                paper_size: (0.0, 0.0),
+                margins: [0.0; 4],
+                plot_origin: Xy::new(0.0, 0.0),
+                paper_units: PlotPaperUnits::Millimeters,
+                rotation: PlotRotation::Unrotated,
+                scale: (1.0, 1.0),
+            },
+            // ISO A3 is stated portrait (297 x 420) and turned a quarter,
+            // with the usual "origin at the paper's corner" page setup: the
+            // plot origin is minus the left and bottom margins.
+            LayoutSpec {
+                name: "Layout1".to_string(),
+                tab_order: 1,
+                block: "*Paper_Space".to_string(),
+                limits_min: Xy::new(0.0, 0.0),
+                limits_max: Xy::new(420.0, 297.0),
+                paper_name: "ISO_A3_(420.00_x_297.00_MM)".to_string(),
+                paper_size: (297.0, 420.0),
+                margins: [7.5, 20.0, 7.5, 20.0],
+                plot_origin: Xy::new(-7.5, -20.0),
+                paper_units: PlotPaperUnits::Millimeters,
+                rotation: PlotRotation::Counterclockwise90,
+                scale: (1.0, 1.0),
+            },
+            // A second sheet, empty, in inches: its block is one more paper
+            // space the file declares.
+            LayoutSpec {
+                name: "Layout2".to_string(),
+                tab_order: 2,
+                block: "*Paper_Space0".to_string(),
+                limits_min: Xy::new(0.0, 0.0),
+                limits_max: Xy::new(11.0, 8.5),
+                paper_name: "ANSI_A_(8.50_x_11.00_Inches)".to_string(),
+                paper_size: (215.9, 279.4),
+                margins: [6.35, 19.05, 6.35, 19.05],
+                plot_origin: Xy::new(0.0, 0.0),
+                paper_units: PlotPaperUnits::Inches,
+                rotation: PlotRotation::Clockwise90,
+                scale: (1.0, 1.0),
+            },
+        ],
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1033,6 +1208,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g11" => g11_mirrored_part(),
         "g12" => g12_curved_and_wide_polylines(),
         "g13" => g13_justified_text(),
+        "g14" => g14_sheet_with_viewports(),
         _ => return None,
     })
 }
@@ -1042,6 +1218,6 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 11] = [
-    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13",
+pub const NAMES: [&str; 12] = [
+    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14",
 ];
