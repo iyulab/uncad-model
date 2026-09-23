@@ -215,6 +215,9 @@ pub struct TextEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
+    /// The vertices' positions only. A vertex's bulge (DXF 42 -- the segment
+    /// to the next vertex is an arc) is not carried, so an arc segment is
+    /// represented by its chord.
     pub vertices: Vec<Point2D>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
