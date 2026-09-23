@@ -36,7 +36,15 @@ fn a_document_written_by_0_1_0_loads() {
     assert!(db.read_diagnostics.is_clean());
     assert_eq!(db.tables.layers.len(), 2);
     assert_eq!(db.tables.block_records["TITLE"].entities.len(), 1);
-    assert_eq!(db.tables.dim_styles["ISO-25"].decimal_places, Some(2));
+    let style = &db.tables.dim_styles["ISO-25"];
+    assert_eq!(style.decimal_places, Some(2));
+    // The variables added since 0.1.0 are not stated by that document.
+    assert_eq!((style.arrow_size, style.rounding), (None, None));
+    assert_eq!(style.linear_unit_format, None);
+    assert_eq!(style.zero_suppression, None);
+    assert_eq!(style.angular_unit_format, None);
+    assert_eq!(style.angular_decimal_places, None);
+    assert_eq!(style.fraction_format, None);
     assert_eq!(db.tables.mlinestyles["STANDARD"], [0.5, -0.5]);
     assert!(db.tables.layouts.is_empty());
 }

@@ -107,7 +107,8 @@ mod tests {
     use super::*;
     use crate::model::*;
     use crate::tables::{
-        BlockRecord, LayerRecord, LayoutRecord, PlotPaperUnits, PlotRotation, PlotSettings, Tables,
+        AngularUnitFormat, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord, LayoutRecord,
+        LinearUnitFormat, PlotPaperUnits, PlotRotation, PlotSettings, Tables,
     };
     use std::collections::BTreeMap;
 
@@ -637,6 +638,30 @@ mod tests {
         );
         let mut mlinestyles = BTreeMap::new();
         mlinestyles.insert("STANDARD".to_string(), vec![0.5, -0.5]);
+        let mut dim_styles = BTreeMap::new();
+        dim_styles.insert(
+            "ARCH".to_string(),
+            DimStyleRecord {
+                name: "ARCH".to_string(),
+                post: Some("<>\"".to_string()),
+                scale: Some(48.0),
+                length_factor: Some(1.0),
+                tolerances: Some(false),
+                limits: None,
+                tolerance_upper: None,
+                tolerance_lower: None,
+                decimal_places: Some(4),
+                tolerance_decimal_places: None,
+                text_height: Some(0.125),
+                arrow_size: Some(0.1875),
+                linear_unit_format: Some(LinearUnitFormat::Architectural),
+                zero_suppression: Some(3),
+                rounding: Some(0.0625),
+                angular_unit_format: Some(AngularUnitFormat::DegreesMinutesSeconds),
+                angular_decimal_places: Some(2),
+                fraction_format: Some(FractionFormat::Diagonal),
+            },
+        );
         let mut layouts = BTreeMap::new();
         layouts.insert(
             "Layout1".to_string(),
@@ -665,7 +690,7 @@ mod tests {
         let db = CadDatabase {
             entities: one_of_each(),
             tables: Tables {
-                dim_styles: BTreeMap::new(),
+                dim_styles,
                 layers,
                 block_records,
                 mlinestyles,

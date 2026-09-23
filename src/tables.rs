@@ -68,9 +68,10 @@ pub struct LayerRecord {
 /// dimension displays is. Writing a plausible number here would make a
 /// style claim something its file never said.
 ///
-/// The set is the one the displayed text depends on. Everything else the
-/// table carries is about how the dimension is drawn, which the drawn block
-/// already settles.
+/// The set is the one the displayed text depends on, and the two sizes a
+/// dimension of the style is drawn at -- its text height and its arrow
+/// size. Everything else the table carries is about how the dimension is
+/// drawn, which the drawn block already settles.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DimStyleRecord {
     /// Style name (DXF 2).
@@ -101,6 +102,77 @@ pub struct DimStyleRecord {
     pub tolerance_decimal_places: Option<i32>,
     /// DXF 140 (`DIMTXT`): the text height.
     pub text_height: Option<f64>,
+    /// DXF 41 (`DIMASZ`): the size of the arrowheads.
+    pub arrow_size: Option<f64>,
+    /// DXF 277 (`DIMLUNIT`): how a linear measurement is written. `None`
+    /// also when the style states a value outside the format's six.
+    pub linear_unit_format: Option<LinearUnitFormat>,
+    /// DXF 78 (`DIMZIN`): which zeros are left out of a linear measurement,
+    /// as the format encodes it -- 0 to 3 say how zero feet and zero inches
+    /// are treated, and 4 (leading zeros) and 8 (trailing zeros) are added
+    /// to them.
+    pub zero_suppression: Option<i32>,
+    /// DXF 45 (`DIMRND`): the step a linear measurement is rounded to; 0 is
+    /// no rounding.
+    pub rounding: Option<f64>,
+    /// DXF 275 (`DIMAUNIT`): how an angle is written. `None` also when the
+    /// style states a value outside the format's five.
+    pub angular_unit_format: Option<AngularUnitFormat>,
+    /// DXF 179 (`DIMADEC`): decimal places in an angle.
+    pub angular_decimal_places: Option<i32>,
+    /// DXF 276 (`DIMFRAC`): how a fraction is written, where the linear
+    /// format writes fractions. `None` also when the style states a value
+    /// outside the format's three.
+    pub fraction_format: Option<FractionFormat>,
+}
+
+/// How a dimension style writes a linear measurement (`DIMLUNIT`, DXF 277,
+/// 1 to 6 in this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LinearUnitFormat {
+    /// `1.55E+01`.
+    Scientific,
+    /// `15.50`.
+    Decimal,
+    /// Feet and decimal inches: `1'-3.50"`.
+    Engineering,
+    /// Feet and fractional inches: `1'-3 1/2"`.
+    Architectural,
+    /// `15 1/2`.
+    Fractional,
+    /// The operating system's own decimal format.
+    WindowsDesktop,
+}
+
+/// How a dimension style writes an angle (`DIMAUNIT`, DXF 275, 0 to 4 in
+/// this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AngularUnitFormat {
+    /// `45.5` degrees.
+    DecimalDegrees,
+    /// `45d30'0"`.
+    DegreesMinutesSeconds,
+    /// `50.5556g`.
+    Gradians,
+    /// `0.7941r`.
+    Radians,
+    /// A bearing: `N 44d30' E`.
+    SurveyorsUnits,
+}
+
+/// How a dimension style writes a fraction (`DIMFRAC`, DXF 276, 0 to 2 in
+/// this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum FractionFormat {
+    /// Numerator over denominator, with a horizontal bar.
+    Horizontal,
+    /// Numerator over denominator, with a diagonal bar.
+    Diagonal,
+    /// On one line: `1/2`.
+    NotStacked,
 }
 
 /// One block definition (DXF `BLOCK` ... `ENDBLK`).
