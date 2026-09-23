@@ -258,6 +258,7 @@ mod tests {
                 text_height: 2.5,
                 rotation: 0.3,
                 line_spacing_factor: 1.0,
+                attachment: Some(MTextAttachment::MiddleCenter),
             }),
             Entity::Polyline3D(PolylineEntity {
                 common: c.clone(),

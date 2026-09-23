@@ -451,6 +451,27 @@ pub struct MTextEntity {
     /// they differ from the default -- and a fraction *of* the default is 1
     /// there, so an absent group is 1.
     pub line_spacing_factor: f64,
+    /// DXF 71: which point of the text block `insertion_point` is. Without
+    /// it the insertion point does not say where the text goes -- the same
+    /// point is the block's top-left corner, its middle or its bottom-right,
+    /// depending on this. `None` when the file does not state it.
+    pub attachment: Option<MTextAttachment>,
+}
+
+/// Which point of an MTEXT block its insertion point is (DXF 71, 1 to 9 in
+/// this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MTextAttachment {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    MiddleLeft,
+    MiddleCenter,
+    MiddleRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
