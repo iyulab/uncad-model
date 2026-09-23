@@ -188,6 +188,7 @@ mod tests {
             PolylineVertex {
                 point: p(2.0, 2.0),
                 bulge: 1.0,
+                ..PolylineVertex::default()
             },
         ];
         assert_eq!(segments(&v, false).count(), 2);

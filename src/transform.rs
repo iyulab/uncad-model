@@ -5,8 +5,8 @@
 //! Every consumer that follows an INSERT into its block -- a renderer, a
 //! pointer, an editor -- needs this same map and needs nested references to
 //! compose the same way, so it lives with the model rather than in each of
-//! them. It is arithmetic on the INSERT's own fields (DXF 10/20, 41/42, 50)
-//! and nothing else; there is no guessing in it.
+//! them. It is arithmetic on the INSERT's own fields (DXF 10/20/30, 41/42,
+//! 50, 210) and nothing else; there is no guessing in it.
 
 use crate::model::{InsertEntity, Point2D};
 use crate::ocs::Ocs;
@@ -156,6 +156,7 @@ impl InsertEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Point3D;
     use std::f64::consts::FRAC_PI_2;
 
     fn p(x: f64, y: f64) -> Point2D {
@@ -217,6 +218,113 @@ mod tests {
         let stepwise = outer.apply(inner.apply(q));
         assert!((composed.x - stepwise.x).abs() < 1e-12);
         assert!((composed.y - stepwise.y).abs() < 1e-12);
+    }
+
+    fn insert(at: Point3D, rotation: f64, extrusion: Point3D) -> InsertEntity {
+        use crate::model::{Confidence, EntityCommon, EntityId, Origin, Ref};
+        InsertEntity {
+            common: EntityCommon {
+                id: EntityId::new(1),
+                origin: Origin::Vector,
+                confidence: Confidence::High,
+                source_handle: Ref::Absent,
+                layer: Ref::Resolved("0".to_string()),
+                color_index: 256,
+                true_color: None,
+                invisible: false,
+            },
+            block_name: Ref::Resolved("B".to_string()),
+            insertion_point: at,
+            scale: Point3D {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            rotation,
+            attribs: Vec::new(),
+            extrusion,
+        }
+    }
+
+    fn v(x: f64, y: f64, z: f64) -> Point3D {
+        Point3D { x, y, z }
+    }
+
+    fn close(a: Point2D, b: Point2D) -> bool {
+        (a.x - b.x).abs() < 1e-12 && (a.y - b.y).abs() < 1e-12
+    }
+
+    const WORLD_Z: Point3D = Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: 1.0,
+    };
+
+    #[test]
+    fn an_insert_with_the_usual_normal_is_placed_in_the_world_axes() {
+        let i = insert(v(10.0, 5.0, 3.0), FRAC_PI_2, WORLD_Z);
+        assert_eq!(
+            i.world_transform(),
+            Some(Affine2::placement(p(10.0, 5.0), 1.0, 1.0, FRAC_PI_2))
+        );
+    }
+
+    #[test]
+    fn a_mirrored_insert_lands_across_the_y_axis() {
+        // The OCS of normal (0, 0, -1) has its x axis along world -x: the
+        // stated insertion point (10, 5) is (-10, 5) in the world, and a
+        // block point one unit along the block's x axis goes one unit
+        // further left.
+        let t = insert(v(10.0, 5.0, 0.0), 0.0, v(0.0, 0.0, -1.0))
+            .world_transform()
+            .unwrap();
+        assert!(close(t.apply(p(0.0, 0.0)), p(-10.0, 5.0)));
+        assert!(close(t.apply(p(1.0, 0.0)), p(-11.0, 5.0)));
+        assert!(t.determinant() < 0.0, "a mirror image");
+        // Turned a quarter in its OCS, the block's x axis runs up the world
+        // y axis still, since the mirror leaves y alone.
+        let t = insert(v(10.0, 5.0, 0.0), FRAC_PI_2, v(0.0, 0.0, -1.0))
+            .world_transform()
+            .unwrap();
+        assert!(close(t.apply(p(1.0, 0.0)), p(-10.0, 6.0)));
+        // A stated normal that is not of unit length names the same OCS.
+        let long = insert(v(10.0, 5.0, 0.0), 0.0, v(0.0, 0.0, -4.0))
+            .world_transform()
+            .unwrap();
+        assert!(close(long.apply(p(1.0, 0.0)), p(-11.0, 5.0)));
+    }
+
+    #[test]
+    fn a_tilted_insert_has_no_world_placement() {
+        // Normal (1, 0, 0): the block's y axis points straight up out of the
+        // world's XY. Seen from above, a block point's place depends on its
+        // own z too, which a 2D map cannot take -- so there is none.
+        assert_eq!(
+            insert(v(0.0, 0.0, 7.0), 0.0, v(1.0, 0.0, 0.0)).world_transform(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_normal_that_is_not_a_direction_has_no_world_placement() {
+        for bad in [v(0.0, 0.0, 0.0), v(f64::NAN, 0.0, 1.0)] {
+            assert_eq!(insert(v(10.0, 5.0, 0.0), 0.3, bad).world_transform(), None);
+        }
+    }
+
+    #[test]
+    fn a_mirrored_block_inside_a_mirrored_block_is_the_right_way_round_again() {
+        let inner = insert(v(1.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0))
+            .world_transform()
+            .unwrap();
+        let outer = insert(v(10.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0))
+            .world_transform()
+            .unwrap();
+        let world = inner.then(&outer);
+        assert!(world.determinant() > 0.0);
+        // Inner: (2, 0) -> OCS (3, 0) -> (-3, 0) in the outer block; outer:
+        // -> OCS (7, 0) -> world (-7, 0).
+        assert!(close(world.apply(p(2.0, 0.0)), p(-7.0, 0.0)));
     }
 
     #[test]

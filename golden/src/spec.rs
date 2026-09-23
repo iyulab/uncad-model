@@ -6,6 +6,11 @@
 //! say more than the model would be an oracle nothing can be checked
 //! against.
 
+use uncad_model::model::OrdinateAxis;
+use uncad_model::tables::{
+    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+};
+
 /// How the writer encodes every string it emits, and what the file declares
 /// in `$DWGCODEPAGE`. An R2000 DXF stores text as 8-bit bytes in the
 /// drawing's codepage, not as UTF-8, so a case with non-ASCII text has to
@@ -48,15 +53,80 @@ pub struct Spec {
     /// these resolves; a dimension naming anything else does not, and a file
     /// with no entries here declares no table at all.
     pub dim_styles: Vec<DimStyleSpec>,
+    /// STYLE (text style) table entries the file declares, by name. A text
+    /// naming one of these resolves; one naming anything else does not. A
+    /// text that names no style stands for the one called `STANDARD`, so
+    /// it resolves when this list has that name and is absent otherwise --
+    /// and with no entries here the file declares no table at all.
+    pub text_styles: Vec<String>,
     /// The drawing's own entities, in file order.
     pub entities: Vec<EntitySpec>,
+    /// The entities of paper space (`*Paper_Space`, the first sheet), in
+    /// file order. The writer puts them after `entities`, marked as paper
+    /// space (DXF 67).
+    pub paper_space: Vec<EntitySpec>,
+    /// The LAYOUT objects the file declares, each naming the block it shows.
+    /// With none the file has no OBJECTS section at all -- what a reader of
+    /// a drawing without layouts sees.
+    pub layouts: Vec<LayoutSpec>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerSpec {
     pub name: String,
-    /// AutoCAD Color Index, 1..=255.
+    /// AutoCAD Color Index, 1..=255. A layer that is off is written with
+    /// this negated -- how a DXF says "off".
     pub color_index: i16,
+    /// Everything else the file says about the layer.
+    pub state: LayerState,
+}
+
+/// A layer's state beyond its name and colour. The default is the state
+/// the writer has always written: on, thawed, unlocked, and neither a plot
+/// flag (DXF 290) nor a lineweight (370) stated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LayerState {
+    /// Written as a negative colour (DXF 62).
+    pub off: bool,
+    /// DXF 70, bit 1.
+    pub frozen: bool,
+    /// DXF 70, bit 4.
+    pub locked: bool,
+    /// DXF 290 when set.
+    pub plot: Option<bool>,
+    /// DXF 370 when set: hundredths of a millimetre, or -3 for the default.
+    pub lineweight: Option<i16>,
+}
+
+/// One LAYOUT object: a tab, the block it shows and its plot settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayoutSpec {
+    /// DXF 1 of the layout part: the tab's name.
+    pub name: String,
+    /// DXF 71.
+    pub tab_order: i32,
+    /// The block record the layout shows (DXF 330): `*Model_Space`,
+    /// `*Paper_Space`, or another `*Paper_Space<n>` the writer then
+    /// declares, empty.
+    pub block: String,
+    /// DXF 10 and 11.
+    pub limits_min: Xy,
+    pub limits_max: Xy,
+    /// DXF 4.
+    pub paper_name: String,
+    /// DXF 44 and 45, millimetres.
+    pub paper_size: (f64, f64),
+    /// DXF 40, 41, 42 and 43 in that order (left, bottom, right, top),
+    /// millimetres.
+    pub margins: [f64; 4],
+    /// DXF 46 and 47, millimetres.
+    pub plot_origin: Xy,
+    /// DXF 72.
+    pub paper_units: PlotPaperUnits,
+    /// DXF 73.
+    pub rotation: PlotRotation,
+    /// DXF 142 and 143: the custom print scale's two sides.
+    pub scale: (f64, f64),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,23 +160,46 @@ impl Xy {
 
 /// One polyline vertex: where it is and the bulge of the segment that
 /// leaves it (DXF 42 -- `0` is straight, otherwise the tangent of a quarter
-/// of the arc's included angle, positive counter-clockwise).
+/// of the arc's included angle, positive counter-clockwise), and that
+/// segment's widths.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vertex {
     pub at: Xy,
     pub bulge: f64,
+    /// DXF 40 and 41: the segment's width where it leaves this vertex and
+    /// where it reaches the next. The writer states them on every vertex of
+    /// a polyline any vertex of which has a width, and on none otherwise.
+    pub start_width: f64,
+    pub end_width: f64,
 }
 
 impl Vertex {
     pub const fn bulged(at: Xy, bulge: f64) -> Self {
-        Vertex { at, bulge }
+        Vertex {
+            at,
+            bulge,
+            start_width: 0.0,
+            end_width: 0.0,
+        }
+    }
+
+    /// This vertex with its segment `start_width` wide where it leaves the
+    /// vertex and `end_width` wide where it reaches the next.
+    pub const fn wide(self, start_width: f64, end_width: f64) -> Self {
+        Vertex {
+            at: self.at,
+            bulge: self.bulge,
+            start_width,
+            end_width,
+        }
     }
 }
 
 impl From<Xy> for Vertex {
-    /// A vertex whose outgoing segment is straight.
+    /// A vertex whose outgoing segment is straight and has no width of its
+    /// own.
     fn from(at: Xy) -> Self {
-        Vertex { at, bulge: 0.0 }
+        Vertex::bulged(at, 0.0)
     }
 }
 
@@ -142,10 +235,16 @@ pub enum EntitySpec {
         /// In the polyline's own coordinate system, as for `Circle`.
         vertices: Vec<Vertex>,
         closed: bool,
+        /// DXF 43 when not 0.
+        const_width: f64,
+        /// DXF 38 when not 0: the z of every vertex in the polyline's own
+        /// coordinate system.
+        elevation: f64,
         mirrored: bool,
     },
     Text {
         layer: String,
+        /// In the text's own coordinate system, as for `Circle`.
         insert: Xy,
         height: f64,
         text: String,
@@ -159,7 +258,66 @@ pub enum EntitySpec {
         /// In the text's own coordinate system: for a mirrored text
         /// (extrusion (0, 0, -1)) `insert` and the alignment point are
         /// written with their x negated, and the text reads mirrored.
+        /// DXF 51 when not 0; degrees.
+        oblique_deg: f64,
+        /// DXF 7 when set.
+        style: Option<String>,
         mirrored: bool,
+    },
+    /// A SOLID: four corners in DXF order, in its own coordinate system as
+    /// for `Circle`.
+    Solid {
+        layer: String,
+        corners: [Xy; 4],
+        mirrored: bool,
+    },
+    /// A polygon mesh (POLYLINE with group 70 bit 16): `m` rows of `n`
+    /// vertices, row by row.
+    PolygonMesh {
+        layer: String,
+        m: u16,
+        n: u16,
+        closed_m: bool,
+        closed_n: bool,
+        vertices: Vec<[f64; 3]>,
+    },
+    /// An ordinate dimension: the distance of `feature` from `datum` along
+    /// one axis, with its leader running to `leader_end`.
+    OrdinateDimension {
+        layer: String,
+        /// DXF 10.
+        datum: Xy,
+        /// DXF 13.
+        feature: Xy,
+        /// DXF 14, and where the text sits (DXF 11).
+        leader_end: Xy,
+        /// DXF 70, bit 64.
+        axis: OrdinateAxis,
+        text: String,
+        measurement: Option<f64>,
+        style: Option<String>,
+    },
+    /// A paper-space viewport; only meaningful in [`Spec::paper_space`].
+    Viewport {
+        layer: String,
+        /// DXF 10, 40 and 41.
+        center: Xy,
+        width: f64,
+        height: f64,
+        /// DXF 68 (0 when off) and the off bit of DXF 90.
+        on: bool,
+        /// DXF 69.
+        id: i32,
+        /// DXF 12.
+        view_center: Xy,
+        /// DXF 45.
+        view_height: f64,
+        /// DXF 17; its z is 0.
+        view_target: Xy,
+        /// DXF 51, degrees.
+        twist_deg: f64,
+        /// DXF 341, by layer name; every name must be a declared layer.
+        frozen_layers: Vec<String>,
     },
     /// An attribute definition -- only meaningful inside a block definition.
     Attdef {
@@ -173,11 +331,14 @@ pub enum EntitySpec {
     Insert {
         layer: String,
         block: String,
+        /// In the reference's own coordinate system, as for `Circle`; the
+        /// rotation turns about that system's Z axis.
         insert: Xy,
         scale: f64,
         /// Degrees.
         rotation_deg: f64,
-        /// Attribute values; each becomes an ATTRIB after the INSERT.
+        /// Attribute values; each becomes an ATTRIB after the INSERT, in
+        /// the world's own axes whatever the INSERT's.
         attribs: Vec<AttribSpec>,
         /// In the INSERT's own coordinate system: for a mirrored INSERT
         /// (extrusion (0, 0, -1)) `insert` is written with its x negated, and
@@ -277,14 +438,21 @@ impl EntitySpec {
                 layer,
                 vertices,
                 closed,
+                const_width,
+                elevation,
                 mirrored,
             } => EntitySpec::LwPolyline {
                 layer: layer.clone(),
                 vertices: vertices
                     .iter()
-                    .map(|v| Vertex::bulged(moved_ocs(&v.at, *mirrored, dx, dy), v.bulge))
+                    .map(|v| Vertex {
+                        at: moved_ocs(&v.at, *mirrored, dx, dy),
+                        ..*v
+                    })
                     .collect(),
                 closed: *closed,
+                const_width: *const_width,
+                elevation: *elevation,
                 mirrored: *mirrored,
             },
             EntitySpec::Text {
@@ -295,6 +463,8 @@ impl EntitySpec {
                 rotation_deg,
                 align,
                 width_factor,
+                oblique_deg,
+                style,
                 mirrored,
             } => EntitySpec::Text {
                 layer: layer.clone(),
@@ -307,6 +477,8 @@ impl EntitySpec {
                     ..a
                 }),
                 width_factor: *width_factor,
+                oblique_deg: *oblique_deg,
+                style: style.clone(),
                 mirrored: *mirrored,
             },
             EntitySpec::Attdef {
@@ -341,6 +513,52 @@ impl EntitySpec {
                 attribs: attribs.clone(),
                 mirrored: *mirrored,
             },
+            EntitySpec::Solid {
+                layer,
+                corners,
+                mirrored,
+            } => EntitySpec::Solid {
+                layer: layer.clone(),
+                corners: corners.map(|c| moved_ocs(&c, *mirrored, dx, dy)),
+                mirrored: *mirrored,
+            },
+            EntitySpec::PolygonMesh {
+                layer,
+                m: rows,
+                n,
+                closed_m,
+                closed_n,
+                vertices,
+            } => EntitySpec::PolygonMesh {
+                layer: layer.clone(),
+                m: *rows,
+                n: *n,
+                closed_m: *closed_m,
+                closed_n: *closed_n,
+                vertices: vertices
+                    .iter()
+                    .map(|[x, y, z]| [x + dx, y + dy, *z])
+                    .collect(),
+            },
+            EntitySpec::OrdinateDimension {
+                layer,
+                datum,
+                feature,
+                leader_end,
+                axis,
+                text,
+                measurement,
+                style,
+            } => EntitySpec::OrdinateDimension {
+                layer: layer.clone(),
+                datum: m(datum),
+                feature: m(feature),
+                leader_end: m(leader_end),
+                axis: *axis,
+                text: text.clone(),
+                measurement: *measurement,
+                style: style.clone(),
+            },
             other => other.clone(),
         }
     }
@@ -349,7 +567,7 @@ impl EntitySpec {
 /// One DIMSTYLE table entry the file declares. Only the variables a case
 /// needs are here; the rest stay unwritten, which is itself what a reader
 /// has to report as "this style does not state it".
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct DimStyleSpec {
     /// DXF 2.
     pub name: String,
@@ -359,6 +577,20 @@ pub struct DimStyleSpec {
     pub decimal_places: Option<i32>,
     /// DXF 140.
     pub text_height: Option<f64>,
+    /// DXF 41.
+    pub arrow_size: Option<f64>,
+    /// DXF 277.
+    pub linear_unit_format: Option<LinearUnitFormat>,
+    /// DXF 78.
+    pub zero_suppression: Option<i32>,
+    /// DXF 45.
+    pub rounding: Option<f64>,
+    /// DXF 275.
+    pub angular_unit_format: Option<AngularUnitFormat>,
+    /// DXF 179.
+    pub angular_decimal_places: Option<i32>,
+    /// DXF 276.
+    pub fraction_format: Option<FractionFormat>,
 }
 
 /// A TEXT's alignment: its two DXF codes (72 horizontal 0 to 5, 73
@@ -381,6 +613,8 @@ pub struct AttribSpec {
     pub align: Option<TextAlign>,
     /// DXF 41, written only when it is not 1.
     pub width_factor: f64,
+    /// DXF 70, bit 1: the value is not shown.
+    pub invisible: bool,
 }
 
 impl EntitySpec {
@@ -391,16 +625,32 @@ impl EntitySpec {
             | EntitySpec::Arc { layer, .. }
             | EntitySpec::LwPolyline { layer, .. }
             | EntitySpec::Text { layer, .. }
+            | EntitySpec::Solid { layer, .. }
             | EntitySpec::Attdef { layer, .. }
             | EntitySpec::Insert { layer, .. }
+            | EntitySpec::PolygonMesh { layer, .. }
             | EntitySpec::LinearDimension { layer, .. }
             | EntitySpec::ArcDimension { layer, .. }
-            | EntitySpec::DiameterDimension { layer, .. } => layer,
+            | EntitySpec::DiameterDimension { layer, .. }
+            | EntitySpec::OrdinateDimension { layer, .. }
+            | EntitySpec::Viewport { layer, .. } => layer,
         }
+    }
+
+    /// Whether this is a dimension, which the writer gives an anonymous
+    /// `*D<n>` block of its drawn geometry.
+    pub fn is_dimension(&self) -> bool {
+        matches!(
+            self,
+            EntitySpec::LinearDimension { .. }
+                | EntitySpec::ArcDimension { .. }
+                | EntitySpec::DiameterDimension { .. }
+                | EntitySpec::OrdinateDimension { .. }
+        )
     }
 }
 
-/// An own-coordinate-system center moved by (`dx`, `dy`) in the world: a
+/// An own-coordinate-system point moved by (`dx`, `dy`) in the world: a
 /// mirrored entity's own x axis is the world's negative x.
 fn moved_ocs(center: &Xy, mirrored: bool, dx: f64, dy: f64) -> Xy {
     if mirrored {

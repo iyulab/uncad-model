@@ -2,8 +2,13 @@
 //! consumer can pick the ones its role is measured by.
 
 use crate::spec::{
-    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, TextAlign, Vertex,
-    Xy,
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
+    Spec, TextAlign, Vertex, Xy,
+};
+use crate::writer::{horizontal_code, vertical_code};
+use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
+use uncad_model::tables::{
+    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
 
 /// G1, a general machined part: a closed outline, four holes, three linear
@@ -34,6 +39,8 @@ pub fn g1_general_part() -> Spec {
             Xy::new(0.0, 100.0).into(),
         ],
         closed: true,
+        const_width: 0.0,
+        elevation: 0.0,
         mirrored: false,
     }];
     for c in hole_centers {
@@ -93,6 +100,7 @@ pub fn g1_general_part() -> Spec {
                 height: 3.5,
                 align: None,
                 width_factor: 1.0,
+                invisible: false,
             },
             AttribSpec {
                 tag: "REV".to_string(),
@@ -101,6 +109,7 @@ pub fn g1_general_part() -> Spec {
                 height: 3.5,
                 align: None,
                 width_factor: 1.0,
+                invisible: false,
             },
             AttribSpec {
                 tag: "MATERIAL".to_string(),
@@ -109,6 +118,7 @@ pub fn g1_general_part() -> Spec {
                 height: 3.5,
                 align: None,
                 width_factor: 1.0,
+                invisible: false,
             },
         ],
         mirrored: false,
@@ -121,18 +131,22 @@ pub fn g1_general_part() -> Spec {
             LayerSpec {
                 name: outline,
                 color_index: 7,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: holes,
                 color_index: 1,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: dims,
                 color_index: 3,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: title.clone(),
                 color_index: 2,
+                state: LayerState::default(),
             },
         ],
         blocks: vec![BlockSpec {
@@ -147,6 +161,8 @@ pub fn g1_general_part() -> Spec {
                         Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
+                    const_width: 0.0,
+                    elevation: 0.0,
                     mirrored: false,
                 },
                 EntitySpec::Attdef {
@@ -176,6 +192,9 @@ pub fn g1_general_part() -> Spec {
             ],
         }],
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -233,6 +252,9 @@ pub fn g2_nested_blocks() -> Spec {
             attribs: Vec::new(),
             mirrored: false,
         }],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -251,6 +273,9 @@ pub fn g6_overlapping_lines() -> Spec {
         layers: Vec::new(),
         blocks: Vec::new(),
         entities: vec![line("0"), line("0")],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -282,6 +307,7 @@ pub fn g9_two_drawing_numbers() -> Spec {
                 at: Xy::new(x + 45.0, -43.25),
             }),
             width_factor: 0.9,
+            invisible: false,
         }],
         mirrored: false,
     };
@@ -291,9 +317,13 @@ pub fn g9_two_drawing_numbers() -> Spec {
         layers: vec![LayerSpec {
             name: "TITLE".to_string(),
             color_index: 2,
+            state: LayerState::default(),
         }],
         blocks: vec![title_block],
         entities: vec![insert(0.0, "BP-1042"), insert(120.0, "BP-2077")],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -311,6 +341,7 @@ pub fn g5_dense_dimensions() -> Spec {
         layers: vec![LayerSpec {
             name: dims.clone(),
             color_index: 3,
+            state: LayerState::default(),
         }],
         blocks: Vec::new(),
         dim_styles: vec![DimStyleSpec {
@@ -318,6 +349,7 @@ pub fn g5_dense_dimensions() -> Spec {
             post: Some("<>mm".to_string()),
             decimal_places: Some(2),
             text_height: Some(2.5),
+            ..DimStyleSpec::default()
         }],
         entities: vec![
             // "<>" and "" are the same thing said two ways, and a reader
@@ -391,6 +423,9 @@ pub fn g5_dense_dimensions() -> Spec {
                 style: Some("ISO-25".to_string()),
             },
         ],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -420,6 +455,9 @@ pub fn g10_unreferenced_insert() -> Spec {
                 mirrored: false,
             },
         ],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -439,6 +477,8 @@ pub fn g7_loose_text_title_block() -> Spec {
         align: None,
         width_factor: 1.0,
         mirrored: false,
+        oblique_deg: 0.0,
+        style: None,
     };
     let entities = vec![
         EntitySpec::LwPolyline {
@@ -454,6 +494,8 @@ pub fn g7_loose_text_title_block() -> Spec {
                 Vertex::bulged(Xy::new(100.0, -40.0), -0.5),
             ],
             closed: true,
+            const_width: 0.0,
+            elevation: 0.0,
             mirrored: false,
         },
         text(102.0, -45.0, "DWG NO"),
@@ -492,6 +534,8 @@ pub fn g7_loose_text_title_block() -> Spec {
                 Xy::new(-145.0, -53.0).into(),
             ],
             closed: true,
+            const_width: 0.0,
+            elevation: 0.0,
             mirrored: true,
         },
         // A caption centered on (140, -67) both ways, drawn at 0.8 of its
@@ -511,6 +555,8 @@ pub fn g7_loose_text_title_block() -> Spec {
             }),
             width_factor: 0.8,
             mirrored: false,
+            oblique_deg: 0.0,
+            style: None,
         },
         // A mirror copy of a block: the INSERT is written at (-175, -66) in
         // a system whose x is the world's -x, turned 30 degrees there. The
@@ -537,6 +583,8 @@ pub fn g7_loose_text_title_block() -> Spec {
             align: None,
             width_factor: 1.0,
             mirrored: true,
+            oblique_deg: 0.0,
+            style: None,
         },
     ];
     Spec {
@@ -545,6 +593,7 @@ pub fn g7_loose_text_title_block() -> Spec {
         layers: vec![LayerSpec {
             name: title,
             color_index: 2,
+            state: LayerState::default(),
         }],
         blocks: vec![BlockSpec {
             name: "MARK".to_string(),
@@ -555,6 +604,9 @@ pub fn g7_loose_text_title_block() -> Spec {
             }],
         }],
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -591,10 +643,12 @@ pub fn g8_korean_title_block() -> Spec {
             LayerSpec {
                 name: outline_layer.clone(),
                 color_index: 7,
+                state: LayerState::default(),
             },
             LayerSpec {
                 name: title_layer.clone(),
                 color_index: 2,
+                state: LayerState::default(),
             },
         ],
         blocks: vec![BlockSpec {
@@ -609,6 +663,8 @@ pub fn g8_korean_title_block() -> Spec {
                         Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
+                    const_width: 0.0,
+                    elevation: 0.0,
                     mirrored: false,
                 },
                 attdef(15.0, "DWGNO", ""),
@@ -626,6 +682,8 @@ pub fn g8_korean_title_block() -> Spec {
                     Xy::new(0.0, 100.0).into(),
                 ],
                 closed: true,
+                const_width: 0.0,
+                elevation: 0.0,
                 mirrored: false,
             },
             EntitySpec::Insert {
@@ -642,6 +700,7 @@ pub fn g8_korean_title_block() -> Spec {
                         height: 3.5,
                         align: None,
                         width_factor: 1.0,
+                        invisible: false,
                     },
                     AttribSpec {
                         tag: "MATERIAL".to_string(),
@@ -650,6 +709,7 @@ pub fn g8_korean_title_block() -> Spec {
                         height: 3.5,
                         align: None,
                         width_factor: 1.0,
+                        invisible: false,
                     },
                     AttribSpec {
                         tag: "DRAWN".to_string(),
@@ -658,6 +718,7 @@ pub fn g8_korean_title_block() -> Spec {
                         height: 3.5,
                         align: None,
                         width_factor: 1.0,
+                        invisible: false,
                     },
                 ],
                 mirrored: false,
@@ -671,8 +732,13 @@ pub fn g8_korean_title_block() -> Spec {
                 align: None,
                 width_factor: 1.0,
                 mirrored: false,
+                oblique_deg: 0.0,
+                style: None,
             },
         ],
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -707,6 +773,9 @@ pub fn g3_many_parts(copies: usize) -> Spec {
         blocks: one.blocks,
         dim_styles: one.dim_styles,
         entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 
@@ -721,6 +790,715 @@ pub fn g3_offset(i: usize, per_row: usize) -> (f64, f64) {
     (col as f64 * PITCH_X, row as f64 * PITCH_Y)
 }
 
+/// G11, a mirrored part: the kinds the format states in an object
+/// coordinate system -- a circle, an arc, a bulged polyline at an
+/// elevation, a text, a solid and a block reference -- each written in the
+/// coordinate system whose Z axis (the extrusion, DXF 210) is (0, 0, -1),
+/// which is what AutoCAD's MIRROR leaves behind, next to one circle in the
+/// world's own axes.
+///
+/// The case is about what a reader must *not* do: the coordinates are the
+/// ones the file states, so the mirrored circle stated at (30, 20) is
+/// carried at (30, 20) with its extrusion, not at the (-30, 20) it lies at
+/// in the world; the polyline's bulge keeps its stated sign. Taking them to
+/// the world is a consumer's step -- except for the block reference, whose
+/// placement ([`uncad_model::model::InsertEntity::world_transform`]) the model
+/// computes.
+pub fn g11_mirrored_part() -> Spec {
+    let layer = "MIRROR".to_string();
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 4,
+            state: LayerState::default(),
+        }],
+        blocks: vec![BlockSpec {
+            name: "MARK".to_string(),
+            entities: vec![
+                EntitySpec::Line {
+                    layer: "0".to_string(),
+                    start: Xy::new(0.0, 0.0),
+                    end: Xy::new(10.0, 0.0),
+                },
+                EntitySpec::Circle {
+                    layer: "0".to_string(),
+                    center: Xy::new(10.0, 0.0),
+                    radius: 2.0,
+                    mirrored: false,
+                },
+            ],
+        }],
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            EntitySpec::Circle {
+                layer: layer.clone(),
+                center: Xy::new(30.0, 20.0),
+                radius: 5.0,
+                mirrored: false,
+            },
+            EntitySpec::Circle {
+                layer: layer.clone(),
+                center: Xy::new(30.0, 20.0),
+                radius: 5.0,
+                mirrored: true,
+            },
+            EntitySpec::Arc {
+                layer: layer.clone(),
+                center: Xy::new(30.0, 50.0),
+                radius: 10.0,
+                start_deg: 0.0,
+                end_deg: 90.0,
+                mirrored: true,
+            },
+            // A rectangle whose right side bulges out into a half circle,
+            // at an elevation: the bulge (1) keeps its sign and the
+            // elevation its value, as stated.
+            EntitySpec::LwPolyline {
+                layer: layer.clone(),
+                vertices: vec![
+                    Xy::new(20.0, 0.0).into(),
+                    Vertex::bulged(Xy::new(40.0, 0.0), 1.0),
+                    Xy::new(40.0, 10.0).into(),
+                    Xy::new(20.0, 10.0).into(),
+                ],
+                closed: true,
+                const_width: 0.0,
+                elevation: 2.5,
+                mirrored: true,
+            },
+            EntitySpec::Text {
+                layer: layer.clone(),
+                insert: Xy::new(20.0, -10.0),
+                height: 2.5,
+                text: "MIRRORED".to_string(),
+                rotation_deg: 0.0,
+                mirrored: true,
+                align: None,
+                width_factor: 1.0,
+                oblique_deg: 0.0,
+                style: None,
+            },
+            EntitySpec::Solid {
+                layer: layer.clone(),
+                corners: [
+                    Xy::new(20.0, -30.0),
+                    Xy::new(30.0, -30.0),
+                    Xy::new(20.0, -20.0),
+                    Xy::new(30.0, -20.0),
+                ],
+                mirrored: true,
+            },
+            // Placed at (50, 0) in the mirrored coordinate system and turned
+            // 30 degrees there: in the world the block's line runs from
+            // (-50, 0) towards the upper left.
+            EntitySpec::Insert {
+                layer,
+                block: "MARK".to_string(),
+                insert: Xy::new(50.0, 0.0),
+                scale: 1.0,
+                rotation_deg: 30.0,
+                attribs: Vec::new(),
+                mirrored: true,
+            },
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
+/// G12, polylines that are not just their vertices: a slot whose two ends
+/// are half circles (bulges of 1), a tapered arrow (per-vertex widths), a
+/// constant-width polyline with a quarter-circle corner, a DONUT (two
+/// vertices, both bulges 1, a constant width), and a polyline whose file
+/// states, on every vertex, widths equal to its constant width.
+///
+/// The last one is the same polyline as one that states the constant width
+/// alone: a reader gives its vertices no width of their own, so that two
+/// spellings of one drawing compare equal.
+pub fn g12_curved_and_wide_polylines() -> Spec {
+    let layer = "OUTLINE".to_string();
+    // tan(22.5 degrees): the bulge of a quarter circle, negative for one
+    // that turns clockwise.
+    let quarter = -0.41421356237309503;
+    let polyline = |vertices: Vec<Vertex>, closed: bool, const_width: f64| EntitySpec::LwPolyline {
+        layer: layer.clone(),
+        vertices,
+        closed,
+        const_width,
+        elevation: 0.0,
+        mirrored: false,
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 7,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            polyline(
+                vec![
+                    Xy::new(0.0, 0.0).into(),
+                    Vertex::bulged(Xy::new(40.0, 0.0), 1.0),
+                    Xy::new(40.0, 10.0).into(),
+                    Vertex::bulged(Xy::new(0.0, 10.0), 1.0),
+                ],
+                true,
+                0.0,
+            ),
+            polyline(
+                vec![
+                    Vertex::from(Xy::new(0.0, 30.0)).wide(2.0, 2.0),
+                    Vertex::from(Xy::new(30.0, 30.0)).wide(4.0, 0.0),
+                    Xy::new(40.0, 30.0).into(),
+                ],
+                false,
+                0.0,
+            ),
+            polyline(
+                vec![
+                    Xy::new(0.0, 50.0).into(),
+                    Vertex::bulged(Xy::new(40.0, 50.0), quarter),
+                    Xy::new(50.0, 60.0).into(),
+                ],
+                false,
+                1.5,
+            ),
+            polyline(
+                vec![
+                    Vertex::bulged(Xy::new(60.0, 20.0), 1.0),
+                    Vertex::bulged(Xy::new(70.0, 20.0), 1.0),
+                ],
+                true,
+                2.0,
+            ),
+            polyline(
+                vec![
+                    Vertex::from(Xy::new(0.0, 90.0)).wide(1.0, 1.0),
+                    Vertex::from(Xy::new(40.0, 90.0)).wide(1.0, 1.0),
+                ],
+                false,
+                1.0,
+            ),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
+/// G13, text placed every way the format places it: each horizontal and
+/// vertical justification the reference defines (the alignment point is
+/// then what places the text), a width factor, an oblique angle, a named
+/// text style, a style the file never declares, and a text that names no
+/// style -- which the reference reads as `STANDARD`, declared here -- and a
+/// title block with an invisible attribute next to a visible one.
+pub fn g13_justified_text() -> Spec {
+    let layer = "TEXT".to_string();
+    let justified = |insert: Xy,
+                     alignment: Xy,
+                     horizontal: HorizontalJustification,
+                     vertical: VerticalJustification,
+                     text: &str,
+                     width_factor: f64,
+                     oblique_deg: f64,
+                     style: Option<&str>| EntitySpec::Text {
+        layer: layer.clone(),
+        insert,
+        height: 2.5,
+        text: text.to_string(),
+        rotation_deg: 0.0,
+        align: (horizontal != HorizontalJustification::Left
+            || vertical != VerticalJustification::Baseline)
+            .then_some(TextAlign {
+                horizontal: horizontal_code(horizontal),
+                vertical: vertical_code(vertical),
+                at: alignment,
+            }),
+        width_factor,
+        oblique_deg,
+        style: style.map(str::to_string),
+        mirrored: false,
+    };
+    use HorizontalJustification as H;
+    use VerticalJustification as V;
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 2,
+            state: LayerState::default(),
+        }],
+        blocks: vec![BlockSpec {
+            name: "TAG".to_string(),
+            entities: vec![
+                EntitySpec::Attdef {
+                    layer: "0".to_string(),
+                    insert: Xy::new(0.0, 0.0),
+                    height: 2.5,
+                    tag: "NUMBER".to_string(),
+                    prompt: "Number".to_string(),
+                    default: "-".to_string(),
+                },
+                EntitySpec::Attdef {
+                    layer: "0".to_string(),
+                    insert: Xy::new(0.0, -4.0),
+                    height: 2.5,
+                    tag: "NOTE".to_string(),
+                    prompt: "Note".to_string(),
+                    default: "-".to_string(),
+                },
+            ],
+        }],
+        dim_styles: Vec::new(),
+        text_styles: vec!["STANDARD".to_string(), "ROMANS".to_string()],
+        entities: vec![
+            EntitySpec::Text {
+                layer: layer.clone(),
+                insert: Xy::new(0.0, 0.0),
+                height: 2.5,
+                text: "LEFT".to_string(),
+                rotation_deg: 0.0,
+                mirrored: false,
+                align: None,
+                width_factor: 1.0,
+                oblique_deg: 0.0,
+                style: None,
+            },
+            justified(
+                Xy::new(43.0, 0.0),
+                Xy::new(50.0, 0.0),
+                H::Center,
+                V::Baseline,
+                "CENTER",
+                1.0,
+                0.0,
+                Some("ROMANS"),
+            ),
+            justified(
+                Xy::new(88.0, -2.5),
+                Xy::new(100.0, 0.0),
+                H::Right,
+                V::Top,
+                "RIGHT TOP",
+                1.0,
+                0.0,
+                None,
+            ),
+            justified(
+                Xy::new(44.0, 18.75),
+                Xy::new(50.0, 20.0),
+                H::Middle,
+                V::Baseline,
+                "MIDDLE",
+                0.8,
+                0.0,
+                Some("ROMANS"),
+            ),
+            justified(
+                Xy::new(0.0, 40.0),
+                Xy::new(60.0, 40.0),
+                H::Aligned,
+                V::Baseline,
+                "ALIGNED",
+                1.0,
+                15.0,
+                None,
+            ),
+            justified(
+                Xy::new(0.0, 60.0),
+                Xy::new(60.0, 60.0),
+                H::Fit,
+                V::Baseline,
+                "FIT",
+                2.5,
+                0.0,
+                None,
+            ),
+            justified(
+                Xy::new(0.0, 79.0),
+                Xy::new(0.0, 80.0),
+                H::Left,
+                V::Bottom,
+                "LEFT BOTTOM",
+                1.0,
+                0.0,
+                Some("GOST"),
+            ),
+            EntitySpec::Insert {
+                layer: layer.clone(),
+                block: "TAG".to_string(),
+                insert: Xy::new(120.0, 0.0),
+                scale: 1.0,
+                rotation_deg: 0.0,
+                attribs: vec![
+                    AttribSpec {
+                        tag: "NUMBER".to_string(),
+                        value: "D-101".to_string(),
+                        insert: Xy::new(120.0, 0.0),
+                        height: 2.5,
+                        invisible: false,
+                        align: None,
+                        width_factor: 1.0,
+                    },
+                    AttribSpec {
+                        tag: "NOTE".to_string(),
+                        value: "FIRE RATED".to_string(),
+                        insert: Xy::new(120.0, -4.0),
+                        height: 2.5,
+                        invisible: true,
+                        align: None,
+                        width_factor: 1.0,
+                    },
+                ],
+                mirrored: false,
+            },
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
+/// G14, a sheet: layers in every state the format gives one (off, frozen,
+/// locked, plotted and not, with and without a lineweight), a model drawn
+/// on them, and a paper-space sheet showing it -- a border, a title, the
+/// sheet's own overall viewport, a detail viewport at half scale, turned
+/// 30 degrees and with a layer frozen in it alone, and a viewport that is
+/// off -- set up as two layouts with their plot settings besides the model
+/// tab.
+///
+/// The detail viewport shows the model around (100, 50) in its view's own
+/// coordinates, measured from the target (10, 5): 300 drawing units of
+/// height in a 150 mm frame.
+pub fn g14_sheet_with_viewports() -> Spec {
+    let state = |f: fn(&mut LayerState)| {
+        let mut s = LayerState::default();
+        f(&mut s);
+        s
+    };
+    let layer = |name: &str, color_index: i16, state: LayerState| LayerSpec {
+        name: name.to_string(),
+        color_index,
+        state,
+    };
+    let line = |layer: &str, y: f64| EntitySpec::Line {
+        layer: layer.to_string(),
+        start: Xy::new(0.0, y),
+        end: Xy::new(200.0, y),
+    };
+    let viewport = |center: Xy,
+                    size: (f64, f64),
+                    on: bool,
+                    id: i32,
+                    view: (Xy, f64, Xy, f64),
+                    frozen_layers: &[&str]| EntitySpec::Viewport {
+        layer: "0".to_string(),
+        center,
+        width: size.0,
+        height: size.1,
+        on,
+        id,
+        view_center: view.0,
+        view_height: view.1,
+        view_target: view.2,
+        twist_deg: view.3,
+        frozen_layers: frozen_layers.iter().map(|s| s.to_string()).collect(),
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![
+            layer("WALLS", 7, LayerState::default()),
+            layer("HIDDEN", 1, state(|s| s.off = true)),
+            layer("FROZEN", 3, state(|s| s.frozen = true)),
+            layer("LOCKED", 4, state(|s| s.locked = true)),
+            layer("NOPLOT", 5, state(|s| s.plot = Some(false))),
+            layer(
+                "PLOT",
+                6,
+                state(|s| {
+                    s.plot = Some(true);
+                    s.lineweight = Some(50);
+                }),
+            ),
+            layer("DEFAULTWT", 8, state(|s| s.lineweight = Some(-3))),
+        ],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            line("WALLS", 0.0),
+            line("HIDDEN", 10.0),
+            line("FROZEN", 20.0),
+            line("LOCKED", 30.0),
+            line("NOPLOT", 40.0),
+            line("PLOT", 50.0),
+            line("DEFAULTWT", 60.0),
+        ],
+        paper_space: vec![
+            EntitySpec::LwPolyline {
+                layer: "0".to_string(),
+                vertices: vec![
+                    Xy::new(0.0, 0.0).into(),
+                    Xy::new(420.0, 0.0).into(),
+                    Xy::new(420.0, 297.0).into(),
+                    Xy::new(0.0, 297.0).into(),
+                ],
+                closed: true,
+                const_width: 0.0,
+                elevation: 0.0,
+                mirrored: false,
+            },
+            EntitySpec::Text {
+                layer: "0".to_string(),
+                insert: Xy::new(320.0, 20.0),
+                height: 5.0,
+                text: "SHEET 1".to_string(),
+                rotation_deg: 0.0,
+                mirrored: false,
+                align: None,
+                width_factor: 1.0,
+                oblique_deg: 0.0,
+                style: None,
+            },
+            viewport(
+                Xy::new(210.0, 148.5),
+                (420.0, 297.0),
+                true,
+                1,
+                (Xy::new(210.0, 148.5), 297.0, Xy::new(0.0, 0.0), 0.0),
+                &[],
+            ),
+            viewport(
+                Xy::new(150.0, 150.0),
+                (200.0, 150.0),
+                true,
+                2,
+                (Xy::new(100.0, 50.0), 300.0, Xy::new(10.0, 5.0), 30.0),
+                &["WALLS"],
+            ),
+            viewport(
+                Xy::new(350.0, 60.0),
+                (100.0, 80.0),
+                false,
+                3,
+                (Xy::new(0.0, 0.0), 80.0, Xy::new(0.0, 0.0), 0.0),
+                &["FROZEN", "NOPLOT"],
+            ),
+        ],
+        layouts: vec![
+            LayoutSpec {
+                name: "Model".to_string(),
+                tab_order: 0,
+                block: "*Model_Space".to_string(),
+                limits_min: Xy::new(0.0, 0.0),
+                limits_max: Xy::new(420.0, 297.0),
+                paper_name: String::new(),
+                paper_size: (0.0, 0.0),
+                margins: [0.0; 4],
+                plot_origin: Xy::new(0.0, 0.0),
+                paper_units: PlotPaperUnits::Millimeters,
+                rotation: PlotRotation::Unrotated,
+                scale: (1.0, 1.0),
+            },
+            // ISO A3 is stated portrait (297 x 420) and turned a quarter,
+            // with the usual "origin at the paper's corner" page setup: the
+            // plot origin is minus the left and bottom margins.
+            LayoutSpec {
+                name: "Layout1".to_string(),
+                tab_order: 1,
+                block: "*Paper_Space".to_string(),
+                limits_min: Xy::new(0.0, 0.0),
+                limits_max: Xy::new(420.0, 297.0),
+                paper_name: "ISO_A3_(420.00_x_297.00_MM)".to_string(),
+                paper_size: (297.0, 420.0),
+                margins: [7.5, 20.0, 7.5, 20.0],
+                plot_origin: Xy::new(-7.5, -20.0),
+                paper_units: PlotPaperUnits::Millimeters,
+                rotation: PlotRotation::Counterclockwise90,
+                scale: (1.0, 1.0),
+            },
+            // A second sheet, empty, in inches: its block is one more paper
+            // space the file declares.
+            LayoutSpec {
+                name: "Layout2".to_string(),
+                tab_order: 2,
+                block: "*Paper_Space0".to_string(),
+                limits_min: Xy::new(0.0, 0.0),
+                limits_max: Xy::new(11.0, 8.5),
+                paper_name: "ANSI_A_(8.50_x_11.00_Inches)".to_string(),
+                paper_size: (215.9, 279.4),
+                margins: [6.35, 19.05, 6.35, 19.05],
+                plot_origin: Xy::new(0.0, 0.0),
+                paper_units: PlotPaperUnits::Inches,
+                rotation: PlotRotation::Clockwise90,
+                scale: (1.0, 1.0),
+            },
+        ],
+    }
+}
+
+/// G15, a polygon mesh: three rows of four vertices, closed in N (each row
+/// wraps back to its first vertex, as a tube does) and open in M, its
+/// heights varying like a patch of terrain. The model carries it as its
+/// grid lines, in the order the model states for a mesh: 8 edges between
+/// the rows (two gaps, four columns), then 12 along them (three rows of
+/// four, each closed).
+pub fn g15_polygon_mesh() -> Spec {
+    let layer = "MESH".to_string();
+    let mut vertices = Vec::new();
+    for (i, z) in [
+        [0.0, 1.0, 2.0, 1.0],
+        [0.5, 1.5, 2.5, 1.5],
+        [1.0, 2.0, 3.0, 2.0],
+    ]
+    .iter()
+    .enumerate()
+    {
+        for (j, z) in z.iter().enumerate() {
+            vertices.push([10.0 * j as f64, 10.0 * i as f64, *z]);
+        }
+    }
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 5,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![EntitySpec::PolygonMesh {
+            layer,
+            m: 3,
+            n: 4,
+            closed_m: false,
+            closed_n: true,
+            vertices,
+        }],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
+/// G16, ordinate dimensions and a dimension style that states every
+/// variable the displayed text depends on. A plate's features are
+/// dimensioned from its lower-left corner: three X-type ordinates (the
+/// feature's x distance from the datum) along the bottom and two Y-type
+/// ones along the left edge. One states its measurement, one states a
+/// literal text, the rest state neither -- and a second style states only
+/// its unit formats, leaving everything else unsaid.
+pub fn g16_ordinate_dimensions() -> Spec {
+    let dims = "DIMS".to_string();
+    let ordinate = |feature: Xy,
+                    leader_end: Xy,
+                    axis: OrdinateAxis,
+                    text: &str,
+                    measurement: Option<f64>,
+                    style: &str| EntitySpec::OrdinateDimension {
+        layer: dims.clone(),
+        datum: Xy::new(0.0, 0.0),
+        feature,
+        leader_end,
+        axis,
+        text: text.to_string(),
+        measurement,
+        style: Some(style.to_string()),
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: dims.clone(),
+            color_index: 3,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: vec![
+            DimStyleSpec {
+                name: "ORD".to_string(),
+                post: Some("<>".to_string()),
+                decimal_places: Some(2),
+                text_height: Some(2.5),
+                arrow_size: Some(2.5),
+                linear_unit_format: Some(LinearUnitFormat::Decimal),
+                zero_suppression: Some(8),
+                rounding: Some(0.5),
+                angular_unit_format: Some(AngularUnitFormat::DegreesMinutesSeconds),
+                angular_decimal_places: Some(1),
+                fraction_format: Some(FractionFormat::NotStacked),
+            },
+            DimStyleSpec {
+                name: "ARCH".to_string(),
+                linear_unit_format: Some(LinearUnitFormat::Architectural),
+                fraction_format: Some(FractionFormat::Diagonal),
+                ..DimStyleSpec::default()
+            },
+        ],
+        text_styles: Vec::new(),
+        entities: vec![
+            EntitySpec::LwPolyline {
+                layer: "0".to_string(),
+                vertices: vec![
+                    Xy::new(0.0, 0.0).into(),
+                    Xy::new(120.0, 0.0).into(),
+                    Xy::new(120.0, 60.0).into(),
+                    Xy::new(0.0, 60.0).into(),
+                ],
+                closed: true,
+                const_width: 0.0,
+                elevation: 0.0,
+                mirrored: false,
+            },
+            ordinate(
+                Xy::new(0.0, 0.0),
+                Xy::new(0.0, -15.0),
+                OrdinateAxis::X,
+                "<>",
+                None,
+                "ORD",
+            ),
+            ordinate(
+                Xy::new(30.0, 20.0),
+                Xy::new(30.0, -15.0),
+                OrdinateAxis::X,
+                "",
+                Some(30.0),
+                "ORD",
+            ),
+            ordinate(
+                Xy::new(120.0, 0.0),
+                Xy::new(120.0, -15.0),
+                OrdinateAxis::X,
+                "120.00",
+                None,
+                "ARCH",
+            ),
+            ordinate(
+                Xy::new(30.0, 20.0),
+                Xy::new(-15.0, 20.0),
+                OrdinateAxis::Y,
+                "<>",
+                None,
+                "ORD",
+            ),
+            ordinate(
+                Xy::new(0.0, 60.0),
+                Xy::new(-15.0, 60.0),
+                OrdinateAxis::Y,
+                "<>",
+                None,
+                "ORD",
+            ),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -732,6 +1510,12 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g9" => g9_two_drawing_numbers(),
         "g5" => g5_dense_dimensions(),
         "g10" => g10_unreferenced_insert(),
+        "g11" => g11_mirrored_part(),
+        "g12" => g12_curved_and_wide_polylines(),
+        "g13" => g13_justified_text(),
+        "g14" => g14_sheet_with_viewports(),
+        "g15" => g15_polygon_mesh(),
+        "g16" => g16_ordinate_dimensions(),
         _ => return None,
     })
 }
@@ -741,4 +1525,6 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 8] = ["g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10"];
+pub const NAMES: [&str; 14] = [
+    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
+];

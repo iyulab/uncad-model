@@ -1,7 +1,13 @@
 //! Each named case has the shape its description promises, stated once so
 //! consumers can rely on it.
 
-use uncad_model::model::{Entity, Point2D, Ref, TextHorizontalAlignment, TextVerticalAlignment};
+use uncad_model::model::{
+    DimensionKind, Entity, HorizontalJustification, LwPolylineEntity, OrdinateAxis, Point2D,
+    Point3D, Ref, VerticalJustification,
+};
+use uncad_model::tables::{
+    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+};
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
 
@@ -139,10 +145,13 @@ fn g7_is_a_title_block_of_loose_texts_and_no_block() {
         })
         .unwrap();
     assert_eq!(
-        (caption.horizontal_alignment, caption.vertical_alignment),
         (
-            TextHorizontalAlignment::Center,
-            TextVerticalAlignment::Middle
+            caption.horizontal_justification,
+            caption.vertical_justification
+        ),
+        (
+            HorizontalJustification::Center,
+            VerticalJustification::Middle
         )
     );
     assert_eq!(
@@ -284,4 +293,301 @@ fn g3_writes_and_reads_back_every_copy() {
         model.tables.layers.len(),
         expected::model(&one, &write(&one)).tables.layers.len()
     );
+}
+
+/// G11 keeps every mirrored coordinate as the file states it, with the
+/// extrusion beside it, and a mirrored block reference lands where its
+/// placement -- the one step into the world the model takes -- puts it.
+#[test]
+fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_normal() {
+    let spec = cases::g11_mirrored_part();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let mirrored = Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: -1.0,
+    };
+
+    // Six entities written with the normal (0, 0, -1), one without it.
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches("210\n0.0\n220\n0.0\n230\n-1.0\n").count(), 6);
+
+    let Entity::Circle(plain) = &model.entities[0] else {
+        panic!("the first entity is the unmirrored circle");
+    };
+    let Entity::Circle(circle) = &model.entities[1] else {
+        panic!("the second entity is the mirrored circle");
+    };
+    assert_eq!(plain.center, circle.center, "the same stated centre");
+    assert_eq!(circle.extrusion, mirrored);
+    assert_ne!(plain.extrusion, circle.extrusion);
+
+    let Entity::LwPolyline(polyline) = &model.entities[3] else {
+        panic!("the fourth entity is the polyline");
+    };
+    let bulges: Vec<f64> = polyline.vertices.iter().map(|v| v.bulge).collect();
+    assert_eq!(bulges, [0.0, 1.0, 0.0, 0.0], "the stated sign");
+    assert_eq!(polyline.elevation, 2.5);
+    assert_eq!(polyline.extrusion, mirrored);
+
+    let Entity::Insert(insert) = &model.entities[6] else {
+        panic!("the last entity is the block reference");
+    };
+    assert_eq!(insert.extrusion, mirrored);
+    let placement = insert.world_transform().expect("a flat plane");
+    let at = |x: f64, y: f64| placement.apply(Point2D { x, y });
+    let close = |p: Point2D, x: f64, y: f64| (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9;
+    // The block's origin at the stated (50, 0), mirrored to (-50, 0); its
+    // line's end, turned 30 degrees in the OCS, up and to the left of it.
+    assert!(close(at(0.0, 0.0), -50.0, 0.0));
+    let (sin, cos) = 30f64.to_radians().sin_cos();
+    assert!(close(at(10.0, 0.0), -50.0 - 10.0 * cos, 10.0 * sin));
+    assert!(placement.determinant() < 0.0, "a mirror image");
+}
+
+/// G12's polylines carry their bulges and widths on their vertices, and
+/// the one whose file spells "constant width" out on every vertex reads as
+/// the one that states it once.
+#[test]
+fn g12_carries_bulges_and_widths_and_folds_their_spellings() {
+    let spec = cases::g12_curved_and_wide_polylines();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let polylines: Vec<_> = model
+        .entities
+        .iter()
+        .map(|e| match e {
+            Entity::LwPolyline(p) => p,
+            other => panic!("only polylines here, not {other:?}"),
+        })
+        .collect();
+    assert_eq!(polylines.len(), 5);
+    let bulges = |p: &LwPolylineEntity| p.vertices.iter().map(|v| v.bulge).collect::<Vec<_>>();
+    let widths = |p: &LwPolylineEntity| {
+        p.vertices
+            .iter()
+            .map(|v| (v.start_width, v.end_width))
+            .collect::<Vec<_>>()
+    };
+
+    let [slot, arrow, bend, donut, spelled] = polylines.as_slice() else {
+        unreachable!()
+    };
+    assert_eq!(bulges(slot), [0.0, 1.0, 0.0, 1.0]);
+    assert_eq!(widths(slot), [(0.0, 0.0); 4]);
+    assert_eq!(widths(arrow), [(2.0, 2.0), (4.0, 0.0), (0.0, 0.0)]);
+    assert_eq!(bulges(arrow), [0.0; 3]);
+    assert_eq!(bend.const_width, 1.5);
+    assert!(bend.vertices[1].bulge < 0.0, "the corner turns clockwise");
+    assert_eq!((donut.vertices.len(), donut.closed), (2, true));
+    assert_eq!(bulges(donut), [1.0, 1.0]);
+
+    // The file does state the constant width on each vertex of the last
+    // one, and no bulge at all: an absent 42 is a straight segment.
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    let last = &dxf[dxf.rfind("LWPOLYLINE").unwrap()..];
+    assert_eq!(last.matches(" 40\n1.0\n").count(), 2);
+    assert_eq!(last.matches(" 42\n").count(), 0);
+    assert_eq!(widths(spelled), [(0.0, 0.0); 2]);
+    assert_eq!(spelled.const_width, 1.0);
+}
+
+/// G13's texts are placed by their alignment point wherever they are
+/// justified, name their styles three ways, and its title block keeps an
+/// invisible attribute's value while saying it is not shown.
+#[test]
+fn g13_places_justified_text_by_its_alignment_point_and_resolves_styles() {
+    let spec = cases::g13_justified_text();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let texts: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Text(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), 7);
+    for t in &texts {
+        let justified = t.horizontal_justification != HorizontalJustification::Left
+            || t.vertical_justification != VerticalJustification::Baseline;
+        assert_eq!(t.alignment_point.is_some(), justified, "{}", t.text);
+    }
+
+    // No group 7: the reference's STANDARD, which this file declares.
+    assert_eq!(texts[0].style_name, Ref::Resolved("STANDARD".to_string()));
+    assert_eq!(texts[1].style_name, Ref::Resolved("ROMANS".to_string()));
+    // A style the file never declares keeps the name it was given.
+    assert_eq!(texts[6].style_name, Ref::Unresolved("GOST".to_string()));
+    assert_eq!(texts[3].width_factor, 0.8);
+    assert!((texts[4].oblique_angle - 15f64.to_radians()).abs() < 1e-12);
+
+    let attribs: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Attrib(a) => Some((a.text.as_str(), a.flags.invisible)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(attribs, [("D-101", false), ("FIRE RATED", true)]);
+}
+
+/// G14 states every layer state, three layouts with their sheets, and a
+/// paper space whose viewports carry their views.
+#[test]
+fn g14_is_a_sheet_of_viewports_over_layers_in_every_state() {
+    let spec = cases::g14_sheet_with_viewports();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+
+    let layers = &model.tables.layers;
+    assert!(layers["HIDDEN"].off && layers["HIDDEN"].color_index < 0);
+    assert!(layers["FROZEN"].frozen && layers["LOCKED"].locked);
+    assert_eq!(layers["NOPLOT"].plot, Some(false));
+    assert_eq!(
+        (layers["PLOT"].plot, layers["PLOT"].lineweight),
+        (Some(true), Some(50))
+    );
+    assert_eq!(layers["DEFAULTWT"].lineweight, Some(-3));
+    assert_eq!(
+        (layers["WALLS"].plot, layers["WALLS"].lineweight),
+        (None, None)
+    );
+
+    // The model's seven lines, then paper space's border, title and three
+    // viewports; each space's block holds its own.
+    assert_eq!(model.entities.len(), 12);
+    assert_eq!(model.tables.block_records["*Model_Space"].entities.len(), 7);
+    assert_eq!(model.tables.block_records["*Paper_Space"].entities.len(), 5);
+    assert!(model.tables.block_records["*Paper_Space0"]
+        .entities
+        .is_empty());
+
+    let viewports: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Viewport(v) => Some(v),
+            _ => None,
+        })
+        .collect();
+    let ids: Vec<_> = viewports.iter().map(|v| (v.viewport_id, v.on)).collect();
+    assert_eq!(
+        ids,
+        [
+            (Some(1), Some(true)),
+            (Some(2), Some(true)),
+            (Some(3), Some(false))
+        ]
+    );
+    let detail = viewports[1]
+        .view
+        .expect("an R2000 viewport states its view");
+    assert_eq!(detail.height / viewports[1].height, 2.0, "half scale");
+    assert!((detail.twist - 30f64.to_radians()).abs() < 1e-12);
+    assert_eq!(
+        viewports[1].frozen_layers,
+        [Ref::Resolved("WALLS".to_string())]
+    );
+
+    let layouts = &model.tables.layouts;
+    assert_eq!(layouts.len(), 3);
+    assert_eq!(
+        layouts["Model"].block_name,
+        Ref::Resolved("*Model_Space".to_string())
+    );
+    assert_eq!(
+        layouts["Layout2"].block_name,
+        Ref::Resolved("*Paper_Space0".to_string())
+    );
+    let a3 = &layouts["Layout1"].plot_settings;
+    assert_eq!((a3.paper_width, a3.paper_height), (297.0, 420.0));
+    assert_eq!(a3.rotation, Some(PlotRotation::Counterclockwise90));
+    assert_eq!(
+        layouts["Layout2"].plot_settings.paper_units,
+        Some(PlotPaperUnits::Inches)
+    );
+
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches("  0\nSECTION\n").count(), 5, "OBJECTS too");
+    assert_eq!(dxf.matches(" 67\n1\n").count(), 5, "paper space's five");
+}
+
+/// G15's mesh is its grid lines, in the model's stated order: between the
+/// rows first, then along them, each row closed.
+#[test]
+fn g15_is_a_mesh_carried_as_its_grid_lines_in_order() {
+    let spec = cases::g15_polygon_mesh();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let [Entity::PolylineMesh(mesh)] = model.entities.as_slice() else {
+        panic!("one polygon mesh");
+    };
+    assert_eq!(mesh.wireframe_edges.len(), 8 + 12);
+    assert_eq!(mesh.skipped_edges, 0);
+    let p = |x: f64, y: f64, z: f64| Point3D { x, y, z };
+    // The first edge joins row 0 to row 1 in column 0; the last closes row
+    // 2 from its last vertex back to its first.
+    assert_eq!(
+        mesh.wireframe_edges[0],
+        [p(0.0, 0.0, 0.0), p(0.0, 10.0, 0.5)]
+    );
+    assert_eq!(
+        mesh.wireframe_edges[19],
+        [p(30.0, 20.0, 2.0), p(0.0, 20.0, 1.0)]
+    );
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches("AcDbPolygonMeshVertex").count(), 12);
+}
+
+/// G16's ordinate dimensions say which coordinate they measure, all from
+/// the datum at group 10, and its full style states every variable while
+/// the other states two.
+#[test]
+fn g16_has_ordinates_of_both_axes_and_a_style_stating_everything() {
+    let spec = cases::g16_ordinate_dimensions();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let ordinates: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Dimension(d) => Some(d),
+            _ => None,
+        })
+        .collect();
+    let axes: Vec<_> = ordinates.iter().map(|d| d.ordinate_axis).collect();
+    use OrdinateAxis::{X, Y};
+    assert_eq!(axes, [Some(X), Some(X), Some(X), Some(Y), Some(Y)]);
+    for d in &ordinates {
+        assert_eq!(d.kind, Some(DimensionKind::Ordinate));
+        let datum = d.definition_point.expect("group 10 is stated");
+        assert_eq!((datum.x, datum.y), (0.0, 0.0), "the datum, not the feature");
+    }
+
+    let full = &model.tables.dim_styles["ORD"];
+    assert_eq!(full.linear_unit_format, Some(LinearUnitFormat::Decimal));
+    assert_eq!(
+        full.angular_unit_format,
+        Some(AngularUnitFormat::DegreesMinutesSeconds)
+    );
+    assert_eq!(
+        (full.zero_suppression, full.rounding, full.arrow_size),
+        (Some(8), Some(0.5), Some(2.5))
+    );
+    assert_eq!(full.fraction_format, Some(FractionFormat::NotStacked));
+    let sparse = &model.tables.dim_styles["ARCH"];
+    assert_eq!(
+        sparse.linear_unit_format,
+        Some(LinearUnitFormat::Architectural)
+    );
+    assert_eq!(sparse.decimal_places, None, "not stated, not filled in");
+
+    // Bit 64 of group 70 on the three X-type ones: 32 + 6 + 64.
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches(" 70\n102\n").count(), 3);
+    assert_eq!(dxf.matches(" 70\n38\n").count(), 2);
 }

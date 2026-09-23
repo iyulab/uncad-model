@@ -13,6 +13,17 @@
 //! departure, noted on each field). Where a consumer has to approximate --
 //! a curve drawn as chords, a solid drawn as its wireframe -- that is the
 //! consumer's decision and is not encoded here.
+//!
+//! Coordinates are the ones the file states. Most entities state world
+//! coordinates; the planar ones the reference defines in an object
+//! coordinate system -- CIRCLE, ARC, LWPOLYLINE and POLYLINE_2D, TEXT,
+//! ATTRIB, ATTDEF, INSERT, HATCH, SOLID and TRACE -- state points of their
+//! own coordinate system, whose Z axis is the entity's `extrusion` (DXF 210;
+//! see [`CircleEntity::extrusion`]). Taking those to world coordinates is a
+//! consumer's step; the arithmetic for it, which every consumer needs alike,
+//! lives with the model: the reference's "arbitrary axis algorithm"
+//! ([`crate::Ocs`]) and a block reference's placement
+//! ([`InsertEntity::world_transform`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -43,16 +54,37 @@ pub struct Point2D {
 /// the tangent of a quarter of its included angle, positive when the arc
 /// turns counter-clockwise from this vertex to the next. A file that does
 /// not write the group states a straight segment, so its absence is `0`.
+///
+/// `start_width` and `end_width` (DXF 40 and 41) are the same segment's
+/// width where it leaves this vertex and where it reaches the next, in
+/// drawing units; they differ for a tapered segment, such as an arrowhead
+/// drawn as a polyline. A file that does not write them gives the vertex no
+/// width of its own, so their absence is `0` -- and an LWPOLYLINE none of
+/// whose vertices has one is as wide as its
+/// [`LwPolylineEntity::const_width`]. A HATCH boundary has no widths; its
+/// vertices carry `0`.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PolylineVertex {
     pub point: Point2D,
     pub bulge: f64,
+    /// DXF 40. An absent key reads as `0`.
+    #[serde(default)]
+    pub start_width: f64,
+    /// DXF 41. An absent key reads as `0`.
+    #[serde(default)]
+    pub end_width: f64,
 }
 
 impl PolylineVertex {
-    /// A vertex whose outgoing segment is straight.
+    /// A vertex whose outgoing segment is straight and has no width of its
+    /// own.
     pub fn straight(point: Point2D) -> Self {
-        Self { point, bulge: 0.0 }
+        Self {
+            point,
+            bulge: 0.0,
+            start_width: 0.0,
+            end_width: 0.0,
+        }
     }
 }
 
@@ -84,10 +116,10 @@ pub enum Ref<T> {
     /// The file points at nothing for this field.
     Absent,
     /// The file carries a reference, but nothing in the drawing answers to
-    /// it. The value is what the file wrote: the handle as a hex string, the
-    /// same form as [`EntityCommon::handle`]; for a pre-R13 drawing, which
-    /// points at its tables by index rather than by handle, the index as
-    /// `idx:<n>`; and where the file points by name, the name.
+    /// it. The value is what the file wrote: the handle as a hex string,
+    /// the same form as [`EntityCommon::source_handle`]; for a pre-R13
+    /// drawing, which points at its tables by index rather than by handle,
+    /// the index as `idx:<n>`; and where the file points by name, the name.
     Unresolved(String),
 }
 
@@ -240,93 +272,93 @@ pub struct CircleEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextEntity {
     pub common: EntityCommon,
+    /// DXF 10: the text's first alignment point -- where its baseline
+    /// starts -- in the OCS [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     pub text: String,
     /// Radians (DXF 50). TEXT stores this as a plain angle, unlike MTEXT,
     /// whose rotation is a direction vector (see [`MTextEntity::rotation`]).
     pub rotation: f64,
-    /// How the text lines up with its alignment point horizontally (DXF 72).
-    /// An absent group is `Left`, the format's default -- a file writes the
-    /// group only when the text is aligned otherwise.
+    /// DXF 72, with the format's own default ([`HorizontalJustification::Left`])
+    /// when the group is absent, and for a document written before this
+    /// field existed.
     #[serde(default)]
-    pub horizontal_alignment: TextHorizontalAlignment,
-    /// How the text lines up with its alignment point vertically (DXF 73).
-    /// An absent group is `Baseline`, as for `horizontal_alignment`.
+    pub horizontal_justification: HorizontalJustification,
+    /// DXF 73, with the format's own default
+    /// ([`VerticalJustification::Baseline`]) when the group is absent, and
+    /// for a document written before this field existed.
     #[serde(default)]
-    pub vertical_alignment: TextVerticalAlignment,
-    /// The point the text is aligned on (DXF 11), stated only when either
-    /// alignment is not the default; `None` otherwise, or when the file
-    /// leaves it out. With it, `start_point` is where the writing program
-    /// computed the text to begin from its own font, and this point is the
-    /// one the text answers to: its center, its right end, its middle -- or,
-    /// for `Aligned` and `Fit`, the end of the baseline that runs from
-    /// `start_point`.
-    #[serde(default)]
+    pub vertical_justification: VerticalJustification,
+    /// DXF 11: the point the text is justified at, in the OCS like
+    /// `start_point` -- for [`HorizontalJustification::Aligned`] and
+    /// [`HorizontalJustification::Fit`], the other end of its baseline.
+    /// `None` for left/baseline justification, which the file places by
+    /// `start_point` alone and states no such point for. With it,
+    /// `start_point` is where the writing program computed the text to
+    /// begin from its own font, and this point is the one the text answers
+    /// to.
     pub alignment_point: Option<Point2D>,
-    /// The width of the characters as a fraction of their normal width (DXF
-    /// 41). A fraction *of* the normal width is 1 when the group is absent.
-    #[serde(default = "unit_ratio")]
+    /// DXF 41: the characters' width relative to the width their style
+    /// draws them at. Optional in the reference, with 1 as its default --
+    /// a ratio -- so an absent group, and a document written before this
+    /// field existed, reads as 1.
+    #[serde(default = "one")]
     pub width_factor: f64,
-    /// The start and alignment points are points of the text's own
-    /// coordinate system, whose Z axis is `extrusion`; this is their z there
-    /// (DXF 30). An absent group is `0`.
+    /// DXF 51: how far the characters slant from upright, radians.
+    /// Optional in the reference, with 0 as its default, so an absent group,
+    /// and a document written before this field existed, reads as 0.
+    #[serde(default)]
+    pub oblique_angle: f64,
+    /// DXF 7: the text style (an entry of the drawing's STYLE table, which
+    /// the model does not carry) the text is drawn in. The reference's
+    /// default for an absent group is the style named `STANDARD`, so a
+    /// reader resolves an absent group to that entry when the drawing has
+    /// one; [`Ref::Absent`] when it has none, and for a document written
+    /// before this field existed.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
+    /// The text's points are points of its own coordinate system, whose Z
+    /// axis is `extrusion`; this is their z there (DXF 30 -- the binary
+    /// format stores it once, as the text's elevation). An absent group is
+    /// `0`.
     #[serde(default)]
     pub elevation: f64,
     /// The normal of the text's plane (DXF 210). An absent group is the
-    /// default (0, 0, 1). A mirror copy writes (0, 0, -1): its points' world
-    /// x is reversed and the text reads mirrored.
+    /// default (0, 0, 1). A mirror copy writes (0, 0, -1): its points'
+    /// world x is reversed and the text reads mirrored.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
 
-/// Where a TEXT's alignment point is along the text (DXF 72, 0 to 5 in this
-/// order).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum TextHorizontalAlignment {
-    /// The text starts at `start_point`; no alignment point.
-    #[default]
-    Left,
-    Center,
-    Right,
-    /// The text runs from `start_point` to the alignment point, its height
-    /// scaled to keep its proportions.
-    Aligned,
-    /// Centered both ways on the alignment point.
-    Middle,
-    /// The text runs from `start_point` to the alignment point at its own
-    /// height, its width stretched to fit.
-    Fit,
-}
-
-/// Where a TEXT's alignment point is across the text (DXF 73, 0 to 3 in this
-/// order).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum TextVerticalAlignment {
-    #[default]
-    Baseline,
-    Bottom,
-    Middle,
-    Top,
-}
-
-/// The default of a ratio to a normal size: 1.
-fn unit_ratio() -> f64 {
-    1.0
-}
-
+/// LWPOLYLINE, and POLYLINE_2D ([`Entity::Polyline2D`]), which has the same
+/// shape: a POLYLINE_2D's vertices are its VERTEX records (DXF 10/20, 42 and
+/// 40/41 on each) -- a DXF's POLYLINE record states default widths (its own
+/// 40/41) for the vertices that state none, and a reader gives those
+/// vertices the defaults -- and its elevation is the z of its own group 10
+/// (DXF 30), where an LWPOLYLINE has a group of its own for it (DXF 38).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
-    /// The vertices in order, each with the bulge of the segment that leaves
-    /// it (see [`PolylineVertex`]). Points of the polyline's own coordinate
-    /// system, whose Z axis is `extrusion`; with the default extrusion that
-    /// system is the world's.
+    /// The vertices in order, each with the bulge and the widths of the
+    /// segment that leaves it (see [`PolylineVertex`]). Points of the
+    /// polyline's own coordinate system, whose Z axis is `extrusion`; with
+    /// the default extrusion that system is the world's.
     pub vertices: Vec<PolylineVertex>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
+    /// DXF 43: the width of every segment when no vertex has a width of its
+    /// own (every vertex's `start_width` and `end_width` is `0`) -- the
+    /// reference does not use it once a vertex states one. `0` is a line
+    /// with no width. An absent group is `0`.
+    ///
+    /// A file that states this width again on every vertex, at both ends,
+    /// draws the same polyline as one that states it only here, and a
+    /// reader gives the two the same model: vertices with no width of their
+    /// own. A POLYLINE_2D has no such group -- its widths are its vertices'
+    /// -- and carries `0` here.
+    #[serde(default)]
+    pub const_width: f64,
     /// The z of every vertex in the polyline's own coordinate system (DXF 38
     /// for an LWPOLYLINE, the POLYLINE record's 30 for a 2D POLYLINE). An
     /// absent group is `0`.
@@ -385,6 +417,55 @@ fn z_axis() -> Point3D {
     }
 }
 
+/// A ratio's default, 1: no departure from what it is a ratio to.
+fn one() -> f64 {
+    1.0
+}
+
+/// What a document written before a reference field existed reads as.
+pub(crate) fn absent<T>() -> Ref<T> {
+    Ref::Absent
+}
+
+/// How a TEXT, ATTRIB or ATTDEF is justified along its baseline (DXF 72,
+/// 0 to 5 in this order). The format's own default is [`Self::Left`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HorizontalJustification {
+    /// The text starts at its start point.
+    #[default]
+    Left,
+    /// Centred on its alignment point.
+    Center,
+    /// Ends at its alignment point.
+    Right,
+    /// Fills the baseline from its start point to its alignment point, its
+    /// height scaled with its width.
+    Aligned,
+    /// Centred on its alignment point, horizontally and vertically.
+    Middle,
+    /// Fills the baseline from its start point to its alignment point at
+    /// its own height, only its width scaled.
+    Fit,
+}
+
+/// Which line of a TEXT, ATTRIB or ATTDEF sits on its alignment point (DXF
+/// 73 on TEXT, 74 on ATTRIB and ATTDEF; 0 to 3 in this order). The
+/// format's own default is [`Self::Baseline`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum VerticalJustification {
+    /// The baseline.
+    #[default]
+    Baseline,
+    /// The bottom of the descenders.
+    Bottom,
+    /// The middle of the text.
+    Middle,
+    /// The top of the text.
+    Top,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PointEntity {
     pub common: EntityCommon,
@@ -427,6 +508,7 @@ pub struct RayEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AttribEntity {
     pub common: EntityCommon,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     /// The attribute's tag (DXF 2): the name its value answers to, as the
@@ -434,29 +516,73 @@ pub struct AttribEntity {
     /// block looks a value up by; the value alone says nothing about which
     /// field it fills.
     pub tag: String,
+    /// DXF 70. A document written before this field existed reads as no
+    /// flag set.
+    #[serde(default)]
+    pub flags: AttributeFlags,
     pub text: String,
     /// Radians (DXF 50).
     pub rotation: f64,
-    /// How the value lines up with its alignment point, as for
-    /// [`TextEntity::horizontal_alignment`] (DXF 72; absent is `Left`).
+    /// DXF 72, with the format's own default ([`HorizontalJustification::Left`])
+    /// when the group is absent, and for a document written before this
+    /// field existed.
     #[serde(default)]
-    pub horizontal_alignment: TextHorizontalAlignment,
-    /// As for [`TextEntity::vertical_alignment`], from DXF 74 -- an
-    /// attribute's 73 is its field length, not its alignment.
+    pub horizontal_justification: HorizontalJustification,
+    /// DXF 74 (73 is the field length here), with the format's own default
+    /// ([`VerticalJustification::Baseline`]) when the group is absent, and
+    /// for a document written before this field existed.
     #[serde(default)]
-    pub vertical_alignment: TextVerticalAlignment,
-    /// As for [`TextEntity::alignment_point`] (DXF 11).
-    #[serde(default)]
+    pub vertical_justification: VerticalJustification,
+    /// DXF 11: the point the value is justified at, in the OCS like
+    /// `start_point` -- for [`HorizontalJustification::Aligned`] and
+    /// [`HorizontalJustification::Fit`], the other end of its baseline.
+    /// `None` for left/baseline justification, which the file places by
+    /// `start_point` alone and states no such point for.
     pub alignment_point: Option<Point2D>,
-    /// As for [`TextEntity::width_factor`] (DXF 41; absent is 1).
-    #[serde(default = "unit_ratio")]
+    /// DXF 41: the characters' width relative to the width their style
+    /// draws them at. Optional in the reference, with 1 as its default --
+    /// a ratio -- so an absent group, and a document written before this
+    /// field existed, reads as 1.
+    #[serde(default = "one")]
     pub width_factor: f64,
-    /// As for [`TextEntity::elevation`] (DXF 30).
+    /// DXF 51: how far the characters slant from upright, radians.
+    /// Optional in the reference, with 0 as its default, so an absent group,
+    /// and a document written before this field existed, reads as 0.
+    #[serde(default)]
+    pub oblique_angle: f64,
+    /// DXF 7: the text style (an entry of the drawing's STYLE table, which
+    /// the model does not carry) the value is drawn in. The reference's
+    /// default for an absent group is the style named `STANDARD`, so a
+    /// reader resolves an absent group to that entry when the drawing has
+    /// one; [`Ref::Absent`] when it has none, and for a document written
+    /// before this field existed.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
+    /// The z of the attribute's points in its own coordinate system, as
+    /// [`TextEntity::elevation`]. An absent group is `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// As for [`TextEntity::extrusion`] (DXF 210).
+    /// The normal of the attribute's plane (DXF 210). An absent group is
+    /// the default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
+}
+
+/// The flags of an ATTRIB or ATTDEF (DXF 70), one per bit, named as the
+/// reference names them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct AttributeFlags {
+    /// Bit 1: the attribute is invisible -- the drawing holds its value but
+    /// does not show it. Not the same flag as the one any entity can carry
+    /// ([`EntityCommon::invisible`], DXF 60).
+    pub invisible: bool,
+    /// Bit 2: the attribute is constant -- its value is the definition's,
+    /// the same in every block reference, and no ATTRIB carries it.
+    pub constant: bool,
+    /// Bit 4: the value is verified when it is entered.
+    pub verify: bool,
+    /// Bit 8: the value is preset -- entered without a prompt.
+    pub preset: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -480,8 +606,10 @@ pub struct InsertEntity {
     /// draws `entities` gets them from there.
     pub attribs: Vec<AttribEntity>,
     /// The normal of the plane the block is placed in (DXF 210). An absent
-    /// group is the default (0, 0, 1). A mirror copy writes (0, 0, -1): the
-    /// block's world x is reversed.
+    /// group is the default (0, 0, 1). A block mirrored with the reference
+    /// writes (0, 0, -1) here and its scale as stated: the block's world x
+    /// is reversed. [`InsertEntity::world_transform`] is the placement that
+    /// follows from all of them.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
@@ -558,42 +686,122 @@ pub struct AcadTableEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AttdefEntity {
     pub common: EntityCommon,
+    /// DXF 10, in the OCS [`Self::extrusion`] defines.
     pub start_point: Point2D,
     pub text_height: f64,
     /// The tag (DXF 2) every ATTRIB made from this definition carries.
     pub tag: String,
+    /// DXF 70: the flags every ATTRIB made from this definition starts
+    /// with. A document written before this field existed reads as no flag
+    /// set.
+    #[serde(default)]
+    pub flags: AttributeFlags,
     pub default_value: String,
     /// Radians (DXF 50). Kept for parity with ATTRIB; a template is not
     /// normally drawn.
     pub rotation: f64,
-    /// How the value lines up with its alignment point, as for
-    /// [`TextEntity::horizontal_alignment`] (DXF 72; absent is `Left`).
+    /// DXF 72, with the format's own default ([`HorizontalJustification::Left`])
+    /// when the group is absent, and for a document written before this
+    /// field existed.
     #[serde(default)]
-    pub horizontal_alignment: TextHorizontalAlignment,
-    /// As for [`TextEntity::vertical_alignment`], from DXF 74 -- an
-    /// attribute's 73 is its field length, not its alignment.
+    pub horizontal_justification: HorizontalJustification,
+    /// DXF 74 (73 is the field length here), with the format's own default
+    /// ([`VerticalJustification::Baseline`]) when the group is absent, and
+    /// for a document written before this field existed.
     #[serde(default)]
-    pub vertical_alignment: TextVerticalAlignment,
-    /// As for [`TextEntity::alignment_point`] (DXF 11).
-    #[serde(default)]
+    pub vertical_justification: VerticalJustification,
+    /// DXF 11: the point the value is justified at, in the OCS like
+    /// `start_point` -- for [`HorizontalJustification::Aligned`] and
+    /// [`HorizontalJustification::Fit`], the other end of its baseline.
+    /// `None` for left/baseline justification, which the file places by
+    /// `start_point` alone and states no such point for.
     pub alignment_point: Option<Point2D>,
-    /// As for [`TextEntity::width_factor`] (DXF 41; absent is 1).
-    #[serde(default = "unit_ratio")]
+    /// DXF 41: the characters' width relative to the width their style
+    /// draws them at. Optional in the reference, with 1 as its default --
+    /// a ratio -- so an absent group, and a document written before this
+    /// field existed, reads as 1.
+    #[serde(default = "one")]
     pub width_factor: f64,
-    /// As for [`TextEntity::elevation`] (DXF 30).
+    /// DXF 51: how far the characters slant from upright, radians.
+    /// Optional in the reference, with 0 as its default, so an absent group,
+    /// and a document written before this field existed, reads as 0.
+    #[serde(default)]
+    pub oblique_angle: f64,
+    /// DXF 7: the text style (an entry of the drawing's STYLE table, which
+    /// the model does not carry) the value is drawn in. The reference's
+    /// default for an absent group is the style named `STANDARD`, so a
+    /// reader resolves an absent group to that entry when the drawing has
+    /// one; [`Ref::Absent`] when it has none, and for a document written
+    /// before this field existed.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
+    /// The z of the definition's points in its own coordinate system, as
+    /// [`TextEntity::elevation`]. An absent group is `0`.
     #[serde(default)]
     pub elevation: f64,
-    /// As for [`TextEntity::extrusion`] (DXF 210).
+    /// The normal of the definition's plane (DXF 210). An absent group is
+    /// the default (0, 0, 1).
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
 }
 
+/// A paper-space viewport: a frame on a layout's sheet, and the view of the
+/// model it shows through that frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViewportEntity {
     pub common: EntityCommon,
+    /// DXF 10: the centre of the frame on the sheet, in paper space.
     pub center: Point3D,
+    /// DXF 40: the frame's width, in paper space units.
     pub width: f64,
+    /// DXF 41: the frame's height, in paper space units.
     pub height: f64,
+    /// What the frame shows of the model. `None` when the record does not
+    /// carry it: a viewport from a file older than R2000 keeps its view in
+    /// extended data, which the model does not read. A document written
+    /// before this field existed reads as `None` too.
+    pub view: Option<ViewportView>,
+    /// Whether the viewport is on, showing its view (DXF 68, where 0 is
+    /// off). The binary format states the same thing as bit 0x20000 of the
+    /// viewport's status flags (DXF 90), set when it is off. `None` when
+    /// the file does not state it.
+    pub on: Option<bool>,
+    /// DXF 69: the viewport's number within its layout. 1 is the layout's
+    /// own overall viewport -- the one that is the sheet itself rather than
+    /// a window onto the model. `None` when the file does not state it: the
+    /// binary format stores no such number.
+    pub viewport_id: Option<i32>,
+    /// The layers frozen in this viewport alone (DXF 341; 331 in a DXF
+    /// from R2004 on), in file order, each a reference like
+    /// [`EntityCommon::layer`]. Empty when there are none, and for a
+    /// document written before this field existed.
+    #[serde(default)]
+    pub frozen_layers: Vec<Ref<String>>,
+}
+
+/// What a paper-space viewport shows of the model: a view, stated the way
+/// the format states one -- a target point, a direction to look along and
+/// a twist, which together define the view's own display coordinates, and
+/// the part of that plane the frame shows.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ViewportView {
+    /// DXF 12: the centre of the view, in its display coordinates.
+    pub center: Point2D,
+    /// DXF 45: the height of the model the frame shows, in drawing units.
+    /// The frame's own height is in paper units, so the two together are
+    /// the scale the model is shown at.
+    pub height: f64,
+    /// DXF 17: the point of the model the view looks at, in world
+    /// coordinates; display coordinates are measured from it.
+    pub target: Point3D,
+    /// DXF 16: the direction from the target towards the viewer, in world
+    /// coordinates. (0, 0, 1) is a plan view.
+    pub direction: Point3D,
+    /// DXF 51: how far the view is turned about its direction, radians.
+    pub twist: f64,
+    /// DXF 42: the lens length of a perspective view, in millimetres; it
+    /// has no effect on a parallel one.
+    pub lens_length: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -666,12 +874,27 @@ pub struct MTextEntity {
     /// depending on this. `None` when the file does not state it.
     pub attachment: Option<MTextAttachment>,
     /// The width of the box the text is laid out in (DXF 41, the reference
-    /// rectangle's width): the writing program wraps each paragraph at it.
-    /// `0` -- also what an absent group means -- is no box, and each
+    /// rectangle's width), in drawing units: the writing program wraps each
+    /// paragraph at it. `0` -- also what an absent group, and a document
+    /// written before this field existed, means -- is no box, and each
     /// paragraph is one line. The box's height is not stated by the format
     /// for a drawn text; it follows from the lines.
     #[serde(default)]
     pub reference_width: f64,
+    /// DXF 42: the width of the text block as the application that wrote
+    /// the file last laid it out -- a measurement, which the reference
+    /// calls read-only, of the text in its font, so a consumer without the
+    /// font still knows how far the text reaches. `None` when the file does
+    /// not state it; a zero measures no text, and reads as `None` too.
+    pub extents_width: Option<f64>,
+    /// DXF 43: the height of the text block, stated and read like
+    /// [`Self::extents_width`].
+    pub extents_height: Option<f64>,
+    /// DXF 7: the text style the text is drawn in, as
+    /// [`TextEntity::style_name`] -- inline format codes in `text` can
+    /// still change the font of a part of it.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
 }
 
 /// Which point of an MTEXT block its insertion point is (DXF 71, 1 to 9 in
@@ -955,7 +1178,7 @@ pub struct DimensionEntity {
     pub text_override: TextOverride,
     /// DXF 10. What it locates depends on [`Self::kind`] -- the dimension
     /// line for a linear dimension, the far chord for a diameter, the
-    /// feature for an ordinate.
+    /// datum an ordinate measures from (its feature is group 13).
     ///
     /// `None` when the reader cannot say which of its own points is this
     /// group. Every DXF dimension carries group 10, but a backend reading
@@ -980,6 +1203,22 @@ pub struct DimensionEntity {
     pub text_rotation: f64,
     /// DXF 3: the DIMSTYLE this dimension names.
     pub style_name: Ref<String>,
+    /// DXF 70, bit 64, on an ordinate dimension: which coordinate of its
+    /// feature it measures from the datum -- [`OrdinateAxis::X`] when the
+    /// bit is set, [`OrdinateAxis::Y`] when it is clear. `None` on every
+    /// other kind, where the bit means nothing, and for a document written
+    /// before this field existed.
+    pub ordinate_axis: Option<OrdinateAxis>,
+}
+
+/// Which coordinate an ordinate dimension measures (DXF 70, bit 64).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum OrdinateAxis {
+    /// The bit is set: the feature's x distance from the datum.
+    X,
+    /// The bit is clear: the feature's y distance from the datum.
+    Y,
 }
 
 /// A 3DSOLID reduced to a wireframe: straight chords between the two
@@ -1004,8 +1243,7 @@ pub struct Solid3DEntity {
 
 /// MULTILEADER's leader-line geometry only: the lines connecting the
 /// content to its landing point, as polylines. The text or block content
-/// itself is not carried, the same narrow scope as 3DSOLID's wireframe and
-/// VIEWPORT's frame.
+/// itself is not carried, the same narrow scope as 3DSOLID's wireframe.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MultiLeaderEntity {
     pub common: EntityCommon,
@@ -1025,13 +1263,19 @@ pub struct MLineVertex {
 /// An MLINE is a set of parallel offset lines (wall-style multi-line). The
 /// per-line offsets live in the referenced MLINESTYLE, looked up in
 /// [`crate::tables::Tables::mlinestyles`]; the model carries the centerline
-/// vertices and the style name.
+/// vertices, the style name and the scale the style is drawn at.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MLineEntity {
     pub common: EntityCommon,
     pub vertices: Vec<MLineVertex>,
     pub closed: bool,
     pub mlinestyle_name: Ref<String>,
+    /// DXF 40: the factor the style's offsets are multiplied by for this
+    /// MLINE -- a wall 200 units thick, drawn in a style whose offsets are
+    /// 0.5 and -0.5, states 200 here. The format requires the group; `None`
+    /// is a model that was not given it, such as a document written before
+    /// this field existed.
+    pub scale: Option<f64>,
 }
 
 /// WIPEOUT's clip boundary, resolved to 2D points in the entity's own local
@@ -1108,7 +1352,8 @@ pub struct LeaderEntity {
 /// A few variants share a payload type where the entity types are
 /// structurally identical ([`Entity::XLine`] reuses [`RayEntity`],
 /// [`Entity::Trace`] reuses [`SolidEntity`],
-/// [`Entity::Region`]/[`Entity::PolylinePFace`] reuse [`Solid3DEntity`],
+/// [`Entity::Region`]/[`Entity::PolylinePFace`]/[`Entity::PolylineMesh`]
+/// reuse [`Solid3DEntity`],
 /// [`Entity::Polyline2D`] reuses [`LwPolylineEntity`]). They stay distinct
 /// variants so [`type_name`](Self::type_name) still reports the real DXF
 /// name.
@@ -1183,6 +1428,17 @@ pub enum Entity {
     /// polyface mesh is just as inherently 3D as a solid's wireframe.
     #[serde(rename = "POLYLINE_PFACE")]
     PolylinePFace(Solid3DEntity),
+    /// POLYLINE_MESH ("polygon mesh"): an M by N grid of vertices (DXF 71
+    /// and 72), carried like [`Entity::PolylinePFace`] as the wireframe of
+    /// its grid lines. The file stores the vertices row by row, so vertex
+    /// `i * N + j` is row `i`, column `j`; the edges come in a fixed order
+    /// so that two readers of one mesh agree edge for edge: first
+    /// `(i, j)-(i + 1, j)` for each row `i` in turn and each column `j`
+    /// within it, then `(i, j)-(i, j + 1)` in the same order. Closed in M
+    /// (DXF 70, bit 1), `i + 1` wraps from the last row to the first; closed
+    /// in N (bit 32), `j + 1` wraps from the last column to the first.
+    #[serde(rename = "POLYLINE_MESH")]
+    PolylineMesh(Solid3DEntity),
     #[serde(rename = "POLYLINE_2D")]
     Polyline2D(LwPolylineEntity),
     #[serde(rename = "TOLERANCE")]
@@ -1234,6 +1490,7 @@ impl Entity {
             Entity::MLine(e) => &e.common,
             Entity::Region(e) => &e.common,
             Entity::PolylinePFace(e) => &e.common,
+            Entity::PolylineMesh(e) => &e.common,
             Entity::Polyline2D(e) => &e.common,
             Entity::Tolerance(e) => &e.common,
             Entity::AcadTable(e) => &e.common,
@@ -1272,6 +1529,7 @@ impl Entity {
             Entity::MLine(e) => &mut e.common,
             Entity::Region(e) => &mut e.common,
             Entity::PolylinePFace(e) => &mut e.common,
+            Entity::PolylineMesh(e) => &mut e.common,
             Entity::Polyline2D(e) => &mut e.common,
             Entity::Tolerance(e) => &mut e.common,
             Entity::AcadTable(e) => &mut e.common,
@@ -1311,6 +1569,7 @@ impl Entity {
             Entity::MLine(_) => "MLINE",
             Entity::Region(_) => "REGION",
             Entity::PolylinePFace(_) => "POLYLINE_PFACE",
+            Entity::PolylineMesh(_) => "POLYLINE_MESH",
             Entity::Polyline2D(_) => "POLYLINE_2D",
             Entity::Tolerance(_) => "TOLERANCE",
             Entity::AcadTable(_) => "ACAD_TABLE",

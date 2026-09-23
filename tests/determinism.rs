@@ -50,6 +50,12 @@ fn drawing() -> CadDatabase {
             LayerRecord {
                 name: name.to_string(),
                 color_index: i as i16 + 1,
+                off: false,
+                frozen: false,
+                locked: false,
+                plot: Some(true),
+                lineweight: Some(-3),
+                linetype: Ref::Resolved("CONTINUOUS".to_string()),
             },
         );
     }
@@ -98,7 +104,7 @@ fn drawing() -> CadDatabase {
         extrusion: Point3D {
             x: 0.0,
             y: 0.0,
-            z: 1.0,
+            z: -1.0,
         },
     }));
 
@@ -118,6 +124,7 @@ fn drawing() -> CadDatabase {
             layers,
             block_records,
             mlinestyles,
+            layouts: BTreeMap::new(),
         },
         read_diagnostics: ReadDiagnostics {
             warnings: vec!["UNHANDLEDCLASS".to_string(), "WRONGCRC".to_string()],

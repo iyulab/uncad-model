@@ -40,14 +40,16 @@ pub use transform::Affine2;
 ///
 /// `entities` holds what the drawing shows (everything owned by the
 /// `*Model_Space`/`*Paper_Space*` blocks, see [`model`]) and `tables` the
-/// LAYER / BLOCK / MLINESTYLE tables it resolves against. This is what
-/// [`to_json`](Self::to_json) serializes verbatim.
+/// tables it resolves against and its layouts (see [`Tables`]). This is
+/// what [`to_json`](Self::to_json) serializes verbatim.
 ///
 /// It is a plain Rust value: `Clone`/`PartialEq`/`Send`/`Sync` without
 /// ceremony, constructible directly or deserialized from the JSON `to_json`
 /// produced. It is deliberately *not* a round-trip representation of a file
-/// (no linetypes, lineweights, styles, dictionaries, header variables): it
-/// keeps what consumers of the drawing's content need.
+/// (no linetype or text style definitions, dictionaries or header
+/// variables -- a layer names its linetype and a text its style, but the
+/// tables those names resolve in are not carried): it keeps what consumers
+/// of the drawing's content need.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CadDatabase {
     pub entities: Vec<Entity>,

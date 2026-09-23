@@ -24,14 +24,21 @@
 //!   `common.confidence` are upper-case strings (`"VECTOR"`, `"HIGH"`, ...);
 //!   `common.source_handle` is a reference field like the ones below, resolved
 //!   to the file's hex handle for an entity that came from a file.
-//! - Reference fields (`common.layer`, `common.source_handle`, an
-//!   INSERT/DIMENSION/TABLE's `block_name`, an MLINE's `mlinestyle_name`) are
+//! - Reference fields -- every [`Ref`](crate::Ref) in the model:
+//!   `common.layer`, `common.source_handle`, an INSERT/DIMENSION/TABLE's or
+//!   a layout's `block_name`, a dimension's, tolerance's, leader's or text's
+//!   `style_name`, an MLINE's `mlinestyle_name`, a layer's `linetype`, a
+//!   viewport's `frozen_layers` and a leader's `annotation_id` -- are
 //!   adjacently tagged three-state values:
 //!   `{"type":"RESOLVED","data":"0"}`, `{"type":"ABSENT"}` or
 //!   `{"type":"UNRESOLVED","data":"2A"}` -- never a bare string, so a name that
 //!   could not be read is not mistaken for a name that is empty.
+//! - A polyline's vertices -- an LWPOLYLINE's, a POLYLINE_2D's, a HATCH
+//!   polyline path's -- are objects of their own,
+//!   `{"point":{"x":..,"y":..},"bulge":..,"start_width":..,"end_width":..}`,
+//!   not bare points.
 //! - HATCH: each item of `boundary_paths` is `{"type":"POLYLINE","data":
-//!   [pt,..]}` or `{"type":"EDGES","data":[edge,..]}`, and each edge is
+//!   [vertex,..]}` or `{"type":"EDGES","data":[edge,..]}`, and each edge is
 //!   `{"type":"LINE"|"ARC"|"ELLIPSE"|"SPLINE", ...}` with the edge's own fields
 //!   beside the tag. Upper-case like the entity tags, but these are path/edge
 //!   kinds, not DXF entity names.
@@ -106,7 +113,10 @@ impl CadDatabase {
 mod tests {
     use super::*;
     use crate::model::*;
-    use crate::tables::{BlockRecord, LayerRecord, Tables};
+    use crate::tables::{
+        AngularUnitFormat, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord, LayoutRecord,
+        LinearUnitFormat, PlotPaperUnits, PlotRotation, PlotSettings, Tables,
+    };
     use std::collections::BTreeMap;
 
     fn common(handle: &str) -> EntityCommon {
@@ -140,12 +150,20 @@ mod tests {
             start_point: p2(1.0, 2.0),
             text_height: 2.5,
             tag: "TAG".to_string(),
+            flags: AttributeFlags {
+                invisible: true,
+                constant: false,
+                verify: false,
+                preset: true,
+            },
             text: "value".to_string(),
             rotation: 0.1,
-            horizontal_alignment: TextHorizontalAlignment::Right,
-            vertical_alignment: TextVerticalAlignment::Top,
-            alignment_point: Some(p2(9.0, 2.0)),
-            width_factor: 0.9,
+            horizontal_justification: HorizontalJustification::Right,
+            vertical_justification: VerticalJustification::Top,
+            alignment_point: Some(p2(5.0, 2.0)),
+            width_factor: 0.8,
+            oblique_angle: 0.2617993877991494,
+            style_name: Ref::Unresolved("3F".to_string()),
             elevation: 0.0,
             extrusion: p3(0.0, 0.0, 1.0),
         };
@@ -157,14 +175,25 @@ mod tests {
         let lwpoly = LwPolylineEntity {
             common: c.clone(),
             vertices: vec![
-                PolylineVertex::straight(p2(0.0, 0.0)),
+                PolylineVertex {
+                    start_width: 0.0,
+                    end_width: 2.0,
+                    ..PolylineVertex::straight(p2(0.0, 0.0))
+                },
                 PolylineVertex {
                     point: p2(1.0, 0.0),
                     bulge: -0.5,
+                    start_width: 2.0,
+                    end_width: 2.0,
                 },
-                PolylineVertex::straight(p2(1.0, 1.0)),
+                PolylineVertex {
+                    start_width: 0.5,
+                    end_width: 0.0,
+                    ..PolylineVertex::straight(p2(1.0, 1.0))
+                },
             ],
             closed: true,
+            const_width: 0.25,
             elevation: 2.0,
             extrusion: p3(0.0, 0.0, -1.0),
         };
@@ -191,11 +220,13 @@ mod tests {
                 text_height: 2.5,
                 text: "hi".to_string(),
                 rotation: 0.2,
-                horizontal_alignment: TextHorizontalAlignment::Middle,
-                vertical_alignment: TextVerticalAlignment::Middle,
-                alignment_point: Some(p2(1.0, 0.5)),
-                width_factor: 0.8,
-                elevation: 0.0,
+                horizontal_justification: HorizontalJustification::Fit,
+                vertical_justification: VerticalJustification::Baseline,
+                alignment_point: Some(p2(10.0, 0.0)),
+                width_factor: 1.0,
+                oblique_angle: 0.0,
+                style_name: Ref::Resolved("ROMANS".to_string()),
+                elevation: 1.5,
                 extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::LwPolyline(lwpoly.clone()),
@@ -255,12 +286,20 @@ mod tests {
                 start_point: p2(0.0, 0.0),
                 text_height: 2.5,
                 tag: "TAG".to_string(),
+                flags: AttributeFlags {
+                    invisible: false,
+                    constant: true,
+                    verify: true,
+                    preset: false,
+                },
                 default_value: "?".to_string(),
                 rotation: 0.4,
-                horizontal_alignment: TextHorizontalAlignment::Left,
-                vertical_alignment: TextVerticalAlignment::Baseline,
+                horizontal_justification: HorizontalJustification::Left,
+                vertical_justification: VerticalJustification::Baseline,
                 alignment_point: None,
                 width_factor: 1.0,
+                oblique_angle: 0.0,
+                style_name: Ref::Absent,
                 elevation: 0.0,
                 extrusion: p3(0.0, 0.0, 1.0),
             }),
@@ -269,6 +308,20 @@ mod tests {
                 center: p3(0.0, 0.0, 0.0),
                 width: 10.0,
                 height: 5.0,
+                view: Some(ViewportView {
+                    center: p2(150.0, 80.0),
+                    height: 250.0,
+                    target: p3(0.0, 0.0, 0.0),
+                    direction: p3(0.0, 0.0, 1.0),
+                    twist: 0.5235987755982988,
+                    lens_length: 50.0,
+                }),
+                on: Some(true),
+                viewport_id: Some(2),
+                frozen_layers: vec![
+                    Ref::Resolved("DIMS".to_string()),
+                    Ref::Unresolved("4B".to_string()),
+                ],
             }),
             Entity::Face3D(Face3DEntity {
                 common: c.clone(),
@@ -296,7 +349,10 @@ mod tests {
                 rotation: 0.3,
                 line_spacing_factor: 1.0,
                 attachment: Some(MTextAttachment::MiddleCenter),
-                reference_width: 60.5,
+                reference_width: 60.0,
+                extents_width: Some(48.25),
+                extents_height: None,
+                style_name: Ref::Resolved("Standard".to_string()),
             }),
             Entity::Polyline3D(PolylineEntity {
                 common: c.clone(),
@@ -322,6 +378,7 @@ mod tests {
                 rotation: 0.0,
                 text_rotation: 0.25,
                 style_name: Ref::Unresolved("ISO-25".to_string()),
+                ordinate_axis: None,
             }),
             Entity::Hatch(HatchEntity {
                 common: c.clone(),
@@ -331,6 +388,8 @@ mod tests {
                         PolylineVertex {
                             point: p2(1.0, 0.0),
                             bulge: 1.0,
+                            start_width: 0.0,
+                            end_width: 0.0,
                         },
                         PolylineVertex::straight(p2(0.0, 1.0)),
                     ]),
@@ -398,9 +457,11 @@ mod tests {
                 }],
                 closed: true,
                 mlinestyle_name: Ref::Resolved("STANDARD".to_string()),
+                scale: Some(200.0),
             }),
             Entity::Region(solid3d.clone()),
-            Entity::PolylinePFace(solid3d),
+            Entity::PolylinePFace(solid3d.clone()),
+            Entity::PolylineMesh(solid3d),
             Entity::Polyline2D(lwpoly),
             Entity::Tolerance(ToleranceEntity {
                 common: c.clone(),
@@ -462,6 +523,7 @@ mod tests {
                 | Entity::MLine(_)
                 | Entity::Region(_)
                 | Entity::PolylinePFace(_)
+                | Entity::PolylineMesh(_)
                 | Entity::Polyline2D(_)
                 | Entity::Tolerance(_)
                 | Entity::AcadTable(_)
@@ -557,6 +619,14 @@ mod tests {
     }
 
     #[test]
+    fn an_ordinate_axis_is_a_letter() {
+        for (axis, text) in [(OrdinateAxis::X, "\"X\""), (OrdinateAxis::Y, "\"Y\"")] {
+            assert_eq!(serde_json::to_string(&axis).unwrap(), text);
+            assert_eq!(serde_json::from_str::<OrdinateAxis>(text).unwrap(), axis);
+        }
+    }
+
+    #[test]
     fn every_variant_survives_a_round_trip() {
         for e in one_of_each() {
             let text = serde_json::to_string(&e).expect("serializable");
@@ -581,17 +651,73 @@ mod tests {
             LayerRecord {
                 name: "0".to_string(),
                 color_index: 7,
+                off: false,
+                frozen: true,
+                locked: false,
+                plot: Some(false),
+                lineweight: Some(25),
+                linetype: Ref::Resolved("CONTINUOUS".to_string()),
             },
         );
         let mut mlinestyles = BTreeMap::new();
         mlinestyles.insert("STANDARD".to_string(), vec![0.5, -0.5]);
+        let mut dim_styles = BTreeMap::new();
+        dim_styles.insert(
+            "ARCH".to_string(),
+            DimStyleRecord {
+                name: "ARCH".to_string(),
+                post: Some("<>\"".to_string()),
+                scale: Some(48.0),
+                length_factor: Some(1.0),
+                tolerances: Some(false),
+                limits: None,
+                tolerance_upper: None,
+                tolerance_lower: None,
+                decimal_places: Some(4),
+                tolerance_decimal_places: None,
+                text_height: Some(0.125),
+                arrow_size: Some(0.1875),
+                linear_unit_format: Some(LinearUnitFormat::Architectural),
+                zero_suppression: Some(3),
+                rounding: Some(0.0625),
+                angular_unit_format: Some(AngularUnitFormat::DegreesMinutesSeconds),
+                angular_decimal_places: Some(2),
+                fraction_format: Some(FractionFormat::Diagonal),
+            },
+        );
+        let mut layouts = BTreeMap::new();
+        layouts.insert(
+            "Layout1".to_string(),
+            LayoutRecord {
+                name: "Layout1".to_string(),
+                tab_order: 1,
+                block_name: Ref::Resolved("*Paper_Space".to_string()),
+                limits_min: p2(0.0, 0.0),
+                limits_max: p2(420.0, 297.0),
+                plot_settings: PlotSettings {
+                    paper_name: "ISO_A3_(420.00_x_297.00_MM)".to_string(),
+                    paper_width: 297.0,
+                    paper_height: 420.0,
+                    margin_left: 7.5,
+                    margin_bottom: 20.0,
+                    margin_right: 7.5,
+                    margin_top: 20.0,
+                    plot_origin: p2(-7.5, -20.0),
+                    paper_units: Some(PlotPaperUnits::Millimeters),
+                    rotation: Some(PlotRotation::Counterclockwise90),
+                    scale_numerator: 1.0,
+                    scale_denominator: 1.0,
+                },
+            },
+        );
         let db = CadDatabase {
             entities: one_of_each(),
             tables: Tables {
-                dim_styles: BTreeMap::new(),
+                dim_styles,
                 layers,
                 block_records,
                 mlinestyles,
+                layouts,
             },
             read_diagnostics: Default::default(),
         };
