@@ -1,7 +1,7 @@
 //! Each named case has the shape its description promises, stated once so
 //! consumers can rely on it.
 
-use uncad_model::model::{Entity, Point2D, Point3D, Ref};
+use uncad_model::model::{Entity, Point2D, Point3D, Ref, SegmentWidth};
 use uncad_model::Affine2;
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
@@ -287,4 +287,49 @@ fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_nor
     let (sin, cos) = 30f64.to_radians().sin_cos();
     assert!(close(at(10.0, 0.0), -50.0 - 10.0 * cos, 10.0 * sin));
     assert!(placement.determinant() < 0.0, "a mirror image");
+}
+
+/// G12's polylines carry their bulges and widths, and the one whose file
+/// spells "straight, constant width" out in full reads as the one that
+/// states nothing.
+#[test]
+fn g12_carries_bulges_and_widths_and_folds_their_spellings() {
+    let spec = cases::g12_curved_and_wide_polylines();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let polylines: Vec<_> = model
+        .entities
+        .iter()
+        .map(|e| match e {
+            Entity::LwPolyline(p) => p,
+            other => panic!("only polylines here, not {other:?}"),
+        })
+        .collect();
+    assert_eq!(polylines.len(), 5);
+
+    let [slot, arrow, bend, donut, spelled] = polylines.as_slice() else {
+        unreachable!()
+    };
+    assert_eq!(slot.bulges, [0.0, 1.0, 0.0, 1.0]);
+    assert!(slot.widths.is_empty());
+    assert_eq!(
+        arrow.widths[1],
+        SegmentWidth {
+            start: 4.0,
+            end: 0.0
+        }
+    );
+    assert!(arrow.bulges.is_empty());
+    assert_eq!(bend.const_width, 1.5);
+    assert!(bend.bulges[1] < 0.0, "the corner turns clockwise");
+    assert_eq!((donut.vertices.len(), donut.closed), (2, true));
+    assert_eq!(donut.bulges, [1.0, 1.0]);
+
+    // The file does state zero bulges and constant widths for the last one.
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    let last = &dxf[dxf.rfind("LWPOLYLINE").unwrap()..];
+    assert_eq!(last.matches(" 42\n0.0\n").count(), 2);
+    assert_eq!(last.matches(" 40\n1.0\n").count(), 2);
+    assert!(spelled.bulges.is_empty() && spelled.widths.is_empty());
+    assert_eq!(spelled.const_width, 1.0);
 }

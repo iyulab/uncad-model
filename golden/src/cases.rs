@@ -778,6 +778,89 @@ pub fn g11_mirrored_part() -> Spec {
     }
 }
 
+/// G12, polylines that are not just their vertices: a slot whose two ends
+/// are half circles (bulges of 1), a tapered arrow (per-vertex widths), a
+/// constant-width polyline with a quarter-circle corner, a DONUT (two
+/// vertices, both bulges 1, a constant width), and a polyline whose file
+/// states zero bulges and widths equal to its constant width.
+///
+/// The last one is the same polyline as one that states nothing: a reader
+/// gives the empty lists for both, so that two spellings of one drawing
+/// compare equal.
+pub fn g12_curved_and_wide_polylines() -> Spec {
+    let layer = "OUTLINE".to_string();
+    // tan(22.5 degrees): the bulge of a quarter circle, negative for one
+    // that turns clockwise.
+    let quarter = -0.41421356237309503;
+    let polyline = |vertices: Vec<Xy>,
+                    closed: bool,
+                    bulges: Vec<f64>,
+                    widths: Vec<(f64, f64)>,
+                    const_width: f64| EntitySpec::LwPolyline {
+        layer: layer.clone(),
+        vertices,
+        closed,
+        bulges,
+        widths,
+        const_width,
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 7,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            polyline(
+                vec![
+                    Xy::new(0.0, 0.0),
+                    Xy::new(40.0, 0.0),
+                    Xy::new(40.0, 10.0),
+                    Xy::new(0.0, 10.0),
+                ],
+                true,
+                vec![0.0, 1.0, 0.0, 1.0],
+                Vec::new(),
+                0.0,
+            ),
+            polyline(
+                vec![Xy::new(0.0, 30.0), Xy::new(30.0, 30.0), Xy::new(40.0, 30.0)],
+                false,
+                Vec::new(),
+                vec![(2.0, 2.0), (4.0, 0.0), (0.0, 0.0)],
+                0.0,
+            ),
+            polyline(
+                vec![Xy::new(0.0, 50.0), Xy::new(40.0, 50.0), Xy::new(50.0, 60.0)],
+                false,
+                vec![0.0, quarter, 0.0],
+                Vec::new(),
+                1.5,
+            ),
+            polyline(
+                vec![Xy::new(60.0, 20.0), Xy::new(70.0, 20.0)],
+                true,
+                vec![1.0, 1.0],
+                Vec::new(),
+                2.0,
+            ),
+            polyline(
+                vec![Xy::new(0.0, 90.0), Xy::new(40.0, 90.0)],
+                false,
+                vec![0.0, 0.0],
+                vec![(1.0, 1.0), (1.0, 1.0)],
+                1.0,
+            ),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -790,6 +873,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g5" => g5_dense_dimensions(),
         "g10" => g10_unreferenced_insert(),
         "g11" => g11_mirrored_part(),
+        "g12" => g12_curved_and_wide_polylines(),
         _ => return None,
     })
 }
@@ -799,4 +883,6 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 9] = ["g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11"];
+pub const NAMES: [&str; 10] = [
+    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12",
+];
