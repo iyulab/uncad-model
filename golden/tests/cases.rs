@@ -2,9 +2,12 @@
 //! consumers can rely on it.
 
 use uncad_model::model::{
-    Entity, HorizontalJustification, Point2D, Point3D, Ref, SegmentWidth, VerticalJustification,
+    DimensionKind, Entity, HorizontalJustification, OrdinateAxis, Point2D, Point3D, Ref,
+    SegmentWidth, VerticalJustification,
 };
-use uncad_model::tables::{PlotPaperUnits, PlotRotation};
+use uncad_model::tables::{
+    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+};
 use uncad_model::Affine2;
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
@@ -485,4 +488,53 @@ fn g15_is_a_mesh_carried_as_its_grid_lines_in_order() {
     );
     let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
     assert_eq!(dxf.matches("AcDbPolygonMeshVertex").count(), 12);
+}
+
+/// G16's ordinate dimensions say which coordinate they measure, all from
+/// the datum at group 10, and its full style states every variable while
+/// the other states two.
+#[test]
+fn g16_has_ordinates_of_both_axes_and_a_style_stating_everything() {
+    let spec = cases::g16_ordinate_dimensions();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let ordinates: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Dimension(d) => Some(d),
+            _ => None,
+        })
+        .collect();
+    let axes: Vec<_> = ordinates.iter().map(|d| d.ordinate_axis).collect();
+    use OrdinateAxis::{X, Y};
+    assert_eq!(axes, [Some(X), Some(X), Some(X), Some(Y), Some(Y)]);
+    for d in &ordinates {
+        assert_eq!(d.kind, Some(DimensionKind::Ordinate));
+        let datum = d.definition_point.expect("group 10 is stated");
+        assert_eq!((datum.x, datum.y), (0.0, 0.0), "the datum, not the feature");
+    }
+
+    let full = &model.tables.dim_styles["ORD"];
+    assert_eq!(full.linear_unit_format, Some(LinearUnitFormat::Decimal));
+    assert_eq!(
+        full.angular_unit_format,
+        Some(AngularUnitFormat::DegreesMinutesSeconds)
+    );
+    assert_eq!(
+        (full.zero_suppression, full.rounding, full.arrow_size),
+        (Some(8), Some(0.5), Some(2.5))
+    );
+    assert_eq!(full.fraction_format, Some(FractionFormat::NotStacked));
+    let sparse = &model.tables.dim_styles["ARCH"];
+    assert_eq!(
+        sparse.linear_unit_format,
+        Some(LinearUnitFormat::Architectural)
+    );
+    assert_eq!(sparse.decimal_places, None, "not stated, not filled in");
+
+    // Bit 64 of group 70 on the three X-type ones: 32 + 6 + 64.
+    let dxf = String::from_utf8(written.dxf).expect("an ASCII case is UTF-8");
+    assert_eq!(dxf.matches(" 70\n102\n").count(), 3);
+    assert_eq!(dxf.matches(" 70\n38\n").count(), 2);
 }

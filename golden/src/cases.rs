@@ -5,8 +5,10 @@ use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
     Spec, Xy,
 };
-use uncad_model::model::{HorizontalJustification, VerticalJustification};
-use uncad_model::tables::{PlotPaperUnits, PlotRotation};
+use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
+use uncad_model::tables::{
+    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+};
 
 /// G1, a general machined part: a closed outline, four holes, three linear
 /// dimensions and one diameter dimension, and a title block inserted with
@@ -1238,6 +1240,120 @@ pub fn g15_polygon_mesh() -> Spec {
     }
 }
 
+/// G16, ordinate dimensions and a dimension style that states every
+/// variable the displayed text depends on. A plate's features are
+/// dimensioned from its lower-left corner: three X-type ordinates (the
+/// feature's x distance from the datum) along the bottom and two Y-type
+/// ones along the left edge. One states its measurement, one states a
+/// literal text, the rest state neither -- and a second style states only
+/// its unit formats, leaving everything else unsaid.
+pub fn g16_ordinate_dimensions() -> Spec {
+    let dims = "DIMS".to_string();
+    let ordinate = |feature: Xy,
+                    leader_end: Xy,
+                    axis: OrdinateAxis,
+                    text: &str,
+                    measurement: Option<f64>,
+                    style: &str| EntitySpec::OrdinateDimension {
+        layer: dims.clone(),
+        datum: Xy::new(0.0, 0.0),
+        feature,
+        leader_end,
+        axis,
+        text: text.to_string(),
+        measurement,
+        style: Some(style.to_string()),
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: dims.clone(),
+            color_index: 3,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: vec![
+            DimStyleSpec {
+                name: "ORD".to_string(),
+                post: Some("<>".to_string()),
+                decimal_places: Some(2),
+                text_height: Some(2.5),
+                arrow_size: Some(2.5),
+                linear_unit_format: Some(LinearUnitFormat::Decimal),
+                zero_suppression: Some(8),
+                rounding: Some(0.5),
+                angular_unit_format: Some(AngularUnitFormat::DegreesMinutesSeconds),
+                angular_decimal_places: Some(1),
+                fraction_format: Some(FractionFormat::NotStacked),
+            },
+            DimStyleSpec {
+                name: "ARCH".to_string(),
+                linear_unit_format: Some(LinearUnitFormat::Architectural),
+                fraction_format: Some(FractionFormat::Diagonal),
+                ..DimStyleSpec::default()
+            },
+        ],
+        text_styles: Vec::new(),
+        entities: vec![
+            EntitySpec::LwPolyline {
+                layer: "0".to_string(),
+                vertices: vec![
+                    Xy::new(0.0, 0.0),
+                    Xy::new(120.0, 0.0),
+                    Xy::new(120.0, 60.0),
+                    Xy::new(0.0, 60.0),
+                ],
+                closed: true,
+                bulges: Vec::new(),
+                widths: Vec::new(),
+                const_width: 0.0,
+            },
+            ordinate(
+                Xy::new(0.0, 0.0),
+                Xy::new(0.0, -15.0),
+                OrdinateAxis::X,
+                "<>",
+                None,
+                "ORD",
+            ),
+            ordinate(
+                Xy::new(30.0, 20.0),
+                Xy::new(30.0, -15.0),
+                OrdinateAxis::X,
+                "",
+                Some(30.0),
+                "ORD",
+            ),
+            ordinate(
+                Xy::new(120.0, 0.0),
+                Xy::new(120.0, -15.0),
+                OrdinateAxis::X,
+                "120.00",
+                None,
+                "ARCH",
+            ),
+            ordinate(
+                Xy::new(30.0, 20.0),
+                Xy::new(-15.0, 20.0),
+                OrdinateAxis::Y,
+                "<>",
+                None,
+                "ORD",
+            ),
+            ordinate(
+                Xy::new(0.0, 60.0),
+                Xy::new(-15.0, 60.0),
+                OrdinateAxis::Y,
+                "<>",
+                None,
+                "ORD",
+            ),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1254,6 +1370,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g13" => g13_justified_text(),
         "g14" => g14_sheet_with_viewports(),
         "g15" => g15_polygon_mesh(),
+        "g16" => g16_ordinate_dimensions(),
         _ => return None,
     })
 }
@@ -1263,6 +1380,6 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 13] = [
-    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15",
+pub const NAMES: [&str; 14] = [
+    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
 ];
