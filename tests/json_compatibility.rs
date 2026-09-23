@@ -140,6 +140,17 @@ fn an_attribute_without_flags_is_visible_and_variable() {
 }
 
 #[test]
+fn an_mtext_without_width_or_extents_is_unwrapped_and_unmeasured() {
+    let db = load();
+    let Some(Entity::MText(m)) = db.entities.iter().find(|e| e.type_name() == "MTEXT") else {
+        panic!("the document has an MTEXT");
+    };
+    assert_eq!(m.rect_width, 0.0);
+    assert_eq!((m.extents_width, m.extents_height), (None, None));
+    assert_eq!(m.style_name, Ref::Absent);
+}
+
+#[test]
 fn a_polyline_without_bulges_or_widths_is_straight_and_constant() {
     let db = load();
     let polylines: Vec<_> = db

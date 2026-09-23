@@ -322,6 +322,10 @@ mod tests {
                 rotation: 0.3,
                 line_spacing_factor: 1.0,
                 attachment: Some(MTextAttachment::MiddleCenter),
+                rect_width: 60.0,
+                extents_width: Some(48.25),
+                extents_height: None,
+                style_name: Ref::Resolved("Standard".to_string()),
             }),
             Entity::Polyline3D(PolylineEntity {
                 common: c.clone(),

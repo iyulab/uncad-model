@@ -792,6 +792,26 @@ pub struct MTextEntity {
     /// point is the block's top-left corner, its middle or its bottom-right,
     /// depending on this. `None` when the file does not state it.
     pub attachment: Option<MTextAttachment>,
+    /// DXF 41: the width of the reference rectangle the text is wrapped
+    /// in, in drawing units; 0 when the text is not wrapped, each paragraph
+    /// running on as one line. A document written before this field
+    /// existed reads as 0.
+    #[serde(default)]
+    pub rect_width: f64,
+    /// DXF 42: the width of the text block as the application that wrote
+    /// the file last laid it out -- a measurement, which the reference
+    /// calls read-only, of the text in its font, so a consumer without the
+    /// font still knows how far the text reaches. `None` when the file does
+    /// not state it; a zero measures no text, and reads as `None` too.
+    pub extents_width: Option<f64>,
+    /// DXF 43: the height of the text block, stated and read like
+    /// [`Self::extents_width`].
+    pub extents_height: Option<f64>,
+    /// DXF 7: the text style the text is drawn in, as
+    /// [`TextEntity::style_name`] -- inline format codes in `text` can
+    /// still change the font of a part of it.
+    #[serde(default = "absent")]
+    pub style_name: Ref<String>,
 }
 
 /// Which point of an MTEXT block its insertion point is (DXF 71, 1 to 9 in
