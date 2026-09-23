@@ -34,6 +34,28 @@ pub struct Point2D {
     pub y: f64,
 }
 
+/// One vertex of a 2D polyline -- an LWPOLYLINE, a 2D POLYLINE, or a HATCH
+/// boundary path given as a polyline.
+///
+/// `bulge` (DXF 42) describes the segment from this vertex to the next one
+/// (for the last vertex of a closed polyline, back to the first): `0` is a
+/// straight segment; otherwise the segment is a circular arc and `bulge` is
+/// the tangent of a quarter of its included angle, positive when the arc
+/// turns counter-clockwise from this vertex to the next. A file that does
+/// not write the group states a straight segment, so its absence is `0`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PolylineVertex {
+    pub point: Point2D,
+    pub bulge: f64,
+}
+
+impl PolylineVertex {
+    /// A vertex whose outgoing segment is straight.
+    pub fn straight(point: Point2D) -> Self {
+        Self { point, bulge: 0.0 }
+    }
+}
+
 /// A value this model reached by following what the source file points with
 /// -- a layer name, a block name, a style name.
 ///
@@ -221,10 +243,9 @@ pub struct TextEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
-    /// The vertices' positions only. A vertex's bulge (DXF 42 -- the segment
-    /// to the next vertex is an arc) is not carried, so an arc segment is
-    /// represented by its chord.
-    pub vertices: Vec<Point2D>,
+    /// The vertices in order, each with the bulge of the segment that leaves
+    /// it (see [`PolylineVertex`]).
+    pub vertices: Vec<PolylineVertex>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
 }
@@ -535,15 +556,16 @@ pub enum HatchEdge {
     },
 }
 
-/// One HATCH boundary path -- either an explicit polyline (vertices only;
-/// bulge/arc segments are dropped) or a list of curved/straight edges.
+/// One HATCH boundary path -- either an explicit polyline (its vertices
+/// carry their bulge, see [`PolylineVertex`]) or a list of curved/straight
+/// edges. A polyline path is a closed loop.
 // JSON: adjacently tagged, because the payload is a sequence rather than a
 // struct -- `{"type":"POLYLINE","data":[pt,..]}` / `{"type":"EDGES","data":
 // [edge,..]}` -- keeping the `type` key every other tagged object uses.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "UPPERCASE")]
 pub enum HatchBoundaryPath {
-    Polyline(Vec<Point2D>),
+    Polyline(Vec<PolylineVertex>),
     Edges(Vec<HatchEdge>),
 }
 

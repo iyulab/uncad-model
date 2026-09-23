@@ -88,6 +88,28 @@ impl Xy {
     }
 }
 
+/// One polyline vertex: where it is and the bulge of the segment that
+/// leaves it (DXF 42 -- `0` is straight, otherwise the tangent of a quarter
+/// of the arc's included angle, positive counter-clockwise).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Vertex {
+    pub at: Xy,
+    pub bulge: f64,
+}
+
+impl Vertex {
+    pub const fn bulged(at: Xy, bulge: f64) -> Self {
+        Vertex { at, bulge }
+    }
+}
+
+impl From<Xy> for Vertex {
+    /// A vertex whose outgoing segment is straight.
+    fn from(at: Xy) -> Self {
+        Vertex { at, bulge: 0.0 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntitySpec {
     Line {
@@ -110,7 +132,7 @@ pub enum EntitySpec {
     },
     LwPolyline {
         layer: String,
-        vertices: Vec<Xy>,
+        vertices: Vec<Vertex>,
         closed: bool,
     },
     Text {
@@ -231,7 +253,10 @@ impl EntitySpec {
                 closed,
             } => EntitySpec::LwPolyline {
                 layer: layer.clone(),
-                vertices: vertices.iter().map(m).collect(),
+                vertices: vertices
+                    .iter()
+                    .map(|v| Vertex::bulged(m(&v.at), v.bulge))
+                    .collect(),
                 closed: *closed,
             },
             EntitySpec::Text {

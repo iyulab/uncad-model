@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, CircleEntity, Confidence, DimensionEntity,
     DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId, InsertEntity, LineEntity,
-    LwPolylineEntity, Origin, Point2D, Point3D, Ref, TextEntity, TextOverride,
+    LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref, TextEntity, TextOverride,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -259,7 +259,13 @@ fn convert(
             closed,
         } => Entity::LwPolyline(LwPolylineEntity {
             common: common(handle, layer),
-            vertices: vertices.iter().copied().map(p2).collect(),
+            vertices: vertices
+                .iter()
+                .map(|v| PolylineVertex {
+                    point: p2(v.at),
+                    bulge: v.bulge,
+                })
+                .collect(),
             closed: *closed,
         }),
         EntitySpec::Text {

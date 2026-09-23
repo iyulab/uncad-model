@@ -419,8 +419,13 @@ impl Writer {
                 self.pair(90, vertices.len());
                 self.pair(70, u16::from(*closed));
                 for v in vertices {
-                    self.num(10, v.x);
-                    self.num(20, v.y);
+                    self.num(10, v.at.x);
+                    self.num(20, v.at.y);
+                    // Written only when the segment is an arc, as AutoCAD
+                    // writes it: an absent 42 is a straight segment.
+                    if v.bulge != 0.0 {
+                        self.num(42, v.bulge);
+                    }
                 }
             }
             EntitySpec::Text {

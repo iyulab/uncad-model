@@ -1,7 +1,9 @@
 //! The named golden cases. Each is a function returning its spec, so a
 //! consumer can pick the ones its role is measured by.
 
-use crate::spec::{AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, Xy};
+use crate::spec::{
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, Spec, Vertex, Xy,
+};
 
 /// G1, a general machined part: a closed outline, four holes, three linear
 /// dimensions and one diameter dimension, and a title block inserted with
@@ -25,10 +27,10 @@ pub fn g1_general_part() -> Spec {
     let mut entities = vec![EntitySpec::LwPolyline {
         layer: outline.clone(),
         vertices: vec![
-            Xy::new(0.0, 0.0),
-            Xy::new(200.0, 0.0),
-            Xy::new(200.0, 100.0),
-            Xy::new(0.0, 100.0),
+            Xy::new(0.0, 0.0).into(),
+            Xy::new(200.0, 0.0).into(),
+            Xy::new(200.0, 100.0).into(),
+            Xy::new(0.0, 100.0).into(),
         ],
         closed: true,
     }];
@@ -129,10 +131,10 @@ pub fn g1_general_part() -> Spec {
                 EntitySpec::LwPolyline {
                     layer: "0".to_string(),
                     vertices: vec![
-                        Xy::new(0.0, 0.0),
-                        Xy::new(80.0, 0.0),
-                        Xy::new(80.0, 20.0),
-                        Xy::new(0.0, 20.0),
+                        Xy::new(0.0, 0.0).into(),
+                        Xy::new(80.0, 0.0).into(),
+                        Xy::new(80.0, 20.0).into(),
+                        Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
                 },
@@ -412,11 +414,15 @@ pub fn g7_loose_text_title_block() -> Spec {
     let entities = vec![
         EntitySpec::LwPolyline {
             layer: title.clone(),
+            // Two arc segments, so a reader that drops the bulge is caught:
+            // the right edge bows outwards (counter-clockwise), and the
+            // closing segment -- the last vertex back to the first -- bows
+            // the other way.
             vertices: vec![
-                Xy::new(100.0, -60.0),
-                Xy::new(180.0, -60.0),
-                Xy::new(180.0, -40.0),
-                Xy::new(100.0, -40.0),
+                Xy::new(100.0, -60.0).into(),
+                Vertex::bulged(Xy::new(180.0, -60.0), 0.5),
+                Xy::new(180.0, -40.0).into(),
+                Vertex::bulged(Xy::new(100.0, -40.0), -0.5),
             ],
             closed: true,
         },
@@ -484,10 +490,10 @@ pub fn g8_korean_title_block() -> Spec {
                 EntitySpec::LwPolyline {
                     layer: "0".to_string(),
                     vertices: vec![
-                        Xy::new(0.0, 0.0),
-                        Xy::new(80.0, 0.0),
-                        Xy::new(80.0, 20.0),
-                        Xy::new(0.0, 20.0),
+                        Xy::new(0.0, 0.0).into(),
+                        Xy::new(80.0, 0.0).into(),
+                        Xy::new(80.0, 20.0).into(),
+                        Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
                 },
@@ -500,10 +506,10 @@ pub fn g8_korean_title_block() -> Spec {
             EntitySpec::LwPolyline {
                 layer: outline_layer,
                 vertices: vec![
-                    Xy::new(0.0, 0.0),
-                    Xy::new(200.0, 0.0),
-                    Xy::new(200.0, 100.0),
-                    Xy::new(0.0, 100.0),
+                    Xy::new(0.0, 0.0).into(),
+                    Xy::new(200.0, 0.0).into(),
+                    Xy::new(200.0, 100.0).into(),
+                    Xy::new(0.0, 100.0).into(),
                 ],
                 closed: true,
             },

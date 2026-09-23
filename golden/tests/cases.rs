@@ -210,8 +210,8 @@ fn g3_grows_linearly_and_lands_where_its_index_says() {
             EntitySpec::LwPolyline { vertices: b, .. },
         ) => {
             assert_eq!(a.len(), b.len());
-            assert_eq!(b[0].x, a[0].x + dx);
-            assert_eq!(b[0].y, a[0].y + dy);
+            assert_eq!(b[0].at.x, a[0].at.x + dx);
+            assert_eq!(b[0].at.y, a[0].at.y + dy);
         }
         (a, b) => panic!("expected the same kind, got {a:?} and {b:?}"),
     }

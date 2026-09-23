@@ -74,7 +74,7 @@ fn entity() -> impl Strategy<Value = EntitySpec> {
         )
             .prop_map(|(layer, vertices, closed)| EntitySpec::LwPolyline {
                 layer,
-                vertices,
+                vertices: vertices.into_iter().map(Into::into).collect(),
                 closed
             }),
         (layer_name(), xy(), 0.5f64..50.0, text(), 0.0f64..360.0).prop_map(

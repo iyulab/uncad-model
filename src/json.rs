@@ -150,7 +150,14 @@ mod tests {
         };
         let lwpoly = LwPolylineEntity {
             common: c.clone(),
-            vertices: vec![p2(0.0, 0.0), p2(1.0, 0.0), p2(1.0, 1.0)],
+            vertices: vec![
+                PolylineVertex::straight(p2(0.0, 0.0)),
+                PolylineVertex {
+                    point: p2(1.0, 0.0),
+                    bulge: -0.5,
+                },
+                PolylineVertex::straight(p2(1.0, 1.0)),
+            ],
             closed: true,
         };
         let solid3d = Solid3DEntity {
@@ -290,7 +297,14 @@ mod tests {
             Entity::Hatch(HatchEntity {
                 common: c.clone(),
                 boundary_paths: vec![
-                    HatchBoundaryPath::Polyline(vec![p2(0.0, 0.0), p2(1.0, 0.0), p2(0.0, 1.0)]),
+                    HatchBoundaryPath::Polyline(vec![
+                        PolylineVertex::straight(p2(0.0, 0.0)),
+                        PolylineVertex {
+                            point: p2(1.0, 0.0),
+                            bulge: 1.0,
+                        },
+                        PolylineVertex::straight(p2(0.0, 1.0)),
+                    ]),
                     HatchBoundaryPath::Edges(vec![
                         HatchEdge::Line {
                             start: p2(0.0, 0.0),
