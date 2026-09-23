@@ -501,6 +501,10 @@ pub struct AttribEntity {
     /// block looks a value up by; the value alone says nothing about which
     /// field it fills.
     pub tag: String,
+    /// DXF 70. A document written before this field existed reads as no
+    /// flag set.
+    #[serde(default)]
+    pub flags: AttributeFlags,
     pub text: String,
     /// Radians (DXF 50).
     pub rotation: f64,
@@ -547,6 +551,23 @@ pub struct AttribEntity {
     /// -- see [`CircleEntity::extrusion`].
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
+}
+
+/// The flags of an ATTRIB or ATTDEF (DXF 70), one per bit, named as the
+/// reference names them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct AttributeFlags {
+    /// Bit 1: the attribute is invisible -- the drawing holds its value but
+    /// does not show it. Not the same flag as the one any entity can carry
+    /// ([`EntityCommon::invisible`], DXF 60).
+    pub invisible: bool,
+    /// Bit 2: the attribute is constant -- its value is the definition's,
+    /// the same in every block reference, and no ATTRIB carries it.
+    pub constant: bool,
+    /// Bit 4: the value is verified when it is entered.
+    pub verify: bool,
+    /// Bit 8: the value is preset -- entered without a prompt.
+    pub preset: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -653,6 +674,11 @@ pub struct AttdefEntity {
     pub text_height: f64,
     /// The tag (DXF 2) every ATTRIB made from this definition carries.
     pub tag: String,
+    /// DXF 70: the flags every ATTRIB made from this definition starts
+    /// with. A document written before this field existed reads as no flag
+    /// set.
+    #[serde(default)]
+    pub flags: AttributeFlags,
     pub default_value: String,
     /// Radians (DXF 50). Kept for parity with ATTRIB; a template is not
     /// normally drawn.

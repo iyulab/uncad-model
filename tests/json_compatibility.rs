@@ -12,7 +12,9 @@
 //! its curve, a leader's annotation became a three-state reference), so a
 //! 0.1.0 document carrying either is not expected to load.
 
-use uncad_model::model::{Entity, HorizontalJustification, Point3D, Ref, VerticalJustification};
+use uncad_model::model::{
+    AttributeFlags, Entity, HorizontalJustification, Point3D, Ref, VerticalJustification,
+};
 use uncad_model::CadDatabase;
 
 const Z_AXIS: Point3D = Point3D {
@@ -116,6 +118,23 @@ fn text_without_placement_groups_is_left_baseline_upright_and_unstyled() {
             ),
             _ => {}
         }
+    }
+    assert_eq!(seen, 3);
+}
+
+#[test]
+fn an_attribute_without_flags_is_visible_and_variable() {
+    let db = load();
+    let mut seen = 0;
+    for e in &db.entities {
+        let flags = match e {
+            Entity::Attrib(a) => a.flags,
+            Entity::Attdef(a) => a.flags,
+            Entity::Insert(i) => i.attribs[0].flags,
+            _ => continue,
+        };
+        assert_eq!(flags, AttributeFlags::default());
+        seen += 1;
     }
     assert_eq!(seen, 3);
 }

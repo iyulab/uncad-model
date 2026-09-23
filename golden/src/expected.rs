@@ -15,10 +15,10 @@ use crate::spec::{EntitySpec, Spec, Xy};
 use crate::writer::{midpoint, Written};
 use std::collections::BTreeMap;
 use uncad_model::model::{
-    ArcEntity, AttdefEntity, AttribEntity, CircleEntity, Confidence, DimensionEntity,
-    DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId, HorizontalJustification,
-    InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D, Ref, TextEntity,
-    TextOverride, VerticalJustification,
+    ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
+    DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
+    HorizontalJustification, InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D,
+    Ref, TextEntity, TextOverride, VerticalJustification,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -313,6 +313,7 @@ fn convert(
             start_point: p2(*insert),
             text_height: *height,
             tag: tag.clone(),
+            flags: AttributeFlags::default(),
             default_value: default.clone(),
             rotation: 0.0,
             horizontal_justification: HorizontalJustification::Left,
@@ -358,6 +359,7 @@ fn convert(
                     start_point: p2(a.insert),
                     text_height: a.height,
                     tag: a.tag.clone(),
+                    flags: AttributeFlags::default(),
                     text: a.value.clone(),
                     rotation: 0.0,
                     horizontal_justification: HorizontalJustification::Left,
