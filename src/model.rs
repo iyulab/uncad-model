@@ -332,6 +332,15 @@ pub struct SolidEntity {
     pub corner2: Point2D,
     pub corner3: Point2D,
     pub corner4: Point2D,
+    /// The corners are points of the entity's own coordinate system, whose Z
+    /// axis is `extrusion`; this is their z there (DXF 30 -- the four corners
+    /// share it). An absent group is `0`.
+    #[serde(default)]
+    pub elevation: f64,
+    /// The normal of the entity's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1).
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 /// Shared by RAY and XLINE: both are a base point and a direction, and

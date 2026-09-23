@@ -214,6 +214,8 @@ mod tests {
                 corner2: p2(1.0, 0.0),
                 corner3: p2(1.0, 1.0),
                 corner4: p2(0.0, 1.0),
+                elevation: 3.0,
+                extrusion: p3(0.0, 0.0, -1.0),
             }),
             Entity::Trace(SolidEntity {
                 common: c.clone(),
@@ -221,6 +223,8 @@ mod tests {
                 corner2: p2(1.0, 0.0),
                 corner3: p2(0.0, 0.2),
                 corner4: p2(1.0, 0.2),
+                elevation: 0.0,
+                extrusion: p3(0.0, 0.0, 1.0),
             }),
             Entity::Ray(ray.clone()),
             Entity::XLine(ray),
