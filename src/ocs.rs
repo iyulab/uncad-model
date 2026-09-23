@@ -188,4 +188,12 @@ mod tests {
         assert!(Ocs::of(p3(0.0, 0.0, 0.0)).is_none());
         assert!(Ocs::of(p3(f64::NAN, 0.0, 1.0)).is_none());
     }
+
+    #[test]
+    fn a_normal_of_any_length_or_with_rounding_noise_is_still_its_plane() {
+        assert!(Ocs::of(p3(0.0, 0.0, 3.0)).unwrap().is_world());
+        assert!(Ocs::of(p3(1e-17, -2e-17, 1.0)).unwrap().is_world());
+        let mirror = Ocs::of(p3(1e-17, 0.0, -1.0)).unwrap();
+        assert!(mirror.is_flat() && !mirror.is_world());
+    }
 }

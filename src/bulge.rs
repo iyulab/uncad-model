@@ -198,4 +198,13 @@ mod tests {
         assert_eq!((last.from, last.to), (p(2.0, 2.0), p(0.0, 0.0)));
         assert!(last.arc.is_some());
     }
+
+    #[test]
+    fn a_quarter_bulge_turns_a_quarter_circle() {
+        // tan(22.5 degrees), clockwise: (40, 50) -> (50, 60) about (50, 50).
+        let arc = BulgeArc::between(p(40.0, 50.0), p(50.0, 60.0), -0.41421356237309503).unwrap();
+        assert!(close(arc.center, p(50.0, 50.0)), "{arc:?}");
+        assert!((arc.radius - 10.0).abs() < 1e-9);
+        assert!((arc.sweep + std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+    }
 }
