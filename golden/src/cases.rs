@@ -33,6 +33,7 @@ pub fn g1_general_part() -> Spec {
             Xy::new(0.0, 100.0).into(),
         ],
         closed: true,
+        mirrored: false,
     }];
     for c in hole_centers {
         entities.push(EntitySpec::Circle {
@@ -138,6 +139,7 @@ pub fn g1_general_part() -> Spec {
                         Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
+                    mirrored: false,
                 },
                 EntitySpec::Attdef {
                     layer: "0".to_string(),
@@ -426,6 +428,7 @@ pub fn g7_loose_text_title_block() -> Spec {
                 Vertex::bulged(Xy::new(100.0, -40.0), -0.5),
             ],
             closed: true,
+            mirrored: false,
         },
         text(102.0, -45.0, "DWG NO"),
         text(130.0, -45.0, "BP-1042"),
@@ -449,6 +452,20 @@ pub fn g7_loose_text_title_block() -> Spec {
             radius: 4.0,
             start_deg: 30.0,
             end_deg: 150.0,
+            mirrored: true,
+        },
+        // A mirrored triangle with one arc segment: drawn with its vertices
+        // at (150, -58), (140, -58) and (145, -53), the arc from the second
+        // turning the other way in the world than its bulge says in its own
+        // system.
+        EntitySpec::LwPolyline {
+            layer: title.clone(),
+            vertices: vec![
+                Xy::new(-150.0, -58.0).into(),
+                Vertex::bulged(Xy::new(-140.0, -58.0), 0.5),
+                Xy::new(-145.0, -53.0).into(),
+            ],
+            closed: true,
             mirrored: true,
         },
     ];
@@ -515,6 +532,7 @@ pub fn g8_korean_title_block() -> Spec {
                         Xy::new(0.0, 20.0).into(),
                     ],
                     closed: true,
+                    mirrored: false,
                 },
                 attdef(15.0, "DWGNO", ""),
                 attdef(8.0, "MATERIAL", "SS400"),
@@ -531,6 +549,7 @@ pub fn g8_korean_title_block() -> Spec {
                     Xy::new(0.0, 100.0).into(),
                 ],
                 closed: true,
+                mirrored: false,
             },
             EntitySpec::Insert {
                 layer: title_layer.clone(),

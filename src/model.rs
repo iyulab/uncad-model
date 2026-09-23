@@ -252,10 +252,22 @@ pub struct TextEntity {
 pub struct LwPolylineEntity {
     pub common: EntityCommon,
     /// The vertices in order, each with the bulge of the segment that leaves
-    /// it (see [`PolylineVertex`]).
+    /// it (see [`PolylineVertex`]). Points of the polyline's own coordinate
+    /// system, whose Z axis is `extrusion`; with the default extrusion that
+    /// system is the world's.
     pub vertices: Vec<PolylineVertex>,
     /// Whether the last vertex connects back to the first (DXF 70, bit 1).
     pub closed: bool,
+    /// The z of every vertex in the polyline's own coordinate system (DXF 38
+    /// for an LWPOLYLINE, the POLYLINE record's 30 for a 2D POLYLINE). An
+    /// absent group is `0`.
+    #[serde(default)]
+    pub elevation: f64,
+    /// The normal of the polyline's plane (DXF 210). An absent group is the
+    /// default (0, 0, 1). A mirror copy writes (0, 0, -1): its vertices'
+    /// world x is reversed, and so is the turn of every bulge.
+    #[serde(default = "z_axis")]
+    pub extrusion: Point3D,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

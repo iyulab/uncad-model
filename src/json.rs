@@ -159,6 +159,8 @@ mod tests {
                 PolylineVertex::straight(p2(1.0, 1.0)),
             ],
             closed: true,
+            elevation: 2.0,
+            extrusion: p3(0.0, 0.0, -1.0),
         };
         let solid3d = Solid3DEntity {
             common: c.clone(),

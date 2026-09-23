@@ -139,8 +139,10 @@ pub enum EntitySpec {
     },
     LwPolyline {
         layer: String,
+        /// In the polyline's own coordinate system, as for `Circle`.
         vertices: Vec<Vertex>,
         closed: bool,
+        mirrored: bool,
     },
     Text {
         layer: String,
@@ -262,13 +264,15 @@ impl EntitySpec {
                 layer,
                 vertices,
                 closed,
+                mirrored,
             } => EntitySpec::LwPolyline {
                 layer: layer.clone(),
                 vertices: vertices
                     .iter()
-                    .map(|v| Vertex::bulged(m(&v.at), v.bulge))
+                    .map(|v| Vertex::bulged(moved_ocs(&v.at, *mirrored, dx, dy), v.bulge))
                     .collect(),
                 closed: *closed,
+                mirrored: *mirrored,
             },
             EntitySpec::Text {
                 layer,

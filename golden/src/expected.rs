@@ -261,6 +261,7 @@ fn convert(
             layer,
             vertices,
             closed,
+            mirrored,
         } => Entity::LwPolyline(LwPolylineEntity {
             common: common(handle, layer),
             vertices: vertices
@@ -271,6 +272,8 @@ fn convert(
                 })
                 .collect(),
             closed: *closed,
+            elevation: 0.0,
+            extrusion: extrusion(*mirrored),
         }),
         EntitySpec::Text {
             layer,

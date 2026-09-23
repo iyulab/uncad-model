@@ -426,6 +426,7 @@ impl Writer {
                 layer,
                 vertices,
                 closed,
+                mirrored,
             } => {
                 self.pair(0, "LWPOLYLINE");
                 self.common(&hex, layer, owner);
@@ -441,6 +442,7 @@ impl Writer {
                         self.num(42, v.bulge);
                     }
                 }
+                self.extrusion(*mirrored);
             }
             EntitySpec::Text {
                 layer,
