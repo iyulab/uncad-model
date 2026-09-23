@@ -1,7 +1,9 @@
 //! Each named case has the shape its description promises, stated once so
 //! consumers can rely on it.
 
-use uncad_model::model::{Entity, Point2D, Point3D, Ref, SegmentWidth};
+use uncad_model::model::{
+    Entity, HorizontalJustification, Point2D, Point3D, Ref, SegmentWidth, VerticalJustification,
+};
 use uncad_model::Affine2;
 use uncad_model_golden::cases;
 use uncad_model_golden::{expected, write, EntitySpec};
@@ -332,4 +334,46 @@ fn g12_carries_bulges_and_widths_and_folds_their_spellings() {
     assert_eq!(last.matches(" 40\n1.0\n").count(), 2);
     assert!(spelled.bulges.is_empty() && spelled.widths.is_empty());
     assert_eq!(spelled.const_width, 1.0);
+}
+
+/// G13's texts are placed by their alignment point wherever they are
+/// justified, name their styles three ways, and its title block keeps an
+/// invisible attribute's value while saying it is not shown.
+#[test]
+fn g13_places_justified_text_by_its_alignment_point_and_resolves_styles() {
+    let spec = cases::g13_justified_text();
+    let written = write(&spec);
+    let model = expected::model(&spec, &written);
+    let texts: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Text(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), 7);
+    for t in &texts {
+        let justified = t.horizontal_justification != HorizontalJustification::Left
+            || t.vertical_justification != VerticalJustification::Baseline;
+        assert_eq!(t.alignment_point.is_some(), justified, "{}", t.text);
+    }
+
+    // No group 7: the reference's STANDARD, which this file declares.
+    assert_eq!(texts[0].style_name, Ref::Resolved("STANDARD".to_string()));
+    assert_eq!(texts[1].style_name, Ref::Resolved("ROMANS".to_string()));
+    // A style the file never declares keeps the name it was given.
+    assert_eq!(texts[6].style_name, Ref::Unresolved("GOST".to_string()));
+    assert_eq!(texts[3].width_factor, 0.8);
+    assert!((texts[4].oblique_angle - 15f64.to_radians()).abs() < 1e-12);
+
+    let attribs: Vec<_> = model
+        .entities
+        .iter()
+        .filter_map(|e| match e {
+            Entity::Attrib(a) => Some((a.text.as_str(), a.flags.invisible)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(attribs, [("D-101", false), ("FIRE RATED", true)]);
 }

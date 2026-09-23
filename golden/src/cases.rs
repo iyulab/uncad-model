@@ -4,6 +4,7 @@
 use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, Spec, Xy,
 };
+use uncad_model::model::{HorizontalJustification, VerticalJustification};
 
 /// G1, a general machined part: a closed outline, four holes, three linear
 /// dimensions and one diameter dimension, and a title block inserted with
@@ -861,6 +862,163 @@ pub fn g12_curved_and_wide_polylines() -> Spec {
     }
 }
 
+/// G13, text placed every way the format places it: each horizontal and
+/// vertical justification the reference defines (the alignment point is
+/// then what places the text), a width factor, an oblique angle, a named
+/// text style, a style the file never declares, and a text that names no
+/// style -- which the reference reads as `STANDARD`, declared here -- and a
+/// title block with an invisible attribute next to a visible one.
+pub fn g13_justified_text() -> Spec {
+    let layer = "TEXT".to_string();
+    let justified = |insert: Xy,
+                     alignment: Xy,
+                     horizontal: HorizontalJustification,
+                     vertical: VerticalJustification,
+                     text: &str,
+                     width_factor: f64,
+                     oblique_deg: f64,
+                     style: Option<&str>| EntitySpec::JustifiedText {
+        layer: layer.clone(),
+        insert,
+        alignment,
+        horizontal,
+        vertical,
+        height: 2.5,
+        text: text.to_string(),
+        rotation_deg: 0.0,
+        width_factor,
+        oblique_deg,
+        style: style.map(str::to_string),
+    };
+    use HorizontalJustification as H;
+    use VerticalJustification as V;
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: layer.clone(),
+            color_index: 2,
+            state: LayerState::default(),
+        }],
+        blocks: vec![BlockSpec {
+            name: "TAG".to_string(),
+            entities: vec![
+                EntitySpec::Attdef {
+                    layer: "0".to_string(),
+                    insert: Xy::new(0.0, 0.0),
+                    height: 2.5,
+                    tag: "NUMBER".to_string(),
+                    prompt: "Number".to_string(),
+                    default: "-".to_string(),
+                },
+                EntitySpec::Attdef {
+                    layer: "0".to_string(),
+                    insert: Xy::new(0.0, -4.0),
+                    height: 2.5,
+                    tag: "NOTE".to_string(),
+                    prompt: "Note".to_string(),
+                    default: "-".to_string(),
+                },
+            ],
+        }],
+        dim_styles: Vec::new(),
+        text_styles: vec!["STANDARD".to_string(), "ROMANS".to_string()],
+        entities: vec![
+            EntitySpec::Text {
+                layer: layer.clone(),
+                insert: Xy::new(0.0, 0.0),
+                height: 2.5,
+                text: "LEFT".to_string(),
+                rotation_deg: 0.0,
+            },
+            justified(
+                Xy::new(43.0, 0.0),
+                Xy::new(50.0, 0.0),
+                H::Center,
+                V::Baseline,
+                "CENTER",
+                1.0,
+                0.0,
+                Some("ROMANS"),
+            ),
+            justified(
+                Xy::new(88.0, -2.5),
+                Xy::new(100.0, 0.0),
+                H::Right,
+                V::Top,
+                "RIGHT TOP",
+                1.0,
+                0.0,
+                None,
+            ),
+            justified(
+                Xy::new(44.0, 18.75),
+                Xy::new(50.0, 20.0),
+                H::Middle,
+                V::Baseline,
+                "MIDDLE",
+                0.8,
+                0.0,
+                Some("ROMANS"),
+            ),
+            justified(
+                Xy::new(0.0, 40.0),
+                Xy::new(60.0, 40.0),
+                H::Aligned,
+                V::Baseline,
+                "ALIGNED",
+                1.0,
+                15.0,
+                None,
+            ),
+            justified(
+                Xy::new(0.0, 60.0),
+                Xy::new(60.0, 60.0),
+                H::Fit,
+                V::Baseline,
+                "FIT",
+                2.5,
+                0.0,
+                None,
+            ),
+            justified(
+                Xy::new(0.0, 79.0),
+                Xy::new(0.0, 80.0),
+                H::Left,
+                V::Bottom,
+                "LEFT BOTTOM",
+                1.0,
+                0.0,
+                Some("GOST"),
+            ),
+            EntitySpec::Insert {
+                layer: layer.clone(),
+                block: "TAG".to_string(),
+                insert: Xy::new(120.0, 0.0),
+                scale: 1.0,
+                rotation_deg: 0.0,
+                attribs: vec![
+                    AttribSpec {
+                        tag: "NUMBER".to_string(),
+                        value: "D-101".to_string(),
+                        insert: Xy::new(120.0, 0.0),
+                        height: 2.5,
+                        invisible: false,
+                    },
+                    AttribSpec {
+                        tag: "NOTE".to_string(),
+                        value: "FIRE RATED".to_string(),
+                        insert: Xy::new(120.0, -4.0),
+                        height: 2.5,
+                        invisible: true,
+                    },
+                ],
+            },
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -874,6 +1032,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g10" => g10_unreferenced_insert(),
         "g11" => g11_mirrored_part(),
         "g12" => g12_curved_and_wide_polylines(),
+        "g13" => g13_justified_text(),
         _ => return None,
     })
 }
@@ -883,6 +1042,6 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 10] = [
-    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12",
+pub const NAMES: [&str; 11] = [
+    "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13",
 ];
