@@ -44,6 +44,18 @@ They are orthogonal: one entity can be recognized from a raster, of a type the m
 
 An unresolved reference is never written as an empty string, in the model or in its serialization. An empty name and a name that could not be read must stay distinguishable.
 
+### 3.2 When a file leaves a value out
+
+Writers omit groups. The DXF reference says optional groups "appear only if their values differ from the defaults", and in practice writers also omit some groups the reference does not mark optional, when their value is zero. What an omission means depends on what the group states, not on how the reference labels it:
+
+| The group states | Omitted means | How the model carries it |
+|---|---|---|
+| A **departure** from a default state — a rotation away from the default direction, a ratio to the default spacing | No departure. The group's own definition fixes the value (0, or 1 for a ratio) | The plain value (`f64`). This is not a default standing in for an unknown: the file has said "no departure" in the only way its format has |
+| A **fact** — whether there is an arrowhead, whether a path is curved, what kind of light it is | Nothing. The definition does not say what absence means | `Option`, and `None` when omitted. Filling in `false` or a first variant would be a claim the file never made |
+| A **size** the format requires — a radius, a text height, a width | The file is malformed | The value the reader fell back on, **and** a diagnostic saying the group was missing. The type does not change |
+
+Invariant 4 is what draws the line: a departure group's absence is established by the format, so there is nothing unknown to carry; a fact group's absence is not, so the model says so. `Option` is used where it carries information and nowhere else -- wrapping every field a writer might omit would make "unknown" the usual answer, and a consumer would learn to replace it with zero.
+
 ## 4. Pure data, no weight
 
 Types and serialization. No parsing, no rendering, no native code, no network. A crate that only needs to *talk about* drawings should pay for nothing else.
