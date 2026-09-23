@@ -861,7 +861,8 @@ pub struct LeaderEntity {
 /// A few variants share a payload type where the entity types are
 /// structurally identical ([`Entity::XLine`] reuses [`RayEntity`],
 /// [`Entity::Trace`] reuses [`SolidEntity`],
-/// [`Entity::Region`]/[`Entity::PolylinePFace`] reuse [`Solid3DEntity`],
+/// [`Entity::Region`]/[`Entity::PolylinePFace`]/[`Entity::PolylineMesh`]
+/// reuse [`Solid3DEntity`],
 /// [`Entity::Polyline2D`] reuses [`LwPolylineEntity`]). They stay distinct
 /// variants so [`type_name`](Self::type_name) still reports the real DXF
 /// name.
@@ -936,6 +937,17 @@ pub enum Entity {
     /// polyface mesh is just as inherently 3D as a solid's wireframe.
     #[serde(rename = "POLYLINE_PFACE")]
     PolylinePFace(Solid3DEntity),
+    /// POLYLINE_MESH ("polygon mesh"): an M by N grid of vertices (DXF 71
+    /// and 72), carried like [`Entity::PolylinePFace`] as the wireframe of
+    /// its grid lines. The file stores the vertices row by row, so vertex
+    /// `i * N + j` is row `i`, column `j`; the edges come in a fixed order
+    /// so that two readers of one mesh agree edge for edge: first
+    /// `(i, j)-(i + 1, j)` for each row `i` in turn and each column `j`
+    /// within it, then `(i, j)-(i, j + 1)` in the same order. Closed in M
+    /// (DXF 70, bit 1), `i + 1` wraps from the last row to the first; closed
+    /// in N (bit 32), `j + 1` wraps from the last column to the first.
+    #[serde(rename = "POLYLINE_MESH")]
+    PolylineMesh(Solid3DEntity),
     #[serde(rename = "POLYLINE_2D")]
     Polyline2D(LwPolylineEntity),
     #[serde(rename = "TOLERANCE")]
@@ -987,6 +999,7 @@ impl Entity {
             Entity::MLine(e) => &e.common,
             Entity::Region(e) => &e.common,
             Entity::PolylinePFace(e) => &e.common,
+            Entity::PolylineMesh(e) => &e.common,
             Entity::Polyline2D(e) => &e.common,
             Entity::Tolerance(e) => &e.common,
             Entity::AcadTable(e) => &e.common,
@@ -1025,6 +1038,7 @@ impl Entity {
             Entity::MLine(e) => &mut e.common,
             Entity::Region(e) => &mut e.common,
             Entity::PolylinePFace(e) => &mut e.common,
+            Entity::PolylineMesh(e) => &mut e.common,
             Entity::Polyline2D(e) => &mut e.common,
             Entity::Tolerance(e) => &mut e.common,
             Entity::AcadTable(e) => &mut e.common,
@@ -1064,6 +1078,7 @@ impl Entity {
             Entity::MLine(_) => "MLINE",
             Entity::Region(_) => "REGION",
             Entity::PolylinePFace(_) => "POLYLINE_PFACE",
+            Entity::PolylineMesh(_) => "POLYLINE_MESH",
             Entity::Polyline2D(_) => "POLYLINE_2D",
             Entity::Tolerance(_) => "TOLERANCE",
             Entity::AcadTable(_) => "ACAD_TABLE",
