@@ -1359,6 +1359,23 @@ pub fn g14_sheet_with_viewports() -> Spec {
     }
 }
 
+/// G19, [`g14_sheet_with_viewports`] as a DXF writes a layout that is not
+/// the current one: from R2000 on, group 69 of every one of its viewports is
+/// 0 rather than the viewport's number. The model carries the 0 as written;
+/// a consumer that takes it for a number finds no overall viewport, and the
+/// sheet itself -- whose view covers the lines of the model -- becomes a
+/// window drawing the model over the whole paper. What tells the overall
+/// viewport then is its view: its own frame, untwisted.
+pub fn g19_sheet_of_a_layout_not_current() -> Spec {
+    let mut spec = g14_sheet_with_viewports();
+    for entity in &mut spec.paper_space {
+        if let EntitySpec::Viewport { id, .. } = entity {
+            *id = 0;
+        }
+    }
+    spec
+}
+
 /// G15, a polygon mesh: three rows of four vertices, closed in N (each row
 /// wraps back to its first vertex, as a tube does) and open in M, its
 /// heights varying like a patch of terrain. The model carries it as its
@@ -1703,6 +1720,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g16" => g16_ordinate_dimensions(),
         "g17" => g17_hatch_edge_paths(),
         "g18" => g18_line_styles(),
+        "g19" => g19_sheet_of_a_layout_not_current(),
         _ => return None,
     })
 }
@@ -1712,7 +1730,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 16] = [
+pub const NAMES: [&str; 17] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18",
+    "g17", "g18", "g19",
 ];
