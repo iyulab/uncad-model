@@ -11,10 +11,12 @@
 //! text is not UTF-8 on disk.
 
 use crate::spec::{
-    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
-    Spec, Xy,
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, HatchEdgeSpec, HatchPathSpec,
+    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, Spec, Xy,
 };
-use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
+use uncad_model::model::{
+    HatchStyle, HorizontalJustification, OrdinateAxis, VerticalJustification,
+};
 use uncad_model::tables::{
     AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
@@ -640,6 +642,32 @@ impl Writer {
                 }
                 self.extrusion(*mirrored);
             }
+            EntitySpec::Hatch {
+                layer,
+                paths,
+                style,
+            } => {
+                self.pair(0, "HATCH");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbHatch");
+                // The elevation point: its z is the hatch's elevation.
+                self.xyz(10, Xy::new(0.0, 0.0), 0.0);
+                self.pair(2, "SOLID");
+                self.pair(70, 1);
+                let associative = paths.iter().any(|p| !p.sources.is_empty());
+                self.pair(71, u8::from(associative));
+                self.pair(91, paths.len());
+                for path in paths {
+                    self.hatch_path(path);
+                }
+                self.pair(75, hatch_style_code(*style));
+                // 1 = a predefined pattern (SOLID is one).
+                self.pair(76, 1);
+                // One seed point, as an application writes it: a point the
+                // model does not carry, which a reader has to step over.
+                self.pair(98, 1);
+                self.pt2(10, Xy::new(0.0, 0.0));
+            }
             EntitySpec::Attdef {
                 layer,
                 insert,
@@ -925,6 +953,119 @@ impl Writer {
 
     /// The SEQEND that closes an INSERT's attributes or a POLYLINE's
     /// vertices; the entity it closes owns it.
+    /// One HATCH boundary path, in the order the DXF reference lists its
+    /// groups. Its points are 2D (the group and the one ten above only).
+    fn hatch_path(&mut self, path: &HatchPathSpec) {
+        let external = u8::from(path.external);
+        match &path.shape {
+            HatchShapeSpec::Polyline(vertices) => {
+                // 2 = a polyline path.
+                self.pair(92, 2 | external);
+                let bulged = vertices.iter().any(|v| v.bulge != 0.0);
+                self.pair(72, u8::from(bulged));
+                self.pair(73, 1);
+                self.pair(93, vertices.len());
+                for v in vertices {
+                    self.pt2(10, v.at);
+                    if bulged {
+                        self.num(42, v.bulge);
+                    }
+                }
+            }
+            HatchShapeSpec::Edges(edges) => {
+                self.pair(92, external);
+                self.pair(93, edges.len());
+                for edge in edges {
+                    self.hatch_edge(edge);
+                }
+            }
+        }
+        self.pair(97, path.sources.len());
+        for &i in &path.sources {
+            let h = *self
+                .handles
+                .entities
+                .get(i)
+                .expect("a hatch's source is a top-level entity written before it");
+            self.pair(330, format!("{h:X}"));
+        }
+    }
+
+    fn hatch_edge(&mut self, edge: &HatchEdgeSpec) {
+        match edge {
+            HatchEdgeSpec::Line { start, end } => {
+                self.pair(72, 1);
+                self.pt2(10, *start);
+                self.pt2(11, *end);
+            }
+            HatchEdgeSpec::Arc {
+                center,
+                radius,
+                start_deg,
+                end_deg,
+                ccw,
+            } => {
+                self.pair(72, 2);
+                self.pt2(10, *center);
+                self.num(40, *radius);
+                self.num(50, *start_deg);
+                self.num(51, *end_deg);
+                self.pair(73, u8::from(*ccw));
+            }
+            HatchEdgeSpec::Ellipse {
+                center,
+                major_end,
+                ratio,
+                start_deg,
+                end_deg,
+                ccw,
+            } => {
+                self.pair(72, 3);
+                self.pt2(10, *center);
+                self.pt2(11, *major_end);
+                self.num(40, *ratio);
+                self.num(50, *start_deg);
+                self.num(51, *end_deg);
+                self.pair(73, u8::from(*ccw));
+            }
+            HatchEdgeSpec::Spline {
+                degree,
+                rational,
+                periodic,
+                knots,
+                control_points,
+                weights,
+            } => {
+                assert_eq!(
+                    weights.len(),
+                    if *rational { control_points.len() } else { 0 },
+                    "a rational spline edge has a weight per control point, any other none"
+                );
+                self.pair(72, 4);
+                self.pair(94, degree);
+                self.pair(73, u8::from(*rational));
+                self.pair(74, u8::from(*periodic));
+                self.pair(95, knots.len());
+                self.pair(96, control_points.len());
+                for k in knots {
+                    self.num(40, *k);
+                }
+                for p in control_points {
+                    self.pt2(10, *p);
+                }
+                for w in weights {
+                    self.num(42, *w);
+                }
+            }
+        }
+    }
+
+    /// A 2D point: the group and the one ten above, no z.
+    fn pt2(&mut self, base: u16, p: Xy) {
+        self.num(base, p.x);
+        self.num(base + 10, p.y);
+    }
+
     fn seqend(&mut self, layer: &str, owner: u32) {
         self.pair(0, "SEQEND");
         let h = self.handle();
@@ -1072,6 +1213,14 @@ pub(crate) fn vertical_code(v: VerticalJustification) -> u8 {
 }
 
 /// DXF 277 (`DIMLUNIT`).
+fn hatch_style_code(s: HatchStyle) -> u8 {
+    match s {
+        HatchStyle::Normal => 0,
+        HatchStyle::Outer => 1,
+        HatchStyle::Ignore => 2,
+    }
+}
+
 fn linear_unit_code(f: LinearUnitFormat) -> u8 {
     match f {
         LinearUnitFormat::Scientific => 1,

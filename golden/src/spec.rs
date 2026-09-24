@@ -6,7 +6,7 @@
 //! say more than the model would be an oracle nothing can be checked
 //! against.
 
-use uncad_model::model::OrdinateAxis;
+use uncad_model::model::{HatchStyle, OrdinateAxis};
 use uncad_model::tables::{
     AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
@@ -296,6 +296,14 @@ pub enum EntitySpec {
         text: String,
         measurement: Option<f64>,
         style: Option<String>,
+    },
+    /// A solid-fill HATCH in the world's plane (default extrusion, elevation
+    /// 0): its boundary paths and which areas among them are filled.
+    Hatch {
+        layer: String,
+        paths: Vec<HatchPathSpec>,
+        /// DXF 75.
+        style: HatchStyle,
     },
     /// A paper-space viewport; only meaningful in [`Spec::paper_space`].
     Viewport {
@@ -593,6 +601,64 @@ pub struct DimStyleSpec {
     pub fraction_format: Option<FractionFormat>,
 }
 
+/// One HATCH boundary path, and the entities it was picked from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HatchPathSpec {
+    pub shape: HatchShapeSpec,
+    /// DXF 92, bit 1: the path is on the outside.
+    pub external: bool,
+    /// The top-level entities (by index into [`Spec::entities`], each before
+    /// the hatch) the path was picked from: DXF 97 and one 330 each, and the
+    /// hatch is associative (71 = 1) when any path names one. The model does
+    /// not carry them -- they are references, not geometry -- so a reader
+    /// only has to step over them.
+    pub sources: Vec<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum HatchShapeSpec {
+    /// A closed polyline path (92 bit 2): its vertices and their bulges (42,
+    /// written for every vertex when any bulge is not 0). Widths are ignored.
+    Polyline(Vec<Vertex>),
+    Edges(Vec<HatchEdgeSpec>),
+}
+
+/// One edge of an edge path, as DXF states it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HatchEdgeSpec {
+    /// 72 = 1: DXF 10 and 11.
+    Line { start: Xy, end: Xy },
+    /// 72 = 2: DXF 10, 40, 50 and 51 (degrees) and 73.
+    Arc {
+        center: Xy,
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+        ccw: bool,
+    },
+    /// 72 = 3: DXF 10, 11 (major axis endpoint relative to the center), 40,
+    /// 50 and 51 (degrees) and 73.
+    Ellipse {
+        center: Xy,
+        major_end: Xy,
+        ratio: f64,
+        start_deg: f64,
+        end_deg: f64,
+        ccw: bool,
+    },
+    /// 72 = 4: DXF 94, 73, 74, 95/96, the knots (40), the control points
+    /// (10) and, for a rational one, a weight (42) per control point. Fit
+    /// data is R2010 and later; this R2000 writer has none to write.
+    Spline {
+        degree: u32,
+        rational: bool,
+        periodic: bool,
+        knots: Vec<f64>,
+        control_points: Vec<Xy>,
+        weights: Vec<f64>,
+    },
+}
+
 /// A TEXT's alignment: its two DXF codes (72 horizontal 0 to 5, 73
 /// vertical 0 to 3) and the alignment point (11).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -633,6 +699,7 @@ impl EntitySpec {
             | EntitySpec::ArcDimension { layer, .. }
             | EntitySpec::DiameterDimension { layer, .. }
             | EntitySpec::OrdinateDimension { layer, .. }
+            | EntitySpec::Hatch { layer, .. }
             | EntitySpec::Viewport { layer, .. } => layer,
         }
     }

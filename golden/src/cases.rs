@@ -2,11 +2,13 @@
 //! consumer can pick the ones its role is measured by.
 
 use crate::spec::{
-    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
-    Spec, TextAlign, Vertex, Xy,
+    AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, HatchEdgeSpec, HatchPathSpec,
+    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, Spec, TextAlign, Vertex, Xy,
 };
 use crate::writer::{horizontal_code, vertical_code};
-use uncad_model::model::{HorizontalJustification, OrdinateAxis, VerticalJustification};
+use uncad_model::model::{
+    HatchStyle, HorizontalJustification, OrdinateAxis, VerticalJustification,
+};
 use uncad_model::tables::{
     AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
@@ -1499,6 +1501,138 @@ pub fn g16_ordinate_dimensions() -> Spec {
     }
 }
 
+/// G17: solid-fill HATCHes whose boundaries are edge paths -- every edge
+/// kind, a rational and a non-rational spline among them -- and a polyline
+/// island with a bulge. The corpus has no spline edge at all, so this case
+/// is what tells a reader's spline fields apart from zeros.
+///
+/// Both hatches are associative: an edge path ending in a spline edge names
+/// the polyline it was picked from (97 = 1, then a 330). In an R2000 file a
+/// spline edge carries no fit data, so that 97 belongs to the path -- a
+/// reader that takes it for the edge's fit-point count loses its place, and
+/// the second hatch has another path after it to lose.
+pub fn g17_hatch_edge_paths() -> Spec {
+    let hatch = "HATCH".to_string();
+    let xy = Xy::new;
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: vec![LayerSpec {
+            name: hatch.clone(),
+            color_index: 4,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            // The outline both hatches name as their source.
+            EntitySpec::LwPolyline {
+                layer: "0".to_string(),
+                vertices: vec![
+                    xy(0.0, 0.0).into(),
+                    Vertex::bulged(xy(40.0, 0.0), 1.0),
+                    xy(40.0, 20.0).into(),
+                    xy(0.0, 20.0).into(),
+                ],
+                closed: true,
+                const_width: 0.0,
+                elevation: 0.0,
+                mirrored: false,
+            },
+            EntitySpec::Hatch {
+                layer: hatch.clone(),
+                paths: vec![HatchPathSpec {
+                    shape: HatchShapeSpec::Edges(vec![
+                        HatchEdgeSpec::Line {
+                            start: xy(0.0, 0.0),
+                            end: xy(40.0, 0.0),
+                        },
+                        HatchEdgeSpec::Arc {
+                            center: xy(40.0, 10.0),
+                            radius: 10.0,
+                            start_deg: 270.0,
+                            end_deg: 90.0,
+                            ccw: true,
+                        },
+                        HatchEdgeSpec::Line {
+                            start: xy(40.0, 20.0),
+                            end: xy(0.0, 20.0),
+                        },
+                        HatchEdgeSpec::Spline {
+                            degree: 2,
+                            rational: true,
+                            periodic: false,
+                            knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                            control_points: vec![xy(0.0, 20.0), xy(-8.0, 10.0), xy(0.0, 0.0)],
+                            weights: vec![1.0, 0.5, 1.0],
+                        },
+                    ]),
+                    external: true,
+                    sources: vec![0],
+                }],
+                style: HatchStyle::Normal,
+            },
+            EntitySpec::Hatch {
+                layer: hatch,
+                paths: vec![
+                    HatchPathSpec {
+                        shape: HatchShapeSpec::Edges(vec![
+                            HatchEdgeSpec::Ellipse {
+                                center: xy(80.0, 20.0),
+                                major_end: xy(20.0, 0.0),
+                                ratio: 0.25,
+                                start_deg: 0.0,
+                                end_deg: 180.0,
+                                ccw: true,
+                            },
+                            HatchEdgeSpec::Arc {
+                                center: xy(60.0, 10.0),
+                                radius: 10.0,
+                                start_deg: 270.0,
+                                end_deg: 90.0,
+                                ccw: false,
+                            },
+                            HatchEdgeSpec::Line {
+                                start: xy(60.0, 0.0),
+                                end: xy(100.0, 0.0),
+                            },
+                            HatchEdgeSpec::Spline {
+                                degree: 3,
+                                rational: false,
+                                periodic: false,
+                                knots: vec![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0],
+                                control_points: vec![
+                                    xy(100.0, 0.0),
+                                    xy(110.0, 5.0),
+                                    xy(105.0, 12.0),
+                                    xy(112.0, 18.0),
+                                    xy(100.0, 20.0),
+                                ],
+                                weights: Vec::new(),
+                            },
+                        ]),
+                        external: true,
+                        sources: vec![0],
+                    },
+                    HatchPathSpec {
+                        shape: HatchShapeSpec::Polyline(vec![
+                            xy(75.0, 5.0).into(),
+                            Vertex::bulged(xy(85.0, 5.0), 0.5),
+                            xy(85.0, 15.0).into(),
+                            xy(75.0, 15.0).into(),
+                        ]),
+                        external: false,
+                        sources: Vec::new(),
+                    },
+                ],
+                style: HatchStyle::Outer,
+            },
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1516,6 +1650,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g14" => g14_sheet_with_viewports(),
         "g15" => g15_polygon_mesh(),
         "g16" => g16_ordinate_dimensions(),
+        "g17" => g17_hatch_edge_paths(),
         _ => return None,
     })
 }
@@ -1525,6 +1660,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 14] = [
+pub const NAMES: [&str; 15] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
+    "g17",
 ];

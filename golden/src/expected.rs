@@ -11,15 +11,18 @@
 //! from them, so the same entity gets the same ID whether the drawing is read
 //! as DWG or as DXF), the origin is `Vector`, the confidence `High`.
 
-use crate::spec::{AttribSpec, EntitySpec, LayerSpec, LayoutSpec, Spec, TextAlign, Xy};
+use crate::spec::{
+    AttribSpec, EntitySpec, HatchEdgeSpec, HatchShapeSpec, LayerSpec, LayoutSpec, Spec, TextAlign,
+    Xy,
+};
 use crate::writer::{midpoint, space_names, Written};
 use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
     DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
-    HorizontalJustification, InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D,
-    PolylineVertex, Ref, Solid3DEntity, SolidEntity, TextEntity, TextOverride,
-    VerticalJustification, ViewportEntity, ViewportView,
+    HatchBoundaryPath, HatchEdge, HatchEntity, HorizontalJustification, InsertEntity, LineEntity,
+    LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref, Solid3DEntity, SolidEntity,
+    TextEntity, TextOverride, VerticalJustification, ViewportEntity, ViewportView,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -408,6 +411,20 @@ fn convert(
             elevation: 0.0,
             extrusion: extrusion(*mirrored),
         }),
+        EntitySpec::Hatch {
+            layer,
+            paths,
+            style,
+        } => Entity::Hatch(HatchEntity {
+            common: common(handle, layer),
+            boundary_paths: paths.iter().map(|p| hatch_path(&p.shape)).collect(),
+            solid_fill: true,
+            gradient: None,
+            pattern_lines: Vec::new(),
+            elevation: 0.0,
+            extrusion: Z_AXIS,
+            style: Some(*style),
+        }),
         EntitySpec::Solid {
             layer,
             corners,
@@ -703,6 +720,81 @@ fn mesh_wireframe(
 }
 
 /// The extrusion a mirrored entity writes, or the default.
+/// A boundary path in the model's terms: angles in radians, as the
+/// reader converts the file's degrees; a polyline path's vertices with their
+/// bulges and no widths.
+fn hatch_path(shape: &HatchShapeSpec) -> HatchBoundaryPath {
+    match shape {
+        HatchShapeSpec::Polyline(vertices) => HatchBoundaryPath::Polyline(
+            vertices
+                .iter()
+                .map(|v| PolylineVertex {
+                    point: p2(v.at),
+                    bulge: v.bulge,
+                    ..PolylineVertex::default()
+                })
+                .collect(),
+        ),
+        HatchShapeSpec::Edges(edges) => HatchBoundaryPath::Edges(
+            edges
+                .iter()
+                .map(|e| match e {
+                    HatchEdgeSpec::Line { start, end } => HatchEdge::Line {
+                        start: p2(*start),
+                        end: p2(*end),
+                    },
+                    HatchEdgeSpec::Arc {
+                        center,
+                        radius,
+                        start_deg,
+                        end_deg,
+                        ccw,
+                    } => HatchEdge::Arc {
+                        center: p2(*center),
+                        radius: *radius,
+                        start_angle: start_deg.to_radians(),
+                        end_angle: end_deg.to_radians(),
+                        is_ccw: *ccw,
+                    },
+                    HatchEdgeSpec::Ellipse {
+                        center,
+                        major_end,
+                        ratio,
+                        start_deg,
+                        end_deg,
+                        ccw,
+                    } => HatchEdge::Ellipse {
+                        center: p2(*center),
+                        end: p2(*major_end),
+                        minor_major_ratio: *ratio,
+                        start_angle: start_deg.to_radians(),
+                        end_angle: end_deg.to_radians(),
+                        is_ccw: *ccw,
+                    },
+                    HatchEdgeSpec::Spline {
+                        degree,
+                        rational,
+                        periodic,
+                        knots,
+                        control_points,
+                        weights,
+                    } => HatchEdge::Spline {
+                        degree: *degree,
+                        rational: *rational,
+                        periodic: *periodic,
+                        knots: knots.clone(),
+                        control_points: control_points.iter().map(|p| p2(*p)).collect(),
+                        weights: weights.clone(),
+                        fit_points: Vec::new(),
+                        start_tangent: None,
+                        end_tangent: None,
+                    },
+                })
+                .collect(),
+        ),
+    }
+}
+
 fn extrusion(mirrored: bool) -> Point3D {
     Point3D {
         x: 0.0,
