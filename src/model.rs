@@ -923,6 +923,13 @@ pub struct SplineEntity {
     /// Control points (DXF 10). With `degree`, `knots` and `weights` they
     /// define the curve; they do not lie on it.
     pub control_points: Vec<Point3D>,
+    /// DXF 12: the curve's direction at its first fit point, which a spline
+    /// defined by fit points may state. `None` where the file states none.
+    #[serde(default)]
+    pub start_tangent: Option<Point3D>,
+    /// DXF 13: the direction at its last fit point, likewise.
+    #[serde(default)]
+    pub end_tangent: Option<Point3D>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

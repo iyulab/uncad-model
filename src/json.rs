@@ -336,6 +336,8 @@ mod tests {
                 invisible_edges: [false, true, false, false],
             }),
             Entity::Spline(SplineEntity {
+                start_tangent: None,
+                end_tangent: None,
                 common: c.clone(),
                 degree: 3,
                 closed: Some(false),
