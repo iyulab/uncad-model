@@ -1385,6 +1385,52 @@ pub struct WipeoutEntity {
     pub boundary: Vec<Point2D>,
 }
 
+/// A raster image placed in the drawing: the frame the file places it in,
+/// the definition that names its file, and the clip boundary.
+///
+/// The frame is carried as the file states it rather than as corners, since
+/// it is the pixel-to-world mapping: pixel `(i, j)` of a `w` x `h` image
+/// (row 0 at the top) has its centre at `insertion_point + (i + 0.5) *
+/// u_vector + (h - 0.5 - j) * v_vector`, and the image's outer corner is
+/// `insertion_point` itself. `u_vector` and `v_vector` are one pixel long.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageEntity {
+    pub common: EntityCommon,
+    /// DXF 10: the image's lower-left corner.
+    pub insertion_point: Point3D,
+    /// DXF 11: one pixel along the image's width.
+    pub u_vector: Point3D,
+    /// DXF 12: one pixel along the image's height.
+    pub v_vector: Point3D,
+    /// DXF 13: the image's width and height in pixels.
+    pub size_pixels: Point2D,
+    /// DXF 340: the IMAGEDEF that names the file, resolved to its handle --
+    /// the key into [`crate::Tables::image_definitions`].
+    pub definition: Ref<String>,
+    /// DXF 70, the display flags as stored: 1 show the image, 2 show it
+    /// when not aligned with the screen, 4 use the clip boundary, 8
+    /// transparency on. This and the four values below are `None` when the
+    /// file leaves the group out.
+    pub display_flags: Option<u16>,
+    /// DXF 280: whether clipping is on.
+    pub clipping: Option<bool>,
+    /// DXF 281: brightness, 0 to 100.
+    pub brightness: Option<u8>,
+    /// DXF 282: contrast, 0 to 100.
+    pub contrast: Option<u8>,
+    /// DXF 283: fade, 0 to 100.
+    pub fade: Option<u8>,
+    /// DXF 290: `true` when the clip boundary keeps what is *outside* it.
+    /// `None` in a file older than the flag -- before R2010 -- and in one
+    /// that leaves it out.
+    pub clip_outside: Option<bool>,
+    /// The clip boundary, in the entity's own local space like
+    /// [`WipeoutEntity::boundary`]: the file's pixel-space vertices put
+    /// through the frame. A closed loop, its first point not repeated. The
+    /// whole image when the file states no boundary.
+    pub boundary: Vec<Point2D>,
+}
+
 /// A light source: its position, its target, and what kind of light the
 /// file says it is. It has no drawable shape of its own (it is invisible in
 /// a plan view); what a consumer shows for it is the consumer's placeholder.
@@ -1546,6 +1592,8 @@ pub enum Entity {
     Wipeout(WipeoutEntity),
     #[serde(rename = "LIGHT")]
     Light(LightEntity),
+    #[serde(rename = "IMAGE")]
+    Image(ImageEntity),
     /// An entity type the model does not have a shape for. Carries the DXF
     /// type name the file used, so consumers can still count and report by
     /// type and nothing is silently dropped. In JSON this is the one variant
@@ -1593,6 +1641,7 @@ impl Entity {
             Entity::AcadTable(e) => &e.common,
             Entity::Wipeout(e) => &e.common,
             Entity::Light(e) => &e.common,
+            Entity::Image(e) => &e.common,
             Entity::Unknown { common, .. } => common,
         }
     }
@@ -1632,6 +1681,7 @@ impl Entity {
             Entity::AcadTable(e) => &mut e.common,
             Entity::Wipeout(e) => &mut e.common,
             Entity::Light(e) => &mut e.common,
+            Entity::Image(e) => &mut e.common,
             Entity::Unknown { common, .. } => common,
         }
     }
@@ -1672,6 +1722,7 @@ impl Entity {
             Entity::AcadTable(_) => "ACAD_TABLE",
             Entity::Wipeout(_) => "WIPEOUT",
             Entity::Light(_) => "LIGHT",
+            Entity::Image(_) => "IMAGE",
             Entity::Unknown { type_name, .. } => type_name,
         }
     }

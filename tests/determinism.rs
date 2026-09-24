@@ -129,6 +129,7 @@ fn drawing() -> CadDatabase {
             block_records,
             mlinestyles,
             layouts: BTreeMap::new(),
+            image_definitions: BTreeMap::new(),
         },
         read_diagnostics: ReadDiagnostics {
             warnings: vec!["UNHANDLEDCLASS".to_string(), "WRONGCRC".to_string()],

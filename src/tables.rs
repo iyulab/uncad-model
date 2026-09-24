@@ -380,4 +380,57 @@ pub struct Tables {
     /// field existed.
     #[serde(default)]
     pub layouts: BTreeMap<String, LayoutRecord>,
+    /// IMAGEDEF handle (upper-case hex, the form of
+    /// [`crate::model::EntityCommon::source_handle`]) -> the raster file it
+    /// names: what an IMAGE's `definition` resolves against. The object has
+    /// no name of its own; several images may show one definition. Empty for
+    /// a drawing without images, and for a document written before this
+    /// field existed.
+    #[serde(default)]
+    pub image_definitions: BTreeMap<String, ImageDefinition>,
+}
+
+/// An IMAGEDEF object: the raster file an IMAGE shows, as the drawing
+/// records it. The file itself is not part of the drawing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageDefinition {
+    /// DXF 1: the file's path as the drawing stores it -- absolute or
+    /// relative, on whatever machine last saved it. Not resolved against
+    /// anything here. `None` when the object states none.
+    pub file_path: Option<String>,
+    /// DXF 10: the image's width and height in pixels.
+    pub size_pixels: Point2D,
+    /// DXF 11: one pixel's width and height, in `resolution_unit`s.
+    pub pixel_size: Point2D,
+    /// DXF 280: whether the application had the file loaded when it saved.
+    /// `None` when the object leaves the group out.
+    pub loaded: Option<bool>,
+    /// DXF 281: the unit `pixel_size` is in. `None` also when the object
+    /// states a value outside the format's three.
+    pub resolution_unit: Option<ResolutionUnit>,
+}
+
+/// The unit an image definition measures a pixel in (DXF 281: 0, 2, 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ResolutionUnit {
+    /// 0: no unit.
+    Unitless,
+    /// 2: centimetres.
+    Centimeter,
+    /// 5: inches.
+    Inch,
+}
+
+impl ResolutionUnit {
+    /// The value as the format writes it; `None` outside the three it
+    /// defines.
+    pub fn from_code(code: i32) -> Option<ResolutionUnit> {
+        match code {
+            0 => Some(ResolutionUnit::Unitless),
+            2 => Some(ResolutionUnit::Centimeter),
+            5 => Some(ResolutionUnit::Inch),
+            _ => None,
+        }
+    }
 }

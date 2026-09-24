@@ -114,8 +114,9 @@ mod tests {
     use super::*;
     use crate::model::*;
     use crate::tables::{
-        AngularUnitFormat, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord, LayoutRecord,
-        LinearUnitFormat, PlotPaperUnits, PlotRotation, PlotSettings, Tables,
+        AngularUnitFormat, BlockRecord, DimStyleRecord, FractionFormat, ImageDefinition,
+        LayerRecord, LayoutRecord, LinearUnitFormat, PlotPaperUnits, PlotRotation, PlotSettings,
+        ResolutionUnit, Tables,
     };
     use std::collections::BTreeMap;
 
@@ -508,6 +509,21 @@ mod tests {
                 target: p3(0.0, 0.0, 0.0),
                 light_type: Some(LightType::Spot),
             }),
+            Entity::Image(ImageEntity {
+                common: c.clone(),
+                insertion_point: p3(10.0, 5.0, 0.0),
+                u_vector: p3(0.5, 0.0, 0.0),
+                v_vector: p3(0.0, 0.5, 0.0),
+                size_pixels: p2(40.0, 20.0),
+                definition: Ref::Resolved("80F".to_string()),
+                display_flags: Some(7),
+                clipping: Some(true),
+                brightness: Some(50),
+                contrast: Some(50),
+                fade: Some(0),
+                clip_outside: None,
+                boundary: vec![p2(10.0, 5.0), p2(30.0, 5.0), p2(30.0, 15.0)],
+            }),
             Entity::Unknown {
                 common: c,
                 type_name: "ACAD_PROXY_ENTITY".to_string(),
@@ -549,6 +565,7 @@ mod tests {
                 | Entity::AcadTable(_)
                 | Entity::Wipeout(_)
                 | Entity::Light(_)
+                | Entity::Image(_)
                 | Entity::Unknown { .. } => {}
             }
         }
@@ -775,6 +792,17 @@ mod tests {
                 active_viewport: Ref::Resolved(EntityId::new(0x2A)),
             },
         );
+        let mut image_definitions = BTreeMap::new();
+        image_definitions.insert(
+            "80F".to_string(),
+            ImageDefinition {
+                file_path: Some("images/plan.png".to_string()),
+                size_pixels: p2(40.0, 20.0),
+                pixel_size: p2(0.1, 0.1),
+                loaded: Some(true),
+                resolution_unit: Some(ResolutionUnit::Centimeter),
+            },
+        );
         let db = CadDatabase {
             entities: one_of_each(),
             tables: Tables {
@@ -783,6 +811,7 @@ mod tests {
                 block_records,
                 mlinestyles,
                 layouts,
+                image_definitions,
             },
             read_diagnostics: Default::default(),
         };

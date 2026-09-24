@@ -209,6 +209,8 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             layers,
             block_records,
             mlinestyles: BTreeMap::new(),
+            // The writer places no images.
+            image_definitions: BTreeMap::new(),
             // A spec without layouts has no OBJECTS section, so there is no
             // LAYOUT object to read.
             layouts: spec
