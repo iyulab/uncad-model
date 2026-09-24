@@ -245,6 +245,75 @@ pub struct EntityCommon {
     /// so an absent one is visible.
     #[serde(default)]
     pub invisible: bool,
+    /// DXF 6: the linetype the entity is drawn with. The format writes the
+    /// group only when it is not BYLAYER, so an absent one is
+    /// [`EntityLinetype::ByLayer`]; so is every entity of a drawing too old
+    /// to state one.
+    #[serde(default)]
+    pub linetype: EntityLinetype,
+    /// DXF 48: the entity's own scale for its linetype's pattern, on top of
+    /// the drawing's. An absent group is 1.
+    #[serde(default = "one")]
+    pub linetype_scale: f64,
+    /// DXF 370: the entity's lineweight in hundredths of a millimetre, or
+    /// one of the format's codes -1 (BYLAYER), -2 (BYBLOCK) and -3 (the
+    /// application's default weight), as for
+    /// [`crate::tables::LayerRecord::lineweight`]. From R2000 an absent
+    /// group is -1. `None` when the drawing is older than R2000, which has
+    /// no lineweights, or states a code the format does not define.
+    #[serde(default)]
+    pub lineweight: Option<i16>,
+    /// DXF 440: how transparent the entity is drawn, as the file stores it
+    /// -- the method in the high byte, an alpha in the low one; read it with
+    /// [`Transparency::from_code`]. From R2004 an absent group is 0
+    /// (BYLAYER). `None` when the drawing is older than R2004, which has no
+    /// transparency.
+    #[serde(default)]
+    pub transparency: Option<u32>,
+}
+
+/// Which linetype an entity is drawn with (DXF 6): its layer's, its block
+/// reference's, or one it names from the drawing's LTYPE table (which the
+/// model does not carry), as a reference like [`EntityCommon::layer`].
+///
+/// Serialized adjacently tagged, like [`Ref`]: `{"type":"BY_LAYER"}`,
+/// `{"type":"BY_BLOCK"}`, `{"type":"NAMED","data":{"type":"RESOLVED",
+/// "data":"HIDDEN"}}`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum EntityLinetype {
+    #[default]
+    ByLayer,
+    ByBlock,
+    Named(Ref<String>),
+}
+
+/// How transparent an entity is drawn, read from
+/// [`EntityCommon::transparency`]: as its layer says, as its block reference
+/// says, or by its own alpha -- 0 fully transparent, 255 opaque.
+///
+/// Serialized adjacently tagged: `{"type":"BY_LAYER"}`,
+/// `{"type":"BY_BLOCK"}`, `{"type":"ALPHA","data":204}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Transparency {
+    ByLayer,
+    ByBlock,
+    Alpha(u8),
+}
+
+impl Transparency {
+    /// The transparency a stored value states: its high byte says how to
+    /// read it (0 BYLAYER, 1 BYBLOCK, 2 by the alpha in the low byte). `None`
+    /// for a method the format does not define.
+    pub fn from_code(code: u32) -> Option<Transparency> {
+        match code >> 24 {
+            0 => Some(Transparency::ByLayer),
+            1 => Some(Transparency::ByBlock),
+            2 => Some(Transparency::Alpha((code & 0xFF) as u8)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

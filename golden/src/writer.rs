@@ -12,7 +12,7 @@
 
 use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, HatchEdgeSpec, HatchPathSpec,
-    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, Spec, Xy,
+    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, LineStyleSpec, Spec, Xy,
 };
 use uncad_model::model::{
     HatchStyle, HorizontalJustification, OrdinateAxis, VerticalJustification,
@@ -97,6 +97,9 @@ struct Writer {
     layer_handles: Vec<(String, u32)>,
     /// Set while writing paper-space entities, which carry DXF 67.
     paper_space: bool,
+    /// The common properties the entity being written states
+    /// ([`EntitySpec::Styled`]); taken by [`Self::common`].
+    style: Option<LineStyleSpec>,
 }
 
 impl Writer {
@@ -511,6 +514,11 @@ impl Writer {
     /// anonymous block a dimension refers to; `owner` is the BLOCK_RECORD
     /// that owns the entity (DXF 330).
     fn entity(&mut self, e: &EntitySpec, dim_block: Option<&str>, owner: u32) -> u32 {
+        if let EntitySpec::Styled { style, entity } = e {
+            assert!(!entity.is_dimension(), "a styled entity is not a dimension");
+            self.style = Some(style.clone());
+            return self.entity(entity, dim_block, owner);
+        }
         let h = self.handle();
         let hex = format!("{h:X}");
         match e {
@@ -642,6 +650,7 @@ impl Writer {
                 }
                 self.extrusion(*mirrored);
             }
+            EntitySpec::Styled { .. } => unreachable!("unwrapped above"),
             EntitySpec::Hatch {
                 layer,
                 paths,
@@ -1083,6 +1092,18 @@ impl Writer {
             self.pair(67, 1);
         }
         self.pair(8, layer);
+        // In the order the reference lists them after the layer.
+        if let Some(style) = self.style.take() {
+            if let Some(linetype) = &style.linetype {
+                self.pair(6, linetype);
+            }
+            if let Some(weight) = style.lineweight {
+                self.pair(370, weight);
+            }
+            if let Some(scale) = style.linetype_scale {
+                self.num(48, scale);
+            }
+        }
     }
 
     /// The OBJECTS section: the root dictionary, its layout dictionary and

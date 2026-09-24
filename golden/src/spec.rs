@@ -297,6 +297,13 @@ pub enum EntitySpec {
         measurement: Option<f64>,
         style: Option<String>,
     },
+    /// An entity that states the common properties a plain one leaves to
+    /// its layer: the writer writes them in its `AcDbEntity` part. Not a
+    /// dimension.
+    Styled {
+        style: LineStyleSpec,
+        entity: Box<EntitySpec>,
+    },
     /// A solid-fill HATCH in the world's plane (default extrusion, elevation
     /// 0): its boundary paths and which areas among them are filled.
     Hatch {
@@ -601,6 +608,18 @@ pub struct DimStyleSpec {
     pub fraction_format: Option<FractionFormat>,
 }
 
+/// The common properties an entity can state itself; `None` writes no
+/// group, which the format reads as BYLAYER (a scale of 1).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct LineStyleSpec {
+    /// DXF 6: a linetype name, or `BYLAYER`/`BYBLOCK`.
+    pub linetype: Option<String>,
+    /// DXF 48.
+    pub linetype_scale: Option<f64>,
+    /// DXF 370: hundredths of a millimetre, or -1/-2/-3.
+    pub lineweight: Option<i16>,
+}
+
 /// One HATCH boundary path, and the entities it was picked from.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HatchPathSpec {
@@ -701,6 +720,7 @@ impl EntitySpec {
             | EntitySpec::OrdinateDimension { layer, .. }
             | EntitySpec::Hatch { layer, .. }
             | EntitySpec::Viewport { layer, .. } => layer,
+            EntitySpec::Styled { entity, .. } => entity.layer(),
         }
     }
 

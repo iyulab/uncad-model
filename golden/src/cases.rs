@@ -3,7 +3,7 @@
 
 use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, HatchEdgeSpec, HatchPathSpec,
-    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, Spec, TextAlign, Vertex, Xy,
+    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, LineStyleSpec, Spec, TextAlign, Vertex, Xy,
 };
 use crate::writer::{horizontal_code, vertical_code};
 use uncad_model::model::{
@@ -1633,6 +1633,41 @@ pub fn g17_hatch_edge_paths() -> Spec {
     }
 }
 
+/// G18: lines that state their own linetype, linetype scale and lineweight
+/// -- BYBLOCK, the declared CONTINUOUS with a scale and a weight, and a
+/// linetype the file never declares -- beside one that states nothing and
+/// takes all three from its layer. An R2000 file: no transparency.
+pub fn g18_line_styles() -> Spec {
+    let line = |y: f64| EntitySpec::Line {
+        layer: "0".to_string(),
+        start: Xy::new(0.0, y),
+        end: Xy::new(50.0, y),
+    };
+    let styled = |y: f64, linetype: &str, scale: Option<f64>, weight: i16| EntitySpec::Styled {
+        style: LineStyleSpec {
+            linetype: Some(linetype.to_string()),
+            linetype_scale: scale,
+            lineweight: Some(weight),
+        },
+        entity: Box::new(line(y)),
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        layers: Vec::new(),
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            line(0.0),
+            styled(10.0, "BYBLOCK", None, -2),
+            styled(20.0, "CONTINUOUS", Some(2.5), 35),
+            styled(30.0, "DASHED", None, -3),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1651,6 +1686,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g15" => g15_polygon_mesh(),
         "g16" => g16_ordinate_dimensions(),
         "g17" => g17_hatch_edge_paths(),
+        "g18" => g18_line_styles(),
         _ => return None,
     })
 }
@@ -1660,7 +1696,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 15] = [
+pub const NAMES: [&str; 16] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17",
+    "g17", "g18",
 ];

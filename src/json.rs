@@ -129,6 +129,10 @@ mod tests {
             color_index: 256,
             true_color: Some(0x12_34_56),
             invisible: false,
+            linetype: crate::model::EntityLinetype::ByLayer,
+            linetype_scale: 1.0,
+            lineweight: Some(-1),
+            transparency: Some(0),
         }
     }
 
@@ -630,6 +634,45 @@ mod tests {
         ))
         .expect("a complete UNKNOWN entity deserializes");
         assert_eq!(ok.type_name(), "ACAD_PROXY_ENTITY");
+    }
+
+    /// The linetype is tagged like a reference, and a document written
+    /// before the four style fields existed reads with their defaults:
+    /// BYLAYER, a scale of 1, and no lineweight or transparency stated.
+    #[test]
+    fn entity_style_fields_are_tagged_and_default_when_absent() {
+        let mut c = common("2A");
+        c.linetype = EntityLinetype::Named(Ref::Resolved("HIDDEN".to_string()));
+        let json = serde_json::to_value(&c).unwrap();
+        assert_eq!(
+            json["linetype"],
+            serde_json::json!({"type": "NAMED", "data": {"type": "RESOLVED", "data": "HIDDEN"}})
+        );
+        c.linetype = EntityLinetype::ByBlock;
+        assert_eq!(
+            serde_json::to_value(&c).unwrap()["linetype"],
+            serde_json::json!({"type": "BY_BLOCK"})
+        );
+
+        let old = r#"{"id":1,"origin":"VECTOR","confidence":"HIGH","source_handle":{"type":"ABSENT"},"layer":{"type":"ABSENT"},"color_index":256,"true_color":null}"#;
+        let c: EntityCommon = serde_json::from_str(old).unwrap();
+        assert_eq!(c.linetype, EntityLinetype::ByLayer);
+        assert_eq!(c.linetype_scale, 1.0);
+        assert_eq!((c.lineweight, c.transparency), (None, None));
+    }
+
+    #[test]
+    fn a_transparency_reads_its_method_from_the_high_byte() {
+        assert_eq!(Transparency::from_code(0), Some(Transparency::ByLayer));
+        assert_eq!(
+            Transparency::from_code(0x0100_0000),
+            Some(Transparency::ByBlock)
+        );
+        assert_eq!(
+            Transparency::from_code(0x0200_00CC),
+            Some(Transparency::Alpha(0xCC))
+        );
+        assert_eq!(Transparency::from_code(0x0300_0000), None);
     }
 
     #[test]

@@ -20,9 +20,10 @@ use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
     DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
-    HatchBoundaryPath, HatchEdge, HatchEntity, HorizontalJustification, InsertEntity, LineEntity,
-    LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref, Solid3DEntity, SolidEntity,
-    TextEntity, TextOverride, VerticalJustification, ViewportEntity, ViewportView,
+    EntityLinetype, HatchBoundaryPath, HatchEdge, HatchEntity, HorizontalJustification,
+    InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref,
+    Solid3DEntity, SolidEntity, TextEntity, TextOverride, VerticalJustification, ViewportEntity,
+    ViewportView,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -292,6 +293,10 @@ fn common(handle: u32, layer: &str) -> EntityCommon {
         color_index: 256,
         true_color: None,
         invisible: false,
+        linetype: uncad_model::model::EntityLinetype::ByLayer,
+        linetype_scale: 1.0,
+        lineweight: Some(-1),
+        transparency: None,
     }
 }
 
@@ -323,6 +328,21 @@ fn convert(
     spec: &Spec,
 ) -> Entity {
     match e {
+        EntitySpec::Styled { style, entity } => {
+            let mut converted = convert(entity, handle, attrib_handles, dim_block, spec);
+            let common = converted.common_mut();
+            common.linetype = match style.linetype.as_deref() {
+                None => EntityLinetype::ByLayer,
+                Some(n) if n.eq_ignore_ascii_case("BYLAYER") => EntityLinetype::ByLayer,
+                Some(n) if n.eq_ignore_ascii_case("BYBLOCK") => EntityLinetype::ByBlock,
+                // The writer's LTYPE table declares CONTINUOUS alone.
+                Some(n) if n == "CONTINUOUS" => EntityLinetype::Named(Ref::Resolved(n.to_string())),
+                Some(n) => EntityLinetype::Named(Ref::Unresolved(n.to_string())),
+            };
+            common.linetype_scale = style.linetype_scale.unwrap_or(1.0);
+            common.lineweight = Some(style.lineweight.unwrap_or(-1));
+            converted
+        }
         EntitySpec::Line { layer, start, end } => Entity::Line(LineEntity {
             common: common(handle, layer),
             start_point: p3(*start),
