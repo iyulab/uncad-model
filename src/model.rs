@@ -934,10 +934,7 @@ pub enum HatchEdge {
     /// format states both; in a closed path the end usually meets the next
     /// edge's start, but nothing in the format requires the edges to be
     /// listed in order.
-    Line {
-        start: Point2D,
-        end: Point2D,
-    },
+    Line { start: Point2D, end: Point2D },
     Arc {
         center: Point2D,
         radius: f64,
@@ -965,8 +962,22 @@ pub enum HatchEdge {
         end_angle: f64,
         is_ccw: bool,
     },
+    /// A spline edge, as the format states it: its degree (DXF 94), whether
+    /// it is rational (73) and periodic (74), its knots (40), control points
+    /// (10/20) and -- for a rational one -- their weights (42, empty
+    /// otherwise). From R2010 on the format may also state the points it was
+    /// fitted through (97, 11/21) and, with them, the tangents at its two
+    /// ends (12/22, 13/23); `None` where it does not.
     Spline {
+        degree: u32,
+        rational: bool,
+        periodic: bool,
+        knots: Vec<f64>,
         control_points: Vec<Point2D>,
+        weights: Vec<f64>,
+        fit_points: Vec<Point2D>,
+        start_tangent: Option<Point2D>,
+        end_tangent: Option<Point2D>,
     },
 }
 
