@@ -841,7 +841,9 @@ pub struct ViewportEntity {
     /// DXF 69: the viewport's number within its layout. 1 is the layout's
     /// own overall viewport -- the one that is the sheet itself rather than
     /// a window onto the model. `None` when the file does not state it: the
-    /// binary format stores no such number.
+    /// binary format stores no such number. A DXF from R2000 on writes 0 for
+    /// every viewport of a layout that is not the current one; that 0 is
+    /// carried as written, and it is no number -- numbers start at 1.
     pub viewport_id: Option<i32>,
     /// The layers frozen in this viewport alone (DXF 341; 331 in a DXF
     /// from R2004 on), in file order, each a reference like
