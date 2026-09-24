@@ -1,4 +1,5 @@
-//! How a drawing's strings are stored, undone.
+//! A drawing's strings: how they are stored, undone -- and what the codes in
+//! them say, split out ([`tokens`]).
 //!
 //! A file whose text is in a code page cannot hold every character, so the
 //! formats write the ones it cannot hold as escapes, in any string -- a
@@ -25,6 +26,10 @@
 //! backslash an MTEXT code starts with.
 
 use std::borrow::Cow;
+
+mod tokens;
+
+pub use tokens::{tokens, Break, Special, Switch, TextKind, Toggle, Token, Tokens};
 
 /// `text` with its `\U+XXXX` and `\M+nXXXX` escapes replaced by the
 /// characters they store.
