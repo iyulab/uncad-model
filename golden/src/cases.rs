@@ -1305,6 +1305,11 @@ pub fn g14_sheet_with_viewports() -> Spec {
                 paper_units: PlotPaperUnits::Millimeters,
                 rotation: PlotRotation::Unrotated,
                 scale: (1.0, 1.0),
+                paper_space_linetype_scaling: true,
+                limits_check: false,
+                extents: (Xy::new(-5.0, -5.0), Xy::new(405.0, 290.0)),
+                // A model layout names a VPORT record here, never an entity.
+                active_viewport: None,
             },
             // ISO A3 is stated portrait (297 x 420) and turned a quarter,
             // with the usual "origin at the paper's corner" page setup: the
@@ -1322,6 +1327,11 @@ pub fn g14_sheet_with_viewports() -> Spec {
                 paper_units: PlotPaperUnits::Millimeters,
                 rotation: PlotRotation::Counterclockwise90,
                 scale: (1.0, 1.0),
+                paper_space_linetype_scaling: true,
+                limits_check: true,
+                extents: (Xy::new(0.0, 0.0), Xy::new(420.0, 297.0)),
+                // The second viewport: the one someone last worked in.
+                active_viewport: Some(3),
             },
             // A second sheet, empty, in inches: its block is one more paper
             // space the file declares.
@@ -1338,6 +1348,12 @@ pub fn g14_sheet_with_viewports() -> Spec {
                 paper_units: PlotPaperUnits::Inches,
                 rotation: PlotRotation::Clockwise90,
                 scale: (1.0, 1.0),
+                // Never activated: no viewport, and the reversed extents an
+                // application writes for a space it has not measured.
+                paper_space_linetype_scaling: false,
+                limits_check: false,
+                extents: (Xy::new(1e20, 1e20), Xy::new(-1e20, -1e20)),
+                active_viewport: None,
             },
         ],
     }

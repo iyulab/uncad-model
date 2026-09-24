@@ -765,6 +765,11 @@ mod tests {
                     scale_numerator: 1.0,
                     scale_denominator: 1.0,
                 },
+                paper_space_linetype_scaling: true,
+                limits_check: false,
+                extents_min: Some(p3(0.0, 0.0, 0.0)),
+                extents_max: Some(p3(420.0, 297.0, 0.0)),
+                active_viewport: Ref::Resolved(EntityId::new(0x2A)),
             },
         );
         let db = CadDatabase {

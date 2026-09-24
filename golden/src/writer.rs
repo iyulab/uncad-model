@@ -1176,13 +1176,16 @@ impl Writer {
         self.num(149, 0.0);
         self.pair(100, "AcDbLayout");
         self.pair(1, &layout.name);
-        self.pair(70, 1);
+        self.pair(
+            70,
+            u8::from(layout.paper_space_linetype_scaling) | u8::from(layout.limits_check) << 1,
+        );
         self.pair(71, layout.tab_order);
         self.xy(10, layout.limits_min);
         self.xy(11, layout.limits_max);
         self.xy(12, Xy::new(0.0, 0.0));
-        self.xy(14, layout.limits_min);
-        self.xy(15, layout.limits_max);
+        self.xy(14, layout.extents.0);
+        self.xy(15, layout.extents.1);
         self.num(146, 0.0);
         self.xy(13, Xy::new(0.0, 0.0));
         self.xy(16, Xy::new(1.0, 0.0));
@@ -1190,6 +1193,14 @@ impl Writer {
         self.pair(76, 0);
         let block = self.block_record(&layout.block);
         self.pair(330, format!("{block:X}"));
+        if let Some(i) = layout.active_viewport {
+            let viewport = *self
+                .handles
+                .paper_entities
+                .get(i)
+                .expect("a layout's active viewport is a paper-space entity");
+            self.pair(331, format!("{viewport:X}"));
+        }
     }
 }
 

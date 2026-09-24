@@ -6,7 +6,7 @@
 //! JSON key order -- is deterministic: the same drawing serializes to the
 //! same bytes on every run and every machine.
 
-use crate::model::{absent, Entity, Point2D, Ref};
+use crate::model::{absent, Entity, EntityId, Point2D, Point3D, Ref};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -228,6 +228,30 @@ pub struct LayoutRecord {
     pub limits_max: Point2D,
     /// How the layout is set up to print.
     pub plot_settings: PlotSettings,
+    /// DXF 70, bit 1 (PSLTSCALE): linetypes in the layout's viewports are
+    /// scaled to the paper rather than to each viewport's own scale.
+    #[serde(default)]
+    pub paper_space_linetype_scaling: bool,
+    /// DXF 70, bit 2 (LIMCHECK): the application refuses points outside
+    /// the limits.
+    #[serde(default)]
+    pub limits_check: bool,
+    /// DXF 14: the lower-left corner of what the layout's space held when
+    /// the file was saved, as stored -- including the reversed 1e20 corners
+    /// an application writes for a space it has not measured. `None` when
+    /// the file does not state it.
+    #[serde(default)]
+    pub extents_min: Option<Point3D>,
+    /// DXF 15: the upper-right corner, likewise.
+    #[serde(default)]
+    pub extents_max: Option<Point3D>,
+    /// DXF 331 of a sheet: the VIEWPORT entity last active in it, as a
+    /// reference like [`crate::model::LeaderEntity::annotation_id`]. A model
+    /// layout names a VPORT table record there, which is not an entity (and
+    /// the model does not carry the table), so it is `Absent`, as is a sheet
+    /// the file names no viewport for.
+    #[serde(default = "absent")]
+    pub active_viewport: Ref<EntityId>,
 }
 
 /// The plot settings a layout carries (the object's `AcDbPlotSettings`

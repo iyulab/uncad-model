@@ -125,6 +125,14 @@ pub struct LayoutSpec {
     pub paper_units: PlotPaperUnits,
     /// DXF 73.
     pub rotation: PlotRotation,
+    /// DXF 70 of the layout part: bit 1 (PSLTSCALE) and bit 2 (LIMCHECK).
+    pub paper_space_linetype_scaling: bool,
+    pub limits_check: bool,
+    /// DXF 14 and 15, z 0.
+    pub extents: (Xy, Xy),
+    /// DXF 331: the paper-space viewport last active in the layout, by
+    /// index into [`Spec::paper_space`]; `None` writes no group.
+    pub active_viewport: Option<usize>,
     /// DXF 142 and 143: the custom print scale's two sides.
     pub scale: (f64, f64),
 }

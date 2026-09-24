@@ -211,7 +211,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             layouts: spec
                 .layouts
                 .iter()
-                .map(|l| (l.name.clone(), layout(l)))
+                .map(|l| (l.name.clone(), layout(l, &written.handles.paper_entities)))
                 .collect(),
         },
         read_diagnostics: ReadDiagnostics::default(),
@@ -258,7 +258,7 @@ fn layer(l: &LayerSpec) -> LayerRecord {
     }
 }
 
-fn layout(l: &LayoutSpec) -> LayoutRecord {
+fn layout(l: &LayoutSpec, paper_handles: &[u32]) -> LayoutRecord {
     let [margin_left, margin_bottom, margin_right, margin_top] = l.margins;
     LayoutRecord {
         name: l.name.clone(),
@@ -279,6 +279,18 @@ fn layout(l: &LayoutSpec) -> LayoutRecord {
             rotation: Some(l.rotation),
             scale_numerator: l.scale.0,
             scale_denominator: l.scale.1,
+        },
+        paper_space_linetype_scaling: l.paper_space_linetype_scaling,
+        limits_check: l.limits_check,
+        extents_min: Some(p3(l.extents.0)),
+        extents_max: Some(p3(l.extents.1)),
+        // A model layout's active viewport is a VPORT record, not an
+        // entity; a sheet's resolves to the viewport the writer named.
+        active_viewport: match l.active_viewport {
+            Some(i) if l.block != "*Model_Space" => {
+                Ref::Resolved(EntityId::new(u64::from(paper_handles[i])))
+            }
+            _ => Ref::Absent,
         },
     }
 }
