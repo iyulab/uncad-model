@@ -143,6 +143,14 @@ pub struct DimStyleRecord {
     /// outside the format's three. Unwritten: horizontal, in a file from
     /// R2000 on (as for the linear unit format).
     pub fraction_format: Option<FractionFormat>,
+    /// DXF 90 (`DIMARCSYM`): where an arc-length dimension's arc symbol
+    /// goes. `None` also when the style states a value outside the
+    /// format's three, and in a file older than the variable -- a DXF
+    /// before R2000, a DWG before R2007. Unwritten, in a file that has
+    /// it: before the text. A document written before this field existed
+    /// reads as `None` too.
+    #[serde(default)]
+    pub arc_symbol: Option<ArcSymbol>,
 }
 
 /// How a dimension style writes a linear measurement (`DIMLUNIT`, DXF 277,
@@ -192,6 +200,32 @@ pub enum FractionFormat {
     Diagonal,
     /// On one line: `1/2`.
     NotStacked,
+}
+
+/// Where a dimension style puts an arc-length dimension's arc symbol
+/// (`DIMARCSYM`, DXF 90, 0 to 2 in this order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ArcSymbol {
+    /// Before the dimension text.
+    BeforeText,
+    /// Above the dimension text.
+    AboveText,
+    /// Not shown.
+    Suppressed,
+}
+
+impl ArcSymbol {
+    /// The variable's value as the format writes it; `None` outside the
+    /// three it defines.
+    pub fn from_code(code: i32) -> Option<ArcSymbol> {
+        match code {
+            0 => Some(ArcSymbol::BeforeText),
+            1 => Some(ArcSymbol::AboveText),
+            2 => Some(ArcSymbol::Suppressed),
+            _ => None,
+        }
+    }
 }
 
 /// One block definition (DXF `BLOCK` ... `ENDBLK`).

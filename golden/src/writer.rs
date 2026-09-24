@@ -18,7 +18,7 @@ use uncad_model::model::{
     HatchStyle, HorizontalJustification, OrdinateAxis, VerticalJustification,
 };
 use uncad_model::tables::{
-    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+    AngularUnitFormat, ArcSymbol, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
 
 /// First handle issued to an entity. Table entries and block records come
@@ -373,6 +373,16 @@ impl Writer {
         }
         if let Some(zin) = style.zero_suppression {
             self.pair(78, zin);
+        }
+        if let Some(symbol) = style.arc_symbol {
+            self.pair(
+                90,
+                match symbol {
+                    ArcSymbol::BeforeText => 0,
+                    ArcSymbol::AboveText => 1,
+                    ArcSymbol::Suppressed => 2,
+                },
+            );
         }
         if let Some(height) = style.text_height {
             self.num(140, height);

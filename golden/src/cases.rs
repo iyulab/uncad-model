@@ -10,7 +10,7 @@ use uncad_model::model::{
     HatchStyle, HorizontalJustification, OrdinateAxis, VerticalJustification,
 };
 use uncad_model::tables::{
-    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+    AngularUnitFormat, ArcSymbol, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
 
 /// G1, a general machined part: a closed outline, four holes, three linear
@@ -351,6 +351,8 @@ pub fn g5_dense_dimensions() -> Spec {
             post: Some("<>mm".to_string()),
             decimal_places: Some(2),
             text_height: Some(2.5),
+            // Not the default, so a reader that ignores the group fails.
+            arc_symbol: Some(ArcSymbol::AboveText),
             ..DimStyleSpec::default()
         }],
         entities: vec![
@@ -1465,6 +1467,7 @@ pub fn g16_ordinate_dimensions() -> Spec {
                 angular_unit_format: Some(AngularUnitFormat::DegreesMinutesSeconds),
                 angular_decimal_places: Some(1),
                 fraction_format: Some(FractionFormat::NotStacked),
+                arc_symbol: Some(ArcSymbol::Suppressed),
             },
             DimStyleSpec {
                 name: "ARCH".to_string(),

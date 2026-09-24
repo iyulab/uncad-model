@@ -66,8 +66,8 @@ fn text_override(text: &str) -> TextOverride {
     }
 }
 use uncad_model::tables::{
-    AngularUnitFormat, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord, LayoutRecord,
-    LinearUnitFormat, PlotSettings, Tables,
+    AngularUnitFormat, ArcSymbol, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord,
+    LayoutRecord, LinearUnitFormat, PlotSettings, Tables,
 };
 use uncad_model::{CadDatabase, ReadDiagnostics};
 
@@ -199,6 +199,9 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                             fraction_format: Some(
                                 s.fraction_format.unwrap_or(FractionFormat::Horizontal),
                             ),
+                            // The files are R2000, which has the variable:
+                            // unwritten is before the text.
+                            arc_symbol: Some(s.arc_symbol.unwrap_or(ArcSymbol::BeforeText)),
                         },
                     )
                 })

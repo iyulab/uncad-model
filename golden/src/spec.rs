@@ -8,7 +8,7 @@
 
 use uncad_model::model::{HatchStyle, OrdinateAxis};
 use uncad_model::tables::{
-    AngularUnitFormat, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
+    AngularUnitFormat, ArcSymbol, FractionFormat, LinearUnitFormat, PlotPaperUnits, PlotRotation,
 };
 
 /// How the writer encodes every string it emits, and what the file declares
@@ -614,6 +614,8 @@ pub struct DimStyleSpec {
     pub angular_decimal_places: Option<i32>,
     /// DXF 276.
     pub fraction_format: Option<FractionFormat>,
+    /// DXF 90 (`DIMARCSYM`); unwritten when `None`.
+    pub arc_symbol: Option<ArcSymbol>,
 }
 
 /// The common properties an entity can state itself; `None` writes no
