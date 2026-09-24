@@ -930,8 +930,13 @@ pub struct PolylineEntity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "UPPERCASE")]
 pub enum HatchEdge {
+    /// A straight edge from `start` to `end` (DXF 10/20 and 11/21). The
+    /// format states both; in a closed path the end usually meets the next
+    /// edge's start, but nothing in the format requires the edges to be
+    /// listed in order.
     Line {
         start: Point2D,
+        end: Point2D,
     },
     Arc {
         center: Point2D,

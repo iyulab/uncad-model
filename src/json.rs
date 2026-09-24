@@ -396,6 +396,7 @@ mod tests {
                     HatchBoundaryPath::Edges(vec![
                         HatchEdge::Line {
                             start: p2(0.0, 0.0),
+                            end: p2(1.0, 0.0),
                         },
                         HatchEdge::Arc {
                             center: p2(0.0, 0.0),
