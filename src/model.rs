@@ -1461,9 +1461,11 @@ pub enum LightType {
     Spot,
 }
 
-/// Simple (non-MULTILEADER) LEADER: a polyline of `vertices` plus an
-/// optional arrowhead at the first vertex. Style name, spline flag and
-/// text-box size are not carried.
+/// Simple (non-MULTILEADER) LEADER: a path through `vertices` plus an
+/// optional arrowhead at the first vertex. The path is straight segments or
+/// a spline through the vertices (`path_type`); for a spline the file stores
+/// the vertices, not the curve through them. The text box's size is not
+/// carried.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LeaderEntity {
     pub common: EntityCommon,
