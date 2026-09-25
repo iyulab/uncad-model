@@ -65,10 +65,11 @@ The arithmetic that lives here is the coordinate arithmetic the format itself de
 - the placement a block reference applies to its block -- the map from a block definition's coordinates to the drawing's, composed across nested references (`Affine2`, from the INSERT's 10/20, 41/42, 50, and -- when its plane is parallel to the world's, a mirror copy's included -- its 210 through `Ocs`; a plane tilted out of the world's has no exact 2D placement, and none is given);
 - the coordinate system an entity is written in -- its axes from its extrusion by the arbitrary axis algorithm (`Ocs`, from 210/220/230);
 - the arc a polyline vertex's bulge describes -- its center, radius and sweep from the two vertices and the bulge (`BulgeArc`, from 42).
+- the point at a parameter on a curve the entity defines completely -- an ELLIPSE's, from its center, major axis, axis ratio and normal (`EllipseEntity::point_at`, from 10, 11, 40 and 210), and a NURBS curve's, from its degree, knots, control points and weights, whether a SPLINE's or a HATCH boundary's spline edge (`Nurbs`, from 71/94, 40, 10 and 41/42). A spline stored only by its fit points has no such curve here: the format does not store the curve through them.
 
 Each is a function of fields the entity carries, with nothing to choose and nothing to guess. Every consumer that draws, measures or points at the entity needs exactly this arithmetic, and if two consumers computed it separately they could disagree about where the same line is -- which is why it is here once rather than in each of them. A tolerance this crate adds on top (when a composed placement still counts as a similarity, when an extrusion counts as the world's) is named and documented where it is defined, apart from the format's own constants.
 
-Distance, intersection, hit-testing, curve sampling, rendering and editing stay in the consumers: they choose something (a precision, a view, a policy for what a degenerate input means) that the format does not.
+Distance, intersection, hit-testing, curve sampling (how many points, how far a chord may stray from the curve), rendering and editing stay in the consumers: they choose something (a precision, a view, a policy for what a degenerate input means) that the format does not.
 
 The dependency tree is permissive-only (MIT / Apache-2.0 / BSD), and this crate depends on none of its consumers.
 

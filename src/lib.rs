@@ -9,8 +9,9 @@
 //! arithmetic the format itself defines on an entity's own fields, which
 //! every consumer needs alike and must compute the same way: the placement
 //! an INSERT applies to its block ([`Affine2`]), the coordinate system an
-//! entity is written in ([`Ocs`]), and the arc a polyline vertex's bulge
-//! describes ([`BulgeArc`]); and the one step of reading a string the formats
+//! entity is written in ([`Ocs`]), the arc a polyline vertex's bulge
+//! describes ([`BulgeArc`]), and the point at a parameter on an ELLIPSE or a
+//! NURBS curve ([`Nurbs`]); and the one step of reading a string the formats
 //! define the same way everywhere, undoing how it was stored ([`text`]).
 //!
 //! The rules the model follows are in `docs/principles.md` alongside this
@@ -20,6 +21,7 @@
 
 pub mod bulge;
 pub mod color;
+pub mod curve;
 pub mod json;
 pub mod model;
 pub mod ocs;
@@ -30,6 +32,7 @@ pub mod transform;
 use serde::{Deserialize, Serialize};
 
 pub use bulge::BulgeArc;
+pub use curve::Nurbs;
 pub use json::{JsonError, ToJsonOptions};
 pub use model::{
     Confidence, Entity, EntityCommon, EntityId, Origin, Point2D, Point3D, PolylineVertex, Ref,
