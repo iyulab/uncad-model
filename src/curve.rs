@@ -143,9 +143,13 @@ impl Nurbs {
         if !(from <= u && u <= to) {
             return None;
         }
-        let span = (self.degree..self.control.len())
-            .rev()
-            .find(|&k| self.knots[k] <= u && self.knots[k] < self.knots[k + 1])?;
+        // The last knot at or before `u` among those that start a piece,
+        // stepped back past empty spans to the piece that holds `u`.
+        let (p, n) = (self.degree, self.control.len());
+        let mut span = p + self.knots[p..n].partition_point(|&k| k <= u) - 1;
+        while self.knots[span] == self.knots[span + 1] {
+            span = span.checked_sub(1).filter(|&k| k >= p)?;
+        }
         let [x, y, z, w] = self.de_boor(span, u);
         if w == 0.0 || !w.is_finite() {
             return None;
