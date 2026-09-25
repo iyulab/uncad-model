@@ -133,7 +133,14 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
             "*Paper_Space" => owned(&paper_space),
             _ => Vec::new(),
         };
-        block_records.insert(name.clone(), BlockRecord { name, entities });
+        block_records.insert(
+            name.clone(),
+            BlockRecord {
+                name,
+                entities,
+                base_point: Default::default(),
+            },
+        );
     }
     for (name, handles) in &written.handles.blocks {
         let specs: Vec<EntitySpec> = if let Some(b) = spec.blocks.iter().find(|b| &b.name == name) {
@@ -149,6 +156,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
         block_records.insert(
             name.clone(),
             BlockRecord {
+                base_point: Default::default(),
                 name: name.clone(),
                 entities: block_entities,
             },

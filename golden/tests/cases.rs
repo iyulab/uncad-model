@@ -175,7 +175,9 @@ fn g7_places_its_mirrored_block_where_the_world_sees_it() {
         panic!("the last entity is the mirrored INSERT");
     };
     assert_eq!(mark.extrusion.z, -1.0);
-    let t = mark.world_transform().expect("a flat plane");
+    let t = mark
+        .world_transform(model.tables.block_records[mark.block_name.name()].base_point)
+        .expect("a flat plane");
     let (sin, cos) = 30f64.to_radians().sin_cos();
     let start = t.apply(Point2D { x: 0.0, y: 0.0 });
     let end = t.apply(Point2D { x: 8.0, y: 0.0 });
@@ -335,7 +337,9 @@ fn g11_keeps_mirrored_coordinates_as_stated_and_places_the_block_through_its_nor
         panic!("the last entity is the block reference");
     };
     assert_eq!(insert.extrusion, mirrored);
-    let placement = insert.world_transform().expect("a flat plane");
+    let placement = insert
+        .world_transform(model.tables.block_records[insert.block_name.name()].base_point)
+        .expect("a flat plane");
     let at = |x: f64, y: f64| placement.apply(Point2D { x, y });
     let close = |p: Point2D, x: f64, y: f64| (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9;
     // The block's origin at the stated (50, 0), mirrored to (-50, 0); its

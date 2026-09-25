@@ -8,7 +8,7 @@
 //! them. It is arithmetic on the INSERT's own fields (DXF 10/20/30, 41/42,
 //! 50, 210) and nothing else; there is no guessing in it.
 
-use crate::model::{InsertEntity, Point2D};
+use crate::model::{InsertEntity, Point2D, Point3D};
 use crate::ocs::Ocs;
 use serde::{Deserialize, Serialize};
 
@@ -41,14 +41,17 @@ impl Affine2 {
         f: 0.0,
     };
 
-    /// The placement an INSERT applies to its block's entities, in the
-    /// INSERT's own plane: scale by the per-axis factors, rotate, then
-    /// translate to the insertion point -- the DXF order. The `z` components
-    /// (43, 30) are not part of a 2D placement and are ignored. With the
-    /// default extrusion this is the placement in the world; otherwise
+    /// The placement an INSERT applies to the entities of a block whose base
+    /// point is `base_point` ([`BlockRecord::base_point`](crate::tables::BlockRecord::base_point)),
+    /// in the INSERT's own plane: take the base point to the origin, scale by
+    /// the per-axis factors, rotate, then translate to the insertion point --
+    /// the DXF order, which puts the block's base point on the insertion
+    /// point. The `z` components (43, 30, and the base point's) are not part
+    /// of a 2D placement and are ignored. With the default extrusion this is
+    /// the placement in the world; otherwise
     /// [`InsertEntity::world_transform`] takes the plane into account.
-    pub fn from_insert(insert: &InsertEntity) -> Affine2 {
-        Affine2::placement(
+    pub fn from_insert(insert: &InsertEntity, base_point: Point3D) -> Affine2 {
+        let m = Affine2::placement(
             Point2D {
                 x: insert.insertion_point.x,
                 y: insert.insertion_point.y,
@@ -56,7 +59,13 @@ impl Affine2 {
             insert.scale.x,
             insert.scale.y,
             insert.rotation,
-        )
+        );
+        let (bx, by) = (base_point.x, base_point.y);
+        Affine2 {
+            e: m.e - (m.a * bx + m.c * by),
+            f: m.f - (m.b * bx + m.d * by),
+            ..m
+        }
     }
 
     /// Scale by `(x_scale, y_scale)`, rotate by `rotation` radians, then
@@ -136,26 +145,34 @@ impl Affine2 {
 }
 
 impl InsertEntity {
-    /// The placement this reference applies to its block's entities, in its
-    /// own plane. See [`Affine2::from_insert`].
-    pub fn transform(&self) -> Affine2 {
-        Affine2::from_insert(self)
+    /// The placement this reference applies to the entities of its block,
+    /// whose base point is `base_point`, in its own plane. See
+    /// [`Affine2::from_insert`].
+    pub fn transform(&self, base_point: Point3D) -> Affine2 {
+        Affine2::from_insert(self, base_point)
     }
 
-    /// Where this reference puts its block's entities in the world's XY:
-    /// the placement in its own plane, then that plane taken to the world
-    /// ([`Ocs::flat_map`]) -- a mirror copy's reverses the world x. `None`
-    /// when the plane is tilted out of the world's, or the extrusion names
-    /// no plane: no 2D map places the block exactly then.
-    pub fn world_transform(&self) -> Option<Affine2> {
+    /// Where this reference puts the entities of its block, whose base point
+    /// is `base_point`, in the world's XY: the placement in its own plane,
+    /// then that plane taken to the world ([`Ocs::flat_map`]) -- a mirror
+    /// copy's reverses the world x. `None` when the plane is tilted out of
+    /// the world's, or the extrusion names no plane: no 2D map places the
+    /// block exactly then.
+    pub fn world_transform(&self, base_point: Point3D) -> Option<Affine2> {
         let plane = Ocs::of(self.extrusion)?.flat_map()?;
-        Some(self.transform().then(&plane))
+        Some(self.transform(base_point).then(&plane))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const ORIGIN: Point3D = Point3D {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
     use crate::model::Point3D;
     use std::f64::consts::FRAC_PI_2;
 
@@ -268,7 +285,7 @@ mod tests {
     fn an_insert_with_the_usual_normal_is_placed_in_the_world_axes() {
         let i = insert(v(10.0, 5.0, 3.0), FRAC_PI_2, WORLD_Z);
         assert_eq!(
-            i.world_transform(),
+            i.world_transform(ORIGIN),
             Some(Affine2::placement(p(10.0, 5.0), 1.0, 1.0, FRAC_PI_2))
         );
     }
@@ -280,7 +297,7 @@ mod tests {
         // block point one unit along the block's x axis goes one unit
         // further left.
         let t = insert(v(10.0, 5.0, 0.0), 0.0, v(0.0, 0.0, -1.0))
-            .world_transform()
+            .world_transform(ORIGIN)
             .unwrap();
         assert!(close(t.apply(p(0.0, 0.0)), p(-10.0, 5.0)));
         assert!(close(t.apply(p(1.0, 0.0)), p(-11.0, 5.0)));
@@ -288,12 +305,12 @@ mod tests {
         // Turned a quarter in its OCS, the block's x axis runs up the world
         // y axis still, since the mirror leaves y alone.
         let t = insert(v(10.0, 5.0, 0.0), FRAC_PI_2, v(0.0, 0.0, -1.0))
-            .world_transform()
+            .world_transform(ORIGIN)
             .unwrap();
         assert!(close(t.apply(p(1.0, 0.0)), p(-10.0, 6.0)));
         // A stated normal that is not of unit length names the same OCS.
         let long = insert(v(10.0, 5.0, 0.0), 0.0, v(0.0, 0.0, -4.0))
-            .world_transform()
+            .world_transform(ORIGIN)
             .unwrap();
         assert!(close(long.apply(p(1.0, 0.0)), p(-11.0, 5.0)));
     }
@@ -304,7 +321,7 @@ mod tests {
         // world's XY. Seen from above, a block point's place depends on its
         // own z too, which a 2D map cannot take -- so there is none.
         assert_eq!(
-            insert(v(0.0, 0.0, 7.0), 0.0, v(1.0, 0.0, 0.0)).world_transform(),
+            insert(v(0.0, 0.0, 7.0), 0.0, v(1.0, 0.0, 0.0)).world_transform(ORIGIN),
             None
         );
     }
@@ -312,17 +329,20 @@ mod tests {
     #[test]
     fn a_normal_that_is_not_a_direction_has_no_world_placement() {
         for bad in [v(0.0, 0.0, 0.0), v(f64::NAN, 0.0, 1.0)] {
-            assert_eq!(insert(v(10.0, 5.0, 0.0), 0.3, bad).world_transform(), None);
+            assert_eq!(
+                insert(v(10.0, 5.0, 0.0), 0.3, bad).world_transform(ORIGIN),
+                None
+            );
         }
     }
 
     #[test]
     fn a_mirrored_block_inside_a_mirrored_block_is_the_right_way_round_again() {
         let inner = insert(v(1.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0))
-            .world_transform()
+            .world_transform(ORIGIN)
             .unwrap();
         let outer = insert(v(10.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0))
-            .world_transform()
+            .world_transform(ORIGIN)
             .unwrap();
         let world = inner.then(&outer);
         assert!(world.determinant() > 0.0);
@@ -386,20 +406,23 @@ mod tests {
         // 30 degrees there: the block's (10, 0) is 10 along that turn from
         // the insertion point, and the world sees both reversed in x.
         let insert = insert_at(p(-200.0, 50.0), 30f64.to_radians(), z(-1.0));
-        let t = insert.world_transform().expect("a flat plane");
+        let t = insert.world_transform(ORIGIN).expect("a flat plane");
         let q = t.apply(p(10.0, 0.0));
         let (sin, cos) = 30f64.to_radians().sin_cos();
         assert!((q.x - (200.0 - 10.0 * cos)).abs() < 1e-9, "{q:?}");
         assert!((q.y - (50.0 + 10.0 * sin)).abs() < 1e-9, "{q:?}");
         assert!(t.determinant() < 0.0);
         // In its own plane it is the plain placement.
-        assert_eq!(insert.transform().apply(p(0.0, 0.0)), p(-200.0, 50.0));
+        assert_eq!(insert.transform(ORIGIN).apply(p(0.0, 0.0)), p(-200.0, 50.0));
     }
 
     #[test]
     fn the_world_plane_places_as_before_and_a_tilted_one_not_at_all() {
         let insert = insert_at(p(3.0, 4.0), 0.5, z(1.0));
-        assert_eq!(insert.world_transform(), Some(insert.transform()));
+        assert_eq!(
+            insert.world_transform(ORIGIN),
+            Some(insert.transform(ORIGIN))
+        );
         let tilted = insert_at(
             p(3.0, 4.0),
             0.5,
@@ -409,7 +432,36 @@ mod tests {
                 z: 0.8,
             },
         );
-        assert_eq!(tilted.world_transform(), None);
-        assert_eq!(insert_at(p(0.0, 0.0), 0.0, z(0.0)).world_transform(), None);
+        assert_eq!(tilted.world_transform(ORIGIN), None);
+        assert_eq!(
+            insert_at(p(0.0, 0.0), 0.0, z(0.0)).world_transform(ORIGIN),
+            None
+        );
+    }
+
+    /// A block whose base point is not the origin, placed as a drawing
+    /// program's script built it: `line 6,1 7,2`, then `block BLOCK1 6,1`
+    /// around that line, then `insert BLOCK1 6,1 0.5 0.5 30`. The line keeps
+    /// its coordinates in the definition; the base point (6, 1) -- where the
+    /// line starts -- lands on the insertion point, so the placed line starts
+    /// there whatever the scale and rotation, and runs half as long, turned
+    /// 30 degrees.
+    #[test]
+    fn a_block_reference_puts_the_base_point_on_the_insertion_point() {
+        let mut i = insert(v(6.0, 1.0, 0.0), 30f64.to_radians(), v(0.0, 0.0, 1.0));
+        i.scale = v(0.5, 0.5, 1.0);
+        let base = v(6.0, 1.0, 0.0);
+        let t = i.world_transform(base).expect("a flat plane");
+        let start = t.apply(p(6.0, 1.0));
+        assert!(
+            (start.x - 6.0).abs() < 1e-12 && (start.y - 1.0).abs() < 1e-12,
+            "{start:?}"
+        );
+        let end = t.apply(p(7.0, 2.0));
+        let (dx, dy) = (end.x - 6.0, end.y - 1.0);
+        assert!((dx.hypot(dy) - 0.5 * 2f64.sqrt()).abs() < 1e-12);
+        assert!((dy.atan2(dx) - 75f64.to_radians()).abs() < 1e-12);
+        // A base point at the origin changes nothing.
+        assert_eq!(i.world_transform(ORIGIN), Some(i.transform(ORIGIN)));
     }
 }

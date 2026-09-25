@@ -239,6 +239,13 @@ pub struct BlockRecord {
     /// former. This is what an INSERT's `block_name` resolves against to
     /// find what it draws.
     pub entities: Vec<Entity>,
+    /// The block's base point (DXF 10/20/30 of the BLOCK): the point of the
+    /// definition a block reference puts on its insertion point. The block's
+    /// entities keep the coordinates the file gives them; a placement takes
+    /// this point off first (see [`Affine2::from_insert`](crate::Affine2::from_insert)).
+    /// An absent group is the format's default, the origin.
+    #[serde(default)]
+    pub base_point: Point3D,
 }
 
 /// One LAYOUT object: a tab of the drawing -- the model tab, or a sheet of

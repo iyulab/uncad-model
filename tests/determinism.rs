@@ -89,6 +89,7 @@ fn drawing() -> CadDatabase {
         block_records.insert(
             name.to_string(),
             BlockRecord {
+                base_point: Default::default(),
                 name: name.to_string(),
                 entities: entities.clone(),
             },
