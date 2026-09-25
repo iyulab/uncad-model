@@ -4,7 +4,7 @@ The neutral entity model for 2D CAD drawings: what a drawing *is* once it has be
 
 Every entity carries a **reference ID**, a **provenance** and a **confidence** — so that anything built on the model can say where a value came from and how far it can be trusted, including "unknown".
 
-This crate is pure data: types and serialization, plus the coordinate arithmetic the format defines on an entity's own fields, which every consumer needs alike -- the placement an INSERT applies to its block (`Affine2`), the coordinate system an entity is written in (`Ocs`), the arc a polyline vertex's bulge describes (`BulgeArc`), and the point at a parameter on an ellipse or a NURBS curve (`EllipseEntity::point_at`, `Nurbs`). It parses nothing, renders nothing, and has no native dependencies.
+This crate is pure data: types and serialization, plus the coordinate arithmetic the format defines on an entity's own fields, which every consumer needs alike -- the placement an INSERT applies to its block (`Affine2`), the coordinate system an entity is written in (`Ocs`), the arc a polyline vertex's bulge describes (`BulgeArc`), the point at a parameter on an ellipse or a NURBS curve (`EllipseEntity::point_at`, `Nurbs`), and how far an arc or an ellipse runs (`ArcEntity::sweep`, `EllipseEntity::sweep`) -- and the unit a `$INSUNITS` code names (`Units`). It parses nothing, renders nothing, and has no native dependencies.
 
 ## Dependencies
 

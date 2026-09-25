@@ -39,6 +39,15 @@ bumps the minor version.
 
 ### Added
 
+- `ArcEntity::sweep`: how far an ARC runs counter-clockwise from its start angle to its end
+  angle, within one turn. Angles a whole turn apart are the whole circle
+  (`WHOLE_TURN_TOLERANCE`). Equal angles give `None`, because the format does not say whether
+  they mean the whole circle or nothing.
+- `EllipseEntity::sweep` and `EllipseEntity::extremes`: how far an ELLIPSE runs in its
+  parameter, and the points where its arc turns in world x or y. Together with the arc's two
+  ends, these points give its extent.
+- `Units` (module `units`): the unit a `$INSUNITS` code names, with its length in
+  millimetres. This is the DXF reference's table.
 - `Ocs`: an entity's own coordinate system from its extrusion (the DXF reference's arbitrary
   axis algorithm), with `to_world` and `flat_map`, the exact 2D map of a plane parallel to XY.
 - `InsertEntity::world_transform`: a block reference's placement taken through its own plane,

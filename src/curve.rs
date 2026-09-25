@@ -1,5 +1,6 @@
 //! The point at a parameter on a curve entity: an ELLIPSE, and a NURBS curve
-//! -- a SPLINE or a HATCH boundary's spline edge.
+//! -- a SPLINE or a HATCH boundary's spline edge -- and how far an ARC or an
+//! ELLIPSE runs, with the points where it turns in x or y.
 //!
 //! The format defines both curves completely by the entity's own fields. An
 //! ellipse is its center, its major axis, the ratio of its minor axis, and
@@ -18,9 +19,82 @@
 //! rather than in each of them -- the same reason [`BulgeArc`](crate::BulgeArc)
 //! does.
 
-use crate::model::{EllipseEntity, Point3D, SplineEntity};
+use std::f64::consts::{PI, TAU};
+
+use crate::model::{ArcEntity, EllipseEntity, Point3D, SplineEntity};
+
+/// How close, in radians, two angles a nonzero number of whole turns apart
+/// must be to count as that many whole turns apart -- an ARC stored as 0 and
+/// 360 degrees, or 30 and 390, whose radians are not a whole turn apart to
+/// the last bit once converted. Chosen by this crate, not the format.
+pub const WHOLE_TURN_TOLERANCE: f64 = 1e-9;
+
+impl ArcEntity {
+    /// How far the arc runs counter-clockwise (about its normal) from
+    /// `start_angle` to `end_angle`, in radians within (0, 2 pi]: two angles
+    /// more than a turn apart name the same directions as two within one, and
+    /// two a whole number of turns apart (within [`WHOLE_TURN_TOLERANCE`])
+    /// are the whole circle.
+    ///
+    /// `None` when the two angles are equal, or either is not a number: the
+    /// format does not say whether equal angles are the whole circle or
+    /// nothing at all, and this crate does not choose.
+    pub fn sweep(&self) -> Option<f64> {
+        let span = self.end_angle - self.start_angle;
+        if !span.is_finite() || span == 0.0 {
+            return None;
+        }
+        let turns = (span / TAU).round();
+        if turns != 0.0 && (span - turns * TAU).abs() <= WHOLE_TURN_TOLERANCE {
+            return Some(TAU);
+        }
+        let sweep = span.rem_euclid(TAU);
+        Some(if sweep == 0.0 { TAU } else { sweep })
+    }
+}
 
 impl EllipseEntity {
+    /// How far the ellipse runs in its own parameter, counter-clockwise from
+    /// `start_angle`: `2 pi` for the whole ellipse, otherwise the span to
+    /// `end_angle` within (0, 2 pi). Equal parameters (within 1e-12) and
+    /// parameters a whole turn apart (within 1e-9) are the whole ellipse --
+    /// the whole ellipse is how a file states them (0 and 2 pi). Both
+    /// tolerances are this crate's.
+    pub fn sweep(&self) -> f64 {
+        let span = self.end_angle - self.start_angle;
+        if span.abs() < 1e-12 || (span.abs() - TAU).abs() < 1e-9 {
+            return TAU;
+        }
+        let sweep = span.rem_euclid(TAU);
+        if sweep < 1e-12 {
+            TAU
+        } else {
+            sweep
+        }
+    }
+
+    /// The points of the ellipse's arc, besides its two ends, where its
+    /// world x or y turns -- the parameters within [`sweep`](Self::sweep)
+    /// from `start_angle`, ends included, at which `x(t) = cx + Mx cos t +
+    /// nx sin t` (or `y`) is stationary: `atan2(nx, Mx)` and half a turn
+    /// later, and likewise for y. With the two ends they hold the arc's
+    /// axis-aligned extent in the world's XY. `None` where
+    /// [`minor_axis`](Self::minor_axis) is.
+    pub fn extremes(&self) -> Option<Vec<Point3D>> {
+        let (m, n) = (self.major_axis_endpoint, self.minor_axis()?);
+        let (start, sweep) = (self.start_angle, self.sweep());
+        let mut out = Vec::new();
+        for base in [n.x.atan2(m.x), n.y.atan2(m.y)] {
+            for half_turn in [0.0, PI] {
+                let offset = (base + half_turn - start).rem_euclid(TAU);
+                if offset <= sweep {
+                    out.push(self.point_at(start + offset)?);
+                }
+            }
+        }
+        Some(out)
+    }
+
     /// The minor axis as a world vector: the unit normal of the ellipse's
     /// plane crossed with the major axis, scaled by `axis_ratio` -- the
     /// direction the parameter turns towards. With the default normal
@@ -433,5 +507,108 @@ mod tests {
             end_tangent: None,
         };
         assert_eq!(s.nurbs(), None);
+    }
+
+    fn arc(start: f64, end: f64) -> ArcEntity {
+        ArcEntity {
+            common: common(),
+            center: p(0.0, 0.0),
+            radius: 1.0,
+            start_angle: start,
+            end_angle: end,
+            extrusion: Point3D {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+        }
+    }
+
+    #[test]
+    fn an_arc_runs_counter_clockwise_within_one_turn() {
+        assert_eq!(arc(0.0, FRAC_PI_2).sweep(), Some(FRAC_PI_2));
+        // Across zero: from 3/4 of a turn to 1/4 is half a turn.
+        let s = arc(3.0 * FRAC_PI_2, FRAC_PI_2).sweep().unwrap();
+        assert!((s - PI).abs() < 1e-12, "{s}");
+        // Angles more than a turn apart name the directions one turn does:
+        // 0 to 3 pi is the half turn 0 to pi.
+        let s = arc(0.0, 3.0 * PI).sweep().unwrap();
+        assert!((s - PI).abs() < 1e-12, "{s}");
+    }
+
+    #[test]
+    fn angles_a_whole_turn_apart_are_the_whole_circle() {
+        assert_eq!(arc(0.0, TAU).sweep(), Some(TAU));
+        assert_eq!(arc(TAU, 0.0).sweep(), Some(TAU));
+        assert_eq!(arc(0.0, 2.0 * TAU).sweep(), Some(TAU));
+        // 30 and 390 degrees, converted: not a whole turn apart to the bit.
+        let (a, b) = (30f64.to_radians(), 390f64.to_radians());
+        assert_eq!(arc(a, b).sweep(), Some(TAU));
+    }
+
+    #[test]
+    fn a_tiny_arc_is_not_taken_for_the_whole_circle() {
+        let s = arc(1.0, 1.0 + 1e-10).sweep().unwrap();
+        assert!(s < 1e-9, "{s}");
+    }
+
+    #[test]
+    fn equal_angles_give_no_sweep() {
+        // The format does not say whether this is the whole circle or
+        // nothing; neither is chosen.
+        assert_eq!(arc(1.0, 1.0).sweep(), None);
+        assert_eq!(arc(0.0, 0.0).sweep(), None);
+        assert_eq!(arc(0.0, f64::NAN).sweep(), None);
+        assert_eq!(arc(0.0, f64::INFINITY).sweep(), None);
+    }
+
+    fn arc_of(el: &EllipseEntity, start: f64, end: f64) -> EllipseEntity {
+        EllipseEntity {
+            start_angle: start,
+            end_angle: end,
+            ..el.clone()
+        }
+    }
+
+    #[test]
+    fn an_ellipse_runs_over_its_parameter_and_equal_ends_are_the_whole() {
+        let z = Point3D {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        };
+        let el = ellipse(p(4.0, 0.0), 0.5, z);
+        assert_eq!(el.sweep(), TAU);
+        assert_eq!(arc_of(&el, 0.0, 0.0).sweep(), TAU);
+        assert_eq!(arc_of(&el, 1.0, 1.0).sweep(), TAU);
+        assert_eq!(arc_of(&el, 0.0, -TAU).sweep(), TAU);
+        assert_eq!(arc_of(&el, 0.0, FRAC_PI_2).sweep(), FRAC_PI_2);
+        let s = arc_of(&el, 3.0 * FRAC_PI_2, FRAC_PI_2).sweep();
+        assert!((s - PI).abs() < 1e-12, "{s}");
+    }
+
+    #[test]
+    fn an_ellipse_arc_turns_where_its_x_or_y_does_within_its_sweep() {
+        let z = Point3D {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        };
+        // (10 + 4 cos t, 20 + 2 sin t): x turns at 0 and pi, y at pi/2 and
+        // 3 pi/2. The quarter from 0 to pi/2 holds its two ends, which are
+        // both turning points.
+        let quarter = arc_of(&ellipse(p(4.0, 0.0), 0.5, z), 0.0, FRAC_PI_2);
+        let ex = quarter.extremes().unwrap();
+        assert_eq!(ex.len(), 2, "{ex:?}");
+        assert!(ex.iter().any(|&q| near(q, p(14.0, 20.0))));
+        assert!(ex.iter().any(|&q| near(q, p(10.0, 22.0))));
+        // The whole ellipse turns four times.
+        assert_eq!(ellipse(p(4.0, 0.0), 0.5, z).extremes().unwrap().len(), 4);
+        // From just past 0 to just before pi/2 it turns nowhere.
+        let inside = arc_of(&ellipse(p(4.0, 0.0), 0.5, z), 0.1, 1.4);
+        assert!(inside.extremes().unwrap().is_empty());
+        // A normal that names no plane has no curve.
+        let flat = ellipse(p(4.0, 0.0), 0.5, p(0.0, 0.0));
+        assert_eq!(flat.extremes(), None);
     }
 }

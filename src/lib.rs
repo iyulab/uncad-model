@@ -10,8 +10,9 @@
 //! every consumer needs alike and must compute the same way: the placement
 //! an INSERT applies to its block ([`Affine2`]), the coordinate system an
 //! entity is written in ([`Ocs`]), the arc a polyline vertex's bulge
-//! describes ([`BulgeArc`]), and the point at a parameter on an ELLIPSE or a
-//! NURBS curve ([`Nurbs`]); and the one step of reading a string the formats
+//! describes ([`BulgeArc`]), the point at a parameter on an ELLIPSE or a
+//! NURBS curve ([`Nurbs`]), and how far an ARC or an ELLIPSE runs
+//! ([`curve`]); the unit a `$INSUNITS` code names ([`Units`]); and the one step of reading a string the formats
 //! define the same way everywhere, undoing how it was stored ([`text`]).
 //!
 //! The rules the model follows are in `docs/principles.md` alongside this
@@ -28,6 +29,7 @@ pub mod ocs;
 pub mod tables;
 pub mod text;
 pub mod transform;
+pub mod units;
 
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +42,7 @@ pub use model::{
 pub use ocs::Ocs;
 pub use tables::Tables;
 pub use transform::Affine2;
+pub use units::Units;
 
 /// A drawing: the model, and nothing else.
 ///
