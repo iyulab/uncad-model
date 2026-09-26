@@ -85,6 +85,8 @@ bumps the minor version.
 
 ### Fixed
 
+- `TextKind` documents a dimension's text and a tolerance frame's text as written in MTEXT
+  codes (`\X`, `\S…;`, `{\Fgdt;…}`), not in percent codes only.
 - A block reference puts its block's base point on the insertion point. The placement took
   every block as based at the origin, so a block with another base point was drawn off by it.
 

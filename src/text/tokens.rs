@@ -1,8 +1,9 @@
 //! A drawing's text, split into what its codes say.
 //!
 //! The model carries text with the codes the text itself is written in
-//! (principles §6.1): TEXT, ATTRIB, ATTDEF and a dimension's text use percent
-//! codes (`%%d` for a degree sign), and MTEXT adds its own backslash codes
+//! (principles §6.1): TEXT, ATTRIB and ATTDEF use percent codes (`%%d` for a
+//! degree sign), and MTEXT -- with a dimension's text and a tolerance
+//! frame's, which are written in its codes -- adds its own backslash codes
 //! (`\P` for a paragraph break, `\S1#2;` for stacked text). What each code
 //! *means* is fixed by the format; what to do with it -- draw it, drop it,
 //! compare text without it -- is each consumer's choice. So the splitting
@@ -18,10 +19,13 @@
 /// Which codes a string is written in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextKind {
-    /// TEXT, ATTRIB, ATTDEF, a dimension's text, a tolerance frame's text:
-    /// percent codes only. A backslash is a character.
+    /// TEXT, ATTRIB, ATTDEF: percent codes only. A backslash is a character.
     Line,
-    /// MTEXT: percent codes and MTEXT's backslash codes and `{}` groups.
+    /// MTEXT, and the texts written in its codes: a dimension's text (whose
+    /// `\X` splits it above and below the dimension line, and whose `\S…;`
+    /// stacks a tolerance) and a tolerance frame's text (`{\Fgdt;…}` picks
+    /// the symbol font). Percent codes and MTEXT's backslash codes and `{}`
+    /// groups.
     MText,
 }
 
