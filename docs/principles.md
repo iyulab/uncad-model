@@ -8,7 +8,7 @@ Parsers, readers, editors, differs and renderers all speak this model and nothin
 
 | Change | How |
 |---|---|
-| **Adding** an entity type or field | Fine without prior discussion; mention it in the change description |
+| **Adding** an entity type or field | Fine without prior discussion; mention it in the change description. Model structs stay exhaustive on purpose: a new field is a compile error in every producer, so each reader decides its value instead of inheriting a default. For a registry consumer that builds model values this is a breaking change, recorded in the changelog of the release that carries it |
 | **Changing the meaning of, or removing,** a field | Propose first |
 | Changing the **provenance / confidence contract**, including a new confidence value | Discuss before any work |
 
