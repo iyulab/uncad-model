@@ -39,6 +39,11 @@ bumps the minor version.
 
 ### Added
 
+- `DimStyleRecord::overridden(&[StyleOverride])`: the style as one dimension or leader sees it,
+  each of its own overrides replacing the variable of its group. An override of the wrong kind
+  leaves that variable `None`; one the record does not carry is skipped.
+- `LinearUnitFormat::from_code`, `AngularUnitFormat::from_code` and
+  `FractionFormat::from_code`, beside `ArcSymbol::from_code`.
 - `DimensionEntity::style_overrides` and `LeaderEntity::style_overrides`: the dimension-style
   variables one dimension or leader sets for itself (its extended data's `DSTYLE` list), as
   `StyleOverride { variable, value }` with `OverrideValue` in the kind the file states. `None`

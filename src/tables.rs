@@ -6,7 +6,7 @@
 //! JSON key order -- is deterministic: the same drawing serializes to the
 //! same bytes on every run and every machine.
 
-use crate::model::{absent, Entity, EntityId, Point2D, Point3D, Ref};
+use crate::model::{absent, Entity, EntityId, OverrideValue, Point2D, Point3D, Ref, StyleOverride};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -215,6 +215,50 @@ pub enum ArcSymbol {
     Suppressed,
 }
 
+impl LinearUnitFormat {
+    /// `DIMLUNIT` (DXF 277) as the format writes it; `None` outside the six
+    /// it defines.
+    pub fn from_code(code: i32) -> Option<LinearUnitFormat> {
+        match code {
+            1 => Some(LinearUnitFormat::Scientific),
+            2 => Some(LinearUnitFormat::Decimal),
+            3 => Some(LinearUnitFormat::Engineering),
+            4 => Some(LinearUnitFormat::Architectural),
+            5 => Some(LinearUnitFormat::Fractional),
+            6 => Some(LinearUnitFormat::WindowsDesktop),
+            _ => None,
+        }
+    }
+}
+
+impl AngularUnitFormat {
+    /// `DIMAUNIT` (DXF 275) as the format writes it; `None` outside the five
+    /// it defines.
+    pub fn from_code(code: i32) -> Option<AngularUnitFormat> {
+        match code {
+            0 => Some(AngularUnitFormat::DecimalDegrees),
+            1 => Some(AngularUnitFormat::DegreesMinutesSeconds),
+            2 => Some(AngularUnitFormat::Gradians),
+            3 => Some(AngularUnitFormat::Radians),
+            4 => Some(AngularUnitFormat::SurveyorsUnits),
+            _ => None,
+        }
+    }
+}
+
+impl FractionFormat {
+    /// `DIMFRAC` (DXF 276) as the format writes it; `None` outside the three
+    /// it defines.
+    pub fn from_code(code: i32) -> Option<FractionFormat> {
+        match code {
+            0 => Some(FractionFormat::Horizontal),
+            1 => Some(FractionFormat::Diagonal),
+            2 => Some(FractionFormat::NotStacked),
+            _ => None,
+        }
+    }
+}
+
 impl ArcSymbol {
     /// The variable's value as the format writes it; `None` outside the
     /// three it defines.
@@ -225,6 +269,60 @@ impl ArcSymbol {
             2 => Some(ArcSymbol::Suppressed),
             _ => None,
         }
+    }
+}
+
+impl DimStyleRecord {
+    /// This style as one dimension or leader sees it: each of `overrides`
+    /// (the entity's own, from its extended data -- see
+    /// [`StyleOverride`]) replaces the variable of its DXF group, which is
+    /// how the format defines them; every other variable is the style's.
+    ///
+    /// An override whose value is not of its variable's kind -- a string
+    /// for a number, a real for an integer -- or whose code the format does
+    /// not define leaves that variable `None`: the style's value is not
+    /// the entity's, and no other is guessed. An override of a variable
+    /// this record does not carry (an arrowhead block, a line color) is
+    /// skipped. When a variable is overridden twice, the last one counts.
+    pub fn overridden(&self, overrides: &[StyleOverride]) -> DimStyleRecord {
+        let mut style = self.clone();
+        for o in overrides {
+            let real = match o.value {
+                OverrideValue::Real(v) => Some(v),
+                _ => None,
+            };
+            let integer = match o.value {
+                OverrideValue::Integer(v) => Some(v),
+                _ => None,
+            };
+            match o.variable {
+                3 => {
+                    style.post = match &o.value {
+                        OverrideValue::Text(t) => Some(t.clone()),
+                        _ => None,
+                    }
+                }
+                40 => style.scale = real,
+                144 => style.length_factor = real,
+                71 => style.tolerances = integer.map(|v| v != 0),
+                72 => style.limits = integer.map(|v| v != 0),
+                47 => style.tolerance_upper = real,
+                48 => style.tolerance_lower = real,
+                271 => style.decimal_places = integer,
+                272 => style.tolerance_decimal_places = integer,
+                140 => style.text_height = real,
+                41 => style.arrow_size = real,
+                277 => style.linear_unit_format = integer.and_then(LinearUnitFormat::from_code),
+                78 => style.zero_suppression = integer,
+                45 => style.rounding = real,
+                275 => style.angular_unit_format = integer.and_then(AngularUnitFormat::from_code),
+                179 => style.angular_decimal_places = integer,
+                276 => style.fraction_format = integer.and_then(FractionFormat::from_code),
+                90 => style.arc_symbol = integer.and_then(ArcSymbol::from_code),
+                _ => {}
+            }
+        }
+        style
     }
 }
 
