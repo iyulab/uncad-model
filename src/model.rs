@@ -1306,6 +1306,12 @@ pub struct DimensionEntity {
     /// other kind, where the bit means nothing, and for a document written
     /// before this field existed.
     pub ordinate_axis: Option<OrdinateAxis>,
+    /// The dimension-style variables this dimension sets for itself, over
+    /// the ones [`Self::style_name`] gives it -- see [`StyleOverride`].
+    /// `None` when the reader did not look (and for a document written
+    /// before this field existed); an empty list when it looked and the
+    /// file sets none.
+    pub style_overrides: Option<Vec<StyleOverride>>,
 }
 
 /// Which coordinate an ordinate dimension measures (DXF 70, bit 64).
@@ -1490,6 +1496,43 @@ pub struct LeaderEntity {
     pub annotation_id: Ref<EntityId>,
     /// DXF 3: the DIMSTYLE this leader names.
     pub style_name: Ref<String>,
+    /// The dimension-style variables this leader sets for itself (its arrow
+    /// size, its arrow block, ...) -- see [`StyleOverride`]. `None` when the
+    /// reader did not look (and for a document written before this field
+    /// existed); an empty list when it looked and the file sets none.
+    pub style_overrides: Option<Vec<StyleOverride>>,
+}
+
+/// One dimension-style variable a single dimension or leader sets for
+/// itself rather than taking it from the style it names. A file keeps these
+/// in the entity's extended data under the `ACAD` application, as a `DSTYLE`
+/// list of (variable, value) pairs -- what an editor writes when one
+/// dimension's arrow size or decimal places is changed on its own.
+///
+/// `variable` is the variable's group code in a DIMSTYLE record (41 is
+/// `DIMASZ`, 271 `DIMDEC`, 341 `DIMLDRBLK`, ...); the value is carried as the
+/// file states it, in the kind it states it in. Which value a consumer
+/// should then use is the style's with these laid over it, variable by
+/// variable -- left to the consumer, as is the meaning of each variable.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StyleOverride {
+    pub variable: u16,
+    pub value: OverrideValue,
+}
+
+/// A [`StyleOverride`]'s value, in the kind the file states it in.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "UPPERCASE")]
+pub enum OverrideValue {
+    /// A real number (extended-data group 1040).
+    Real(f64),
+    /// An integer (1070 or 1071).
+    Integer(i32),
+    /// A string (1000).
+    Text(String),
+    /// A handle to another object (1005), as hex -- a block record for an
+    /// arrow block, a text style for a text style.
+    Handle(String),
 }
 
 /// One entity of a parsed drawing.

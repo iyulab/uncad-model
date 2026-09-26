@@ -585,6 +585,7 @@ fn convert(
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
             ordinate_axis: None,
+            style_overrides: Some(Vec::new()),
         }),
         EntitySpec::ArcDimension {
             layer,
@@ -615,6 +616,7 @@ fn convert(
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
             ordinate_axis: None,
+            style_overrides: Some(Vec::new()),
         }),
         EntitySpec::DiameterDimension {
             layer,
@@ -641,6 +643,7 @@ fn convert(
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
             ordinate_axis: None,
+            style_overrides: Some(Vec::new()),
         }),
         EntitySpec::OrdinateDimension {
             layer,
@@ -671,6 +674,7 @@ fn convert(
             text_rotation: 0.0,
             style_name: style_ref(style, spec),
             ordinate_axis: Some(*axis),
+            style_overrides: Some(Vec::new()),
         }),
         EntitySpec::Viewport {
             layer,

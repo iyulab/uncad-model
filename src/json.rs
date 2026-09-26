@@ -386,6 +386,7 @@ mod tests {
                 text_rotation: 0.25,
                 style_name: Ref::Unresolved("ISO-25".to_string()),
                 ordinate_axis: None,
+                style_overrides: None,
             }),
             Entity::Hatch(HatchEntity {
                 common: c.clone(),
@@ -465,6 +466,7 @@ mod tests {
                 annotation: LeaderAnnotation::Tolerance,
                 annotation_id: Ref::Resolved(EntityId::new(0x4F1)),
                 style_name: Ref::Resolved("ISO-25".to_string()),
+                style_overrides: None,
             }),
             Entity::MultiLeader(MultiLeaderEntity {
                 common: c.clone(),

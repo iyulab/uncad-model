@@ -39,6 +39,11 @@ bumps the minor version.
 
 ### Added
 
+- `DimensionEntity::style_overrides` and `LeaderEntity::style_overrides`: the dimension-style
+  variables one dimension or leader sets for itself (its extended data's `DSTYLE` list), as
+  `StyleOverride { variable, value }` with `OverrideValue` in the kind the file states. `None`
+  when the reader did not look -- and for a document written before the field; an empty list
+  when it looked and there is none.
 - `ArcEntity::sweep`: how far an ARC runs counter-clockwise from its start angle to its end
   angle, within one turn. Angles a whole turn apart are the whole circle
   (`WHOLE_TURN_TOLERANCE`). Equal angles give `None`, because the format does not say whether

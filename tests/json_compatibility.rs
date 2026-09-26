@@ -200,6 +200,9 @@ fn an_ordinate_dimension_without_its_axis_does_not_claim_one() {
     };
     assert_eq!(d.kind, Some(DimensionKind::Ordinate));
     assert_eq!(d.ordinate_axis, None);
+    // Written before a reader looked at a dimension's own style variables:
+    // not "none", but "not looked at".
+    assert_eq!(d.style_overrides, None);
 }
 
 #[test]
