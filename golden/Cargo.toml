@@ -15,7 +15,10 @@ workspace = true
 uncad-model = { path = ".." }
 # The codepage encoder for cases with non-ASCII text (`Codepage::Ansi949`).
 encoding_rs = "0.8"
+# Random specs for property checks (`strategy`). A normal dependency: the
+# crate is test-only and never published, and the checks that use the
+# generator live wherever the code they check is linked in.
+proptest = "1"
 
 [dev-dependencies]
-proptest = "1"
 serde_json = "1.0.151"

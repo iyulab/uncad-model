@@ -6,15 +6,18 @@
 //! parser is expected to produce -- so the spec is the oracle, not a
 //! hand-maintained expected file.
 //!
-//! Test-only, never published: consumers take it as a dev-dependency and run
-//! their share of the cases (a parser compares its output to `expected`; a
-//! summarizer checks its summary against the spec's values; and so on).
+//! Test-only, never published: consumers take byte copies of the written
+//! files and expected models and run their share of the cases (a parser
+//! compares its output to `expected`; a summarizer checks its summary
+//! against the spec's values; and so on). [`strategy`] generates random
+//! specs for property checks.
 
 #![forbid(unsafe_code)]
 
 pub mod cases;
 pub mod expected;
 pub mod spec;
+pub mod strategy;
 pub mod writer;
 
 pub use spec::{
