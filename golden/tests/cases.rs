@@ -26,6 +26,20 @@ fn every_named_case_writes_and_has_an_expected_model() {
     assert!(cases::by_name("g0").is_none());
 }
 
+/// Every entity of every named case -- the kinds the random specs do not
+/// make among them (hatches, viewports, styled entities) -- moves when
+/// displaced: `g3_many_parts` builds its copies with `moved`, and a kind
+/// it passed over would lie on top of the first copy's.
+#[test]
+fn every_entity_of_every_case_moves() {
+    for name in cases::NAMES {
+        let spec = cases::by_name(name).expect(name);
+        for e in spec.entities.iter().chain(&spec.paper_space) {
+            assert_ne!(&e.moved(300.0, 200.0), e, "{name}: {e:?}");
+        }
+    }
+}
+
 #[test]
 fn g2_nests_three_blocks_with_the_declared_transforms() {
     let spec = cases::g2_nested_blocks();

@@ -533,7 +533,16 @@ impl EntitySpec {
                 insert: moved_ocs(insert, *mirrored, dx, dy),
                 scale: *scale,
                 rotation_deg: *rotation_deg,
-                attribs: attribs.clone(),
+                // An attribute's points are written in world coordinates,
+                // whatever its reference's extrusion.
+                attribs: attribs
+                    .iter()
+                    .map(|a| AttribSpec {
+                        insert: m(&a.insert),
+                        align: a.align.map(|t| TextAlign { at: m(&t.at), ..t }),
+                        ..a.clone()
+                    })
+                    .collect(),
                 mirrored: *mirrored,
             },
             EntitySpec::Solid {
@@ -582,7 +591,172 @@ impl EntitySpec {
                 measurement: *measurement,
                 style: style.clone(),
             },
-            other => other.clone(),
+            EntitySpec::Styled { style, entity } => EntitySpec::Styled {
+                style: style.clone(),
+                entity: Box::new(entity.moved(dx, dy)),
+            },
+            EntitySpec::Hatch {
+                layer,
+                paths,
+                style,
+            } => EntitySpec::Hatch {
+                layer: layer.clone(),
+                paths: paths
+                    .iter()
+                    .map(|path| HatchPathSpec {
+                        shape: match &path.shape {
+                            HatchShapeSpec::Polyline(vertices) => HatchShapeSpec::Polyline(
+                                vertices
+                                    .iter()
+                                    .map(|v| Vertex { at: m(&v.at), ..*v })
+                                    .collect(),
+                            ),
+                            HatchShapeSpec::Edges(edges) => HatchShapeSpec::Edges(
+                                edges.iter().map(|e| e.moved(dx, dy)).collect(),
+                            ),
+                        },
+                        ..path.clone()
+                    })
+                    .collect(),
+                style: *style,
+            },
+            // A viewport's own place is its centre on the sheet; what it
+            // shows (its view centre and target) is model space and stays.
+            EntitySpec::Viewport {
+                layer,
+                center,
+                width,
+                height,
+                on,
+                id,
+                view_center,
+                view_height,
+                view_target,
+                twist_deg,
+                frozen_layers,
+            } => EntitySpec::Viewport {
+                layer: layer.clone(),
+                center: m(center),
+                width: *width,
+                height: *height,
+                on: *on,
+                id: *id,
+                view_center: *view_center,
+                view_height: *view_height,
+                view_target: *view_target,
+                twist_deg: *twist_deg,
+                frozen_layers: frozen_layers.clone(),
+            },
+            EntitySpec::LinearDimension {
+                layer,
+                from,
+                to,
+                line_point,
+                text,
+                measurement,
+                style,
+            } => EntitySpec::LinearDimension {
+                layer: layer.clone(),
+                from: m(from),
+                to: m(to),
+                line_point: m(line_point),
+                text: text.clone(),
+                measurement: *measurement,
+                style: style.clone(),
+            },
+            EntitySpec::ArcDimension {
+                layer,
+                from,
+                to,
+                center,
+                line_point,
+                text,
+                measurement,
+                style,
+            } => EntitySpec::ArcDimension {
+                layer: layer.clone(),
+                from: m(from),
+                to: m(to),
+                center: m(center),
+                line_point: m(line_point),
+                text: text.clone(),
+                measurement: *measurement,
+                style: style.clone(),
+            },
+            EntitySpec::DiameterDimension {
+                layer,
+                first,
+                second,
+                text,
+                measurement,
+                style,
+            } => EntitySpec::DiameterDimension {
+                layer: layer.clone(),
+                first: m(first),
+                second: m(second),
+                text: text.clone(),
+                measurement: *measurement,
+                style: style.clone(),
+            },
+        }
+    }
+}
+
+impl HatchEdgeSpec {
+    /// The edge displaced by `(dx, dy)`. An ellipse's major axis endpoint
+    /// is relative to its centre (DXF 11 of a hatch edge) and a spline's
+    /// knots and weights are not points, so only centres, ends and control
+    /// points move.
+    pub fn moved(&self, dx: f64, dy: f64) -> HatchEdgeSpec {
+        let m = |p: &Xy| p.moved(dx, dy);
+        match self {
+            HatchEdgeSpec::Line { start, end } => HatchEdgeSpec::Line {
+                start: m(start),
+                end: m(end),
+            },
+            HatchEdgeSpec::Arc {
+                center,
+                radius,
+                start_deg,
+                end_deg,
+                ccw,
+            } => HatchEdgeSpec::Arc {
+                center: m(center),
+                radius: *radius,
+                start_deg: *start_deg,
+                end_deg: *end_deg,
+                ccw: *ccw,
+            },
+            HatchEdgeSpec::Ellipse {
+                center,
+                major_end,
+                ratio,
+                start_deg,
+                end_deg,
+                ccw,
+            } => HatchEdgeSpec::Ellipse {
+                center: m(center),
+                major_end: *major_end,
+                ratio: *ratio,
+                start_deg: *start_deg,
+                end_deg: *end_deg,
+                ccw: *ccw,
+            },
+            HatchEdgeSpec::Spline {
+                degree,
+                rational,
+                periodic,
+                knots,
+                control_points,
+                weights,
+            } => HatchEdgeSpec::Spline {
+                degree: *degree,
+                rational: *rational,
+                periodic: *periodic,
+                knots: knots.clone(),
+                control_points: control_points.iter().map(m).collect(),
+                weights: weights.clone(),
+            },
         }
     }
 }

@@ -11,7 +11,7 @@
 
 use proptest::prelude::*;
 use uncad_model::ToJsonOptions;
-use uncad_model_golden::strategy::spec;
+use uncad_model_golden::strategy::{entity, later_entity, spec};
 use uncad_model_golden::{expected, write};
 
 proptest! {
@@ -90,5 +90,14 @@ proptest! {
             let declared = format!("  2\n{}\n", e.layer());
             prop_assert!(dxf.contains(&declared), "layer {} not declared", e.layer());
         }
+    }
+
+    /// `moved` moves every kind: an entity displaced by a non-zero offset is
+    /// never the entity it was. (A kind it passed over unmoved made every
+    /// copy of a many-copies case lay its dimensions and attributes on top
+    /// of the first copy's.)
+    #[test]
+    fn every_kind_moves(e in prop_oneof![entity(), later_entity()]) {
+        prop_assert_ne!(e.moved(300.0, 200.0), e);
     }
 }
