@@ -319,8 +319,36 @@ pub fn later_entity() -> impl Strategy<Value = EntitySpec> {
     prop_oneof![justified, solid, lifted, ordinate, mesh]
 }
 
+/// The name every reference [`undeclared`] rewrites points at: a block, a
+/// text style and a dimension style the file never declares.
+pub const UNDECLARED: &str = "UNDECLARED";
+
+/// `entity` with the table entry it names by name -- the block a reference
+/// inserts, the style a text or a dimension is written in -- replaced by
+/// [`UNDECLARED`]. The file names it; the reader owes that name back,
+/// unresolved. An entity that names nothing is returned as it is.
+pub fn undeclared(entity: EntitySpec) -> EntitySpec {
+    let mut e = entity;
+    match &mut e {
+        EntitySpec::Insert { block, .. } => *block = UNDECLARED.to_string(),
+        EntitySpec::Text { style, .. }
+        | EntitySpec::LinearDimension { style, .. }
+        | EntitySpec::DiameterDimension { style, .. }
+        | EntitySpec::ArcDimension { style, .. }
+        | EntitySpec::OrdinateDimension { style, .. } => *style = Some(UNDECLARED.to_string()),
+        _ => {}
+    }
+    e
+}
+
+/// A spec of up to 23 entities, one in four of them naming a table entry
+/// the file never declares ([`undeclared`]).
 pub fn spec() -> impl Strategy<Value = Spec> {
-    prop::collection::vec(entity(), 0..24).prop_map(|entities| Spec {
+    prop::collection::vec(
+        (entity(), 0u8..4).prop_map(|(e, k)| if k == 0 { undeclared(e) } else { e }),
+        0..24,
+    )
+    .prop_map(|entities| Spec {
         codepage: Codepage::Ascii,
         dim_styles: Vec::new(),
         layers: vec![
