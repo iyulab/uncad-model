@@ -58,7 +58,7 @@ Invariant 4 is what draws the line: a departure group's absence is established b
 
 ## 4. Pure data, no weight
 
-Types and serialization. No parsing, no rendering, no native code, no network. A crate that only needs to *talk about* drawings should pay for nothing else.
+Types and serialization. No file reading, no rendering, no native code, no network. A crate that only needs to *talk about* drawings should pay for nothing else.
 
 The arithmetic that lives here is the coordinate arithmetic the format itself defines on an entity's own fields, and nothing else:
 
@@ -70,6 +70,8 @@ The arithmetic that lives here is the coordinate arithmetic the format itself de
 - the unit a header's `$INSUNITS` code names, with its length in millimetres (`Units`) -- the DXF reference's table, which is data rather than arithmetic, and is here for the same reason.
 
 Each is a function of fields the entity carries, with nothing to choose and nothing to guess. Every consumer that draws, measures or points at the entity needs exactly this arithmetic, and if two consumers computed it separately they could disagree about where the same line is -- which is why it is here once rather than in each of them. A tolerance this crate adds on top (when a composed placement still counts as a similarity, when an extrusion counts as the world's) is named and documented where it is defined, apart from the format's own constants.
+
+Two steps of reading live here for the same reason, though neither is arithmetic: undoing how a string was stored (`text` -- §6.1), and the wireframe of an ACIS body from its SAT text (`acis::wireframe`). Once a 3DSOLID's or a REGION's body is text, both formats carry the same SAT records; the edges `Solid3DEntity` carries are a function of those records with nothing to choose, and two readers computing them separately could disagree about the same edge. How a file stores that text -- obfuscated in DXF groups, or in a binary form a reader converts -- stays with the reader.
 
 Distance, intersection, hit-testing, curve sampling (how many points, how far a chord may stray from the curve), rendering and editing stay in the consumers: they choose something (a precision, a view, a policy for what a degenerate input means) that the format does not.
 

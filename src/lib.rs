@@ -1,7 +1,7 @@
 //! The neutral entity model for 2D CAD drawings: what a drawing *is* once it
 //! has been taken out of its file format.
 //!
-//! Pure data. This crate parses nothing, renders nothing, and has no native
+//! Pure data. This crate reads no file, renders nothing, and has no native
 //! dependencies: a parser fills a [`CadDatabase`], and a summarizer, an
 //! editor, a differ or a renderer reads it. What it offers beyond the data
 //! is serialization -- [`CadDatabase::to_json`] and the `serde` derives on
@@ -13,13 +13,16 @@
 //! describes ([`BulgeArc`]), the point at a parameter on an ELLIPSE or a
 //! NURBS curve ([`Nurbs`]), and how far an ARC or an ELLIPSE runs
 //! ([`curve`]); the unit a `$INSUNITS` code names ([`Units`]); and the one step of reading a string the formats
-//! define the same way everywhere, undoing how it was stored ([`text`]).
+//! define the same way everywhere, undoing how it was stored ([`text`]); and
+//! the wireframe of an ACIS body from the SAT text both formats carry it in
+//! ([`acis`]).
 //!
 //! The rules the model follows are in `docs/principles.md` alongside this
 //! crate; the shape of each type follows the DXF reference.
 
 #![forbid(unsafe_code)]
 
+pub mod acis;
 pub mod bulge;
 pub mod color;
 pub mod curve;

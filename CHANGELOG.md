@@ -39,6 +39,9 @@ bumps the minor version.
 
 ### Added
 
+- `acis::wireframe`: the wireframe a `Solid3DEntity` carries, from the SAT text of an ACIS
+  body -- one straight segment per edge and the count of edges it could not resolve -- so that
+  every reader of a 3DSOLID or a REGION computes it the same way.
 - `DimStyleRecord::overridden(&[StyleOverride])`: the style as one dimension or leader sees it,
   each of its own overrides replacing the variable of its group. An override of the wrong kind
   leaves that variable `None`; one the record does not carry is skipped.
