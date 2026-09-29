@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-30
+
 ### Added
 
 - `acis::wireframe_sab`: the wireframe of an ACIS body stored as SAB, the binary form of the
