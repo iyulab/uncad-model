@@ -1,12 +1,13 @@
-//! The wireframe of an ACIS body, from its SAT text.
+//! The wireframe of an ACIS body, from its SAT text or its SAB bytes.
 //!
 //! A 3DSOLID or a REGION stores its shape as an ACIS body -- a boundary
-//! representation written in ACIS's own save format. Both file formats carry
-//! that body the same way once it is text: the SAT (v1, ASCII) records, one
-//! per `#`-terminated entry, pointing at each other by position (`$N`). How a
-//! file stores the text around it (a DXF record's obfuscated groups, a binary
-//! body a DWG reader converts) is the reader's to undo; this module starts
-//! from the SAT text itself.
+//! representation written in ACIS's own save format, either as text (SAT) or
+//! in the binary form of the same records (SAB). Both carry records pointing
+//! at each other by position (`$N` in SAT). How a file stores the body around
+//! those bytes (a DXF record's obfuscated groups, a DXF `ACDSDATA` section's
+//! hex chunks, a DWG object's data) is the reader's to undo; this module
+//! starts from the SAT text ([`wireframe`]) or the SAB bytes
+//! ([`wireframe_sab`]) themselves.
 //!
 //! It is not an ACIS parser. It reads exactly what [`Solid3DEntity`] carries:
 //! for every `edge` record, its two endpoint `vertex` records resolved through
@@ -37,6 +38,19 @@ struct SatRecord {
 /// [`Solid3DEntity::skipped_edges`]: crate::model::Solid3DEntity::skipped_edges
 pub fn wireframe(sat: &str) -> (Vec<[Point3D; 2]>, usize) {
     extract_wireframe_segments(&parse_sat_records(sat))
+}
+
+/// [`wireframe`] for a body stored as SAB, the binary form of the same
+/// records; `None` when `sab` cannot be decoded as one.
+///
+/// Decoding stops at the end-of-data marker, or at the start of a history
+/// section. A body is not decoded at all -- rather than decoded up to the
+/// point of trouble -- when its signature is not a SAB one, when it ends
+/// before its end-of-data marker, or when it holds a tag whose encoding is
+/// not known: a guessed width would shift every byte after it, and the
+/// records it produced would point at the wrong records.
+pub fn wireframe_sab(sab: &[u8]) -> Option<(Vec<[Point3D; 2]>, usize)> {
+    Some(extract_wireframe_segments(&parse_sab_records(sab)?))
 }
 
 /// Splits SAT (v1, ASCII) text into records, indexed exactly as the text's
@@ -77,6 +91,177 @@ fn parse_sat_records(sat_text: &str) -> Vec<SatRecord> {
         });
     }
     records
+}
+
+/// The 15-byte signatures a SAB body opens with: ACIS up to version 21800,
+/// ASM (Autodesk's ACIS) after it.
+const SAB_SIGNATURES: [&[u8; 15]; 2] = [b"ACIS BinaryFile", b"ASM BinaryFile4"];
+
+/// SAB tags: each token is one tag byte, then a payload whose width the tag
+/// fixes. Integers and floats are little-endian.
+mod sab_tag {
+    /// A 32-bit integer.
+    pub const INT: u8 = 0x04;
+    /// A 64-bit float.
+    pub const DOUBLE: u8 = 0x06;
+    /// A string of up to 255 bytes: a one-byte length, then the bytes.
+    pub const STRING: u8 = 0x07;
+    pub const TRUE: u8 = 0x0A;
+    pub const FALSE: u8 = 0x0B;
+    /// A record pointer: a 32-bit record index, `-1` for none.
+    pub const POINTER: u8 = 0x0C;
+    /// The last (or only) part of an identifier: a one-byte length, then the
+    /// bytes.
+    pub const IDENT: u8 = 0x0D;
+    /// A leading part of an identifier, joined to the next part with `-`
+    /// (`plane` then `surface` is `plane-surface`).
+    pub const IDENT_PART: u8 = 0x0E;
+    pub const SUBTYPE_START: u8 = 0x0F;
+    pub const SUBTYPE_END: u8 = 0x10;
+    pub const RECORD_END: u8 = 0x11;
+    /// A string with a 32-bit length.
+    pub const LONG_STRING: u8 = 0x12;
+    /// A position: three 64-bit floats.
+    pub const POSITION: u8 = 0x13;
+    /// A direction: three 64-bit floats.
+    pub const VECTOR: u8 = 0x14;
+    /// An enumeration value: a 32-bit integer.
+    pub const ENUM: u8 = 0x15;
+}
+
+/// Reads the bytes of a SAB body front to back; every read is `None` past
+/// the end.
+struct SabBytes<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> SabBytes<'a> {
+    fn take(&mut self, n: usize) -> Option<&'a [u8]> {
+        let end = self.pos.checked_add(n)?;
+        let taken = self.bytes.get(self.pos..end)?;
+        self.pos = end;
+        Some(taken)
+    }
+
+    fn u8(&mut self) -> Option<u8> {
+        Some(self.take(1)?[0])
+    }
+
+    fn i32(&mut self) -> Option<i32> {
+        Some(i32::from_le_bytes(self.take(4)?.try_into().ok()?))
+    }
+
+    fn f64(&mut self) -> Option<f64> {
+        Some(f64::from_le_bytes(self.take(8)?.try_into().ok()?))
+    }
+
+    fn text(&mut self, len: usize) -> Option<String> {
+        Some(String::from_utf8_lossy(self.take(len)?).into_owned())
+    }
+
+    /// One header value: the tag it must carry, then that tag's payload.
+    fn expect_tag(&mut self, tag: u8) -> Option<()> {
+        (self.u8()? == tag).then_some(())
+    }
+}
+
+/// Decodes a SAB body into the records [`parse_sat_records`] makes of the
+/// same body's SAT text: same order, same `$N` pointers, numbers as their
+/// decimal text. `None` when the body cannot be decoded (see
+/// [`wireframe_sab`]).
+///
+/// A record is its type name (the identifier parts before its first other
+/// token), its tokens, and a record-end tag. Words the SAT text spells
+/// differently by context -- a boolean is `forward`/`reversed` in one record
+/// and `I`/`F` in another -- are written as `TRUE`/`FALSE`: nothing read from
+/// the records depends on them.
+fn parse_sab_records(sab: &[u8]) -> Option<Vec<SatRecord>> {
+    let mut b = SabBytes { bytes: sab, pos: 0 };
+    let signature = b.take(15)?;
+    if !SAB_SIGNATURES.iter().any(|s| s.as_slice() == signature) {
+        return None;
+    }
+    // Version, record count, entity count, flags: nothing read here depends
+    // on them.
+    for _ in 0..4 {
+        b.i32()?;
+    }
+    // Product, ACIS version and date strings, then the units and the two
+    // tolerances.
+    for _ in 0..3 {
+        b.expect_tag(sab_tag::STRING)?;
+        let len = b.u8()?;
+        b.take(usize::from(len))?;
+    }
+    for _ in 0..3 {
+        b.expect_tag(sab_tag::DOUBLE)?;
+        b.f64()?;
+    }
+
+    let mut records = Vec::new();
+    let mut type_name: Option<String> = None;
+    let mut tokens: Vec<String> = Vec::new();
+    // The leading parts of an identifier still waiting for its last part.
+    let mut ident_parts: Vec<String> = Vec::new();
+    loop {
+        let tag = b.u8()?;
+        let token = match tag {
+            sab_tag::IDENT_PART => {
+                let len = b.u8()?;
+                ident_parts.push(b.text(usize::from(len))?);
+                continue;
+            }
+            sab_tag::IDENT => {
+                let len = b.u8()?;
+                ident_parts.push(b.text(usize::from(len))?);
+                let ident = ident_parts.join("-");
+                ident_parts.clear();
+                if type_name.is_some() {
+                    ident
+                } else if ident.starts_with("End-of-") || ident.starts_with("Begin-of-") {
+                    // `End-of-ACIS-data` / `End-of-ASM-data`, or a history
+                    // section starting: the records are over.
+                    return Some(records);
+                } else {
+                    type_name = Some(ident);
+                    continue;
+                }
+            }
+            _ if !ident_parts.is_empty() => return None,
+            _ if type_name.is_none() => return None,
+            sab_tag::RECORD_END => {
+                records.push(SatRecord {
+                    type_name: type_name.take()?,
+                    tokens: std::mem::take(&mut tokens),
+                });
+                continue;
+            }
+            sab_tag::INT | sab_tag::ENUM => b.i32()?.to_string(),
+            sab_tag::DOUBLE => b.f64()?.to_string(),
+            sab_tag::STRING => {
+                let len = b.u8()?;
+                format!("@{len} {}", b.text(usize::from(len))?)
+            }
+            sab_tag::LONG_STRING => {
+                let len = usize::try_from(b.i32()?).ok()?;
+                format!("@{len} {}", b.text(len)?)
+            }
+            sab_tag::TRUE => "TRUE".to_string(),
+            sab_tag::FALSE => "FALSE".to_string(),
+            sab_tag::POINTER => format!("${}", b.i32()?),
+            sab_tag::SUBTYPE_START => "{".to_string(),
+            sab_tag::SUBTYPE_END => "}".to_string(),
+            sab_tag::POSITION | sab_tag::VECTOR => {
+                for _ in 0..3 {
+                    tokens.push(b.f64()?.to_string());
+                }
+                continue;
+            }
+            _ => return None,
+        };
+        tokens.push(token);
+    }
 }
 
 /// `true` when every `$N` pointer in the records the wireframe walk follows
@@ -368,5 +553,240 @@ End-of-ACIS-data",
     fn empty_or_header_only_text_is_an_empty_body() {
         assert_eq!(wireframe(""), (Vec::new(), 0));
         assert_eq!(wireframe("700 0 1 0\nh\n1e-06 1e-10\n"), (Vec::new(), 0));
+    }
+
+    /// Writes SAB bytes token by token, the way a body is laid out: the
+    /// header, then records, then the end-of-data marker.
+    struct Sab(Vec<u8>);
+
+    impl Sab {
+        fn new(signature: &[u8; 15]) -> Self {
+            let mut s = Sab(signature.to_vec());
+            for v in [22300i32, 0, 2, 4] {
+                s.0.extend(v.to_le_bytes());
+            }
+            for text in ["Product", "ASM 223.0", "Mon Jan 01 00:00:00 2024"] {
+                s.string(text);
+            }
+            for v in [1.0, 1e-6, 1e-10] {
+                s.double(v);
+            }
+            s
+        }
+        fn ident(&mut self, name: &str) -> &mut Self {
+            let parts: Vec<&str> = name.split('-').collect();
+            for (i, part) in parts.iter().enumerate() {
+                let tag = if i + 1 == parts.len() { 0x0D } else { 0x0E };
+                self.0.push(tag);
+                self.0.push(part.len() as u8);
+                self.0.extend(part.as_bytes());
+            }
+            self
+        }
+        fn string(&mut self, text: &str) -> &mut Self {
+            self.0.push(0x07);
+            self.0.push(text.len() as u8);
+            self.0.extend(text.as_bytes());
+            self
+        }
+        fn int(&mut self, v: i32) -> &mut Self {
+            self.0.push(0x04);
+            self.0.extend(v.to_le_bytes());
+            self
+        }
+        fn double(&mut self, v: f64) -> &mut Self {
+            self.0.push(0x06);
+            self.0.extend(v.to_le_bytes());
+            self
+        }
+        fn ptr(&mut self, v: i32) -> &mut Self {
+            self.0.push(0x0C);
+            self.0.extend(v.to_le_bytes());
+            self
+        }
+        fn position(&mut self, [x, y, z]: [f64; 3]) -> &mut Self {
+            self.0.push(0x13);
+            for v in [x, y, z] {
+                self.0.extend(v.to_le_bytes());
+            }
+            self
+        }
+        fn tag(&mut self, tag: u8) -> &mut Self {
+            self.0.push(tag);
+            self
+        }
+        fn end(&mut self) -> &mut Self {
+            self.tag(0x11)
+        }
+        /// The records of one straight edge as an ASM-era body lays them
+        /// out: 0 asmheader, 1 point, 2 point, 3 vertex, 4 vertex, 5 edge.
+        fn one_edge(signature: &[u8; 15], a: [f64; 3], b: [f64; 3]) -> Self {
+            let mut s = Sab::new(signature);
+            s.ident("asmheader")
+                .ptr(-1)
+                .int(-1)
+                .string("223.0.1.1930")
+                .end();
+            for p in [a, b] {
+                s.ident("point").ptr(-1).int(-1).ptr(-1).position(p).end();
+            }
+            for point in [1, 2] {
+                s.ident("vertex")
+                    .ptr(-1)
+                    .int(-1)
+                    .ptr(-1)
+                    .ptr(5)
+                    .int(0)
+                    .ptr(point)
+                    .end();
+            }
+            s.ident("edge")
+                .ptr(-1)
+                .int(-1)
+                .ptr(-1)
+                .ptr(3)
+                .double(0.0)
+                .ptr(4)
+                .double(1.0)
+                .ptr(-1)
+                .ptr(-1)
+                .tag(0x0B)
+                .string("unknown")
+                .end();
+            s
+        }
+        fn end_of_data(&mut self) -> &mut Self {
+            self.ident("End-of-ASM-data")
+        }
+    }
+
+    const A: [f64; 3] = [-54.05474532926735, 11789.649090833082, 0.0];
+    const B: [f64; 3] = [1.5, 2.25, -3.0];
+
+    fn segment(a: [f64; 3], b: [f64; 3]) -> [Point3D; 2] {
+        let p = |[x, y, z]: [f64; 3]| Point3D { x, y, z };
+        [p(a), p(b)]
+    }
+
+    #[test]
+    fn a_sab_edge_resolves_to_its_endpoints_exactly() {
+        for signature in SAB_SIGNATURES {
+            let mut sab = Sab::one_edge(signature, A, B);
+            sab.end_of_data();
+            assert_eq!(
+                wireframe_sab(&sab.0),
+                Some((vec![segment(A, B)], 0)),
+                "{}",
+                String::from_utf8_lossy(signature)
+            );
+        }
+    }
+
+    #[test]
+    fn sab_records_are_numbered_like_the_sat_text() {
+        let mut sab = Sab::one_edge(SAB_SIGNATURES[1], A, B);
+        sab.end_of_data();
+        let records = parse_sab_records(&sab.0).unwrap();
+        let types: Vec<&str> = records.iter().map(|r| r.type_name.as_str()).collect();
+        assert_eq!(
+            types,
+            ["asmheader", "point", "point", "vertex", "vertex", "edge"]
+        );
+        assert_eq!(
+            records[5].tokens,
+            [
+                "$-1",
+                "-1",
+                "$-1",
+                "$3",
+                "0",
+                "$4",
+                "1",
+                "$-1",
+                "$-1",
+                "FALSE",
+                "@7 unknown"
+            ]
+        );
+    }
+
+    #[test]
+    fn identifier_parts_join_into_one_type_name() {
+        let mut sab = Sab::one_edge(SAB_SIGNATURES[1], A, B);
+        sab.ident("persubent-acadSolidHistory-attrib")
+            .ptr(-1)
+            .int(-1)
+            .end();
+        sab.end_of_data();
+        let records = parse_sab_records(&sab.0).unwrap();
+        assert_eq!(
+            records.last().unwrap().type_name,
+            "persubent-acadSolidHistory-attrib"
+        );
+        assert_eq!(wireframe_sab(&sab.0), Some((vec![segment(A, B)], 0)));
+    }
+
+    #[test]
+    fn a_history_section_ends_the_records() {
+        let mut sab = Sab::one_edge(SAB_SIGNATURES[0], A, B);
+        sab.ident("Begin-of-ACIS-History-data").tag(0x99);
+        assert_eq!(wireframe_sab(&sab.0), Some((vec![segment(A, B)], 0)));
+    }
+
+    #[test]
+    fn an_unknown_tag_leaves_the_body_undecoded() {
+        let mut sab = Sab::one_edge(SAB_SIGNATURES[1], A, B);
+        sab.ident("point").ptr(-1).tag(0x16).end();
+        sab.end_of_data();
+        assert_eq!(wireframe_sab(&sab.0), None);
+    }
+
+    #[test]
+    fn a_body_without_its_end_marker_is_undecoded() {
+        let sab = Sab::one_edge(SAB_SIGNATURES[1], A, B);
+        assert_eq!(wireframe_sab(&sab.0), None);
+        let mut cut = Sab::one_edge(SAB_SIGNATURES[1], A, B);
+        cut.end_of_data();
+        cut.0.truncate(cut.0.len() - 20);
+        assert_eq!(wireframe_sab(&cut.0), None);
+    }
+
+    #[test]
+    fn bytes_that_are_not_sab_are_undecoded() {
+        assert_eq!(wireframe_sab(b""), None);
+        assert_eq!(wireframe_sab(b"700 0 1 0\npoint 0 0 0 #\n"), None);
+        let mut sab = Sab::one_edge(b"ACIS BinaryFilX", A, B);
+        sab.end_of_data();
+        assert_eq!(wireframe_sab(&sab.0), None);
+    }
+
+    #[test]
+    fn a_token_outside_any_record_leaves_the_body_undecoded() {
+        let mut sab = Sab::new(SAB_SIGNATURES[1]);
+        sab.int(3).end();
+        sab.end_of_data();
+        assert_eq!(wireframe_sab(&sab.0), None);
+    }
+
+    #[test]
+    fn an_empty_sab_body_is_empty() {
+        let mut sab = Sab::new(SAB_SIGNATURES[1]);
+        sab.end_of_data();
+        assert_eq!(wireframe_sab(&sab.0), Some((Vec::new(), 0)));
+    }
+
+    /// The range guard applies to decoded records as it does to text.
+    #[test]
+    fn a_sab_pointer_past_the_records_leaves_every_edge_unread() {
+        let mut sab = Sab::one_edge(SAB_SIGNATURES[1], A, B);
+        sab.ident("edge")
+            .ptr(-1)
+            .int(-1)
+            .ptr(-1)
+            .ptr(3)
+            .ptr(40)
+            .end();
+        sab.end_of_data();
+        assert_eq!(wireframe_sab(&sab.0), Some((Vec::new(), 2)));
     }
 }

@@ -7,6 +7,13 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `acis::wireframe_sab`: the wireframe of an ACIS body stored as SAB, the binary form of the
+  SAT records -- the same edges `acis::wireframe` reads from the text. `None` when the bytes do
+  not decode as a SAB body (wrong signature, no end-of-data marker, or a tag whose encoding is
+  not known), rather than a partly decoded body.
+
 ## [0.2.0] - 2026-09-29
 
 ### Changed
