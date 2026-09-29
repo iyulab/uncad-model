@@ -14,6 +14,12 @@ bumps the minor version.
   not decode as a SAB body (wrong signature, no end-of-data marker, or a tag whose encoding is
   not known), rather than a partly decoded body.
 
+### Fixed
+
+- `acis::wireframe` reads a SAT text from before ACIS 2.0 (version below 200, as R13 and R14
+  write it): its header is one line, not three, and skipping three lines lost the first two
+  records, so every pointer after them landed two records off and no edge resolved.
+
 ## [0.2.0] - 2026-09-29
 
 ### Changed

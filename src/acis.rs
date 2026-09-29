@@ -53,20 +53,31 @@ pub fn wireframe_sab(sab: &[u8]) -> Option<(Vec<[Point3D; 2]>, usize)> {
     Some(extract_wireframe_segments(&parse_sab_records(sab)?))
 }
 
+/// The save version from which a SAT header has its second and third lines
+/// (the product, ACIS version and date; the units and tolerances): ACIS 2.0,
+/// encoded as major * 100 + minor. An older file's header is its first line
+/// alone -- the version and the record, entity and history counts.
+const SAT_FILE_INFO_VERSION: u32 = 200;
+
 /// Splits SAT (v1, ASCII) text into records, indexed exactly as the text's
 /// own `$N` pointers refer to them: 0-based, in order, with the header lines
 /// and the `End-of-ACIS-data` marker excluded.
-// The fixed 3-line header skip is not verified against every SAT variant.
-// On an old R14-era body it did parse every record including 18 real `edge`
-// ones, yet none of their vertices resolved -- whether that is this
-// assumption being wrong for that ACIS version or some other cause was never
-// established.
+///
+/// The header is three lines, or one before ACIS 2.0 (see
+/// [`SAT_FILE_INFO_VERSION`]); a first line that does not start with a
+/// version number is taken as a three-line header.
 fn parse_sat_records(sat_text: &str) -> Vec<SatRecord> {
-    // The first 3 lines are the header (version, product/version/date
-    // string, tolerances); records start on line 3 (0-based).
     let lines: Vec<&str> = sat_text.split('\n').collect();
-    let body = if lines.len() > 3 {
-        lines[3..].join("\n")
+    let version = lines
+        .first()
+        .and_then(|l| l.split_whitespace().next())
+        .and_then(|v| v.parse::<u32>().ok());
+    let header_lines = match version {
+        Some(v) if v < SAT_FILE_INFO_VERSION => 1,
+        _ => 3,
+    };
+    let body = if lines.len() > header_lines {
+        lines[header_lines..].join("\n")
     } else {
         String::new()
     };
@@ -546,6 +557,41 @@ End-of-ACIS-data",
                 (s.len(), k)
             },
             (1, 0)
+        );
+    }
+
+    /// Before ACIS 2.0 the header is one line: the records start on the
+    /// second, and the first of them (a `body` here) is record 0.
+    #[test]
+    fn a_pre_2_0_header_is_one_line() {
+        let sat = "106 7 1 0
+body $-1 $-1 $-1 $-1 #
+point $-1 0 0 0 #
+point $-1 1 2 3 #
+vertex $-1 $5 $1 #
+vertex $-1 $5 $2 #
+edge $-1 $3 $4 $-1 $-1 0 #
+End-of-ACIS-data
+";
+        let records = parse_sat_records(sat);
+        assert_eq!(records[0].type_name, "body");
+        assert_eq!(
+            wireframe(sat),
+            (
+                vec![[
+                    Point3D {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0
+                    },
+                    Point3D {
+                        x: 1.0,
+                        y: 2.0,
+                        z: 3.0
+                    }
+                ]],
+                0
+            )
         );
     }
 
