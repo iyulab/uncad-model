@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
 ### Changed
 
 - **Breaking:** `Affine2::from_insert` and `InsertEntity::transform` take the block's base
