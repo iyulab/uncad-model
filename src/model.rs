@@ -1344,13 +1344,89 @@ pub struct Solid3DEntity {
     pub skipped_edges: usize,
 }
 
-/// MULTILEADER's leader-line geometry only: the lines connecting the
-/// content to its landing point, as polylines. The text or block content
-/// itself is not carried, the same narrow scope as 3DSOLID's wireframe.
+/// MULTILEADER's leader geometry only: its leaders, each a root with the
+/// lines that reach it. The text or block content itself is not carried,
+/// the same narrow scope as 3DSOLID's wireframe.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MultiLeaderEntity {
     pub common: EntityCommon,
+    /// The leader roots (DXF `LEADER{` blocks of the context data), in file
+    /// order.
+    pub leaders: Vec<LeaderRoot>,
+}
+
+impl MultiLeaderEntity {
+    /// The leader lines as drawn, in order: each line of each root through
+    /// its vertices and on to the root's
+    /// [`last_point`](LeaderRoot::last_point). Its first point is where the
+    /// line starts, away from the content. A line of fewer than two points
+    /// so drawn -- one vertex and no last point -- draws nothing and is
+    /// left out.
+    pub fn drawn_lines(&self) -> Vec<Vec<Point3D>> {
+        self.leaders
+            .iter()
+            .flat_map(|root| {
+                root.lines.iter().map(move |line| {
+                    let mut drawn = line.clone();
+                    drawn.extend(root.last_point);
+                    drawn
+                })
+            })
+            .filter(|drawn| drawn.len() >= 2)
+            .collect()
+    }
+
+    /// Each root's dogleg as drawn: from its last point, `direction` times
+    /// `length` on. Only a root that has both a last point and a dogleg has
+    /// one.
+    pub fn doglegs(&self) -> Vec<[Point3D; 2]> {
+        self.leaders
+            .iter()
+            .filter_map(|root| {
+                let (last, dogleg) = (root.last_point?, root.dogleg?);
+                Some([
+                    last,
+                    Point3D {
+                        x: last.x + dogleg.direction.x * dogleg.length,
+                        y: last.y + dogleg.direction.y * dogleg.length,
+                        z: last.z + dogleg.direction.z * dogleg.length,
+                    },
+                ])
+            })
+            .collect()
+    }
+}
+
+/// One leader root of a MULTILEADER: the lines that run to it, and where
+/// they end and turn towards the content.
+///
+/// A line is drawn through its vertices and then to [`Self::last_point`];
+/// from there the dogleg runs towards the content. Which of these a file
+/// states is its own flag's to say: a root whose last leader line point
+/// flag (DXF 290) is off has no such point, and one whose dogleg flag (291)
+/// is off has no dogleg -- `None` is the format saying so, not a value left
+/// out.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LeaderRoot {
+    /// The lines of this root (DXF `LEADER_LINE{` blocks), each its vertices
+    /// (DXF 10) in order -- a line of one vertex runs from it to
+    /// [`Self::last_point`].
     pub lines: Vec<Vec<Point3D>>,
+    /// DXF 10 of the root: the point every line of the root runs to, and
+    /// where the dogleg starts.
+    pub last_point: Option<Point3D>,
+    /// The dogleg from [`Self::last_point`] towards the content.
+    pub dogleg: Option<Dogleg>,
+}
+
+/// A leader root's dogleg: the short horizontal-looking stroke from the
+/// last leader line point to the content, `direction` times `length` long.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Dogleg {
+    /// DXF 11: the direction it runs in, as the file states it.
+    pub direction: Point3D,
+    /// DXF 40: its length along `direction`, in drawing units.
+    pub length: f64,
 }
 
 /// One MLINE vertex: the centerline `point` plus `miter_direction`, a vector

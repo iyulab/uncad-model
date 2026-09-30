@@ -7,6 +7,23 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `MultiLeaderEntity::drawn_lines` and `MultiLeaderEntity::doglegs`: the leader lines as the
+  format draws them -- each line on to its root's `last_point` -- and each root's dogleg from
+  there, so every consumer draws and measures the same strokes.
+
+### Changed
+
+- **Breaking:** `MultiLeaderEntity::lines` moves under the leader roots the lines run to:
+  `MultiLeaderEntity::leaders` is a list of `LeaderRoot { lines, last_point, dogleg }`. A
+  line is drawn through its vertices and then to its root's `last_point` (DXF 10 of the
+  `LEADER{` block); the `Dogleg { direction, length }` (DXF 11, 40) runs from there towards
+  the content. Each is `None` when the root's own flag (DXF 290, 291) says the file has none.
+  A line of a single vertex -- the usual case -- was a point before; with its root it is the
+  line the drawing shows. Callers: read `leaders[].lines` for what `lines` held, and draw each
+  line on to its root's `last_point`.
+
 ## [0.2.1] - 2026-09-30
 
 ### Added

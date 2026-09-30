@@ -626,38 +626,6 @@
       "skipped_edges": 0
     },
     {
-      "type": "MULTILEADER",
-      "common": {
-        "id": 57,
-        "origin": "VECTOR",
-        "confidence": "HIGH",
-        "source_handle": {
-          "type": "RESOLVED",
-          "data": "39"
-        },
-        "layer": {
-          "type": "RESOLVED",
-          "data": "0"
-        },
-        "color_index": 256,
-        "true_color": null
-      },
-      "lines": [
-        [
-          {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          {
-            "x": 1.0,
-            "y": 1.0,
-            "z": 0.0
-          }
-        ]
-      ]
-    },
-    {
       "type": "MLINE",
       "common": {
         "id": 58,

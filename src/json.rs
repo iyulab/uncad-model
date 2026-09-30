@@ -470,7 +470,21 @@ mod tests {
             }),
             Entity::MultiLeader(MultiLeaderEntity {
                 common: c.clone(),
-                lines: vec![vec![p3(0.0, 0.0, 0.0), p3(1.0, 1.0, 0.0)]],
+                leaders: vec![
+                    LeaderRoot {
+                        lines: vec![vec![p3(0.0, 0.0, 0.0)], vec![p3(1.0, 1.0, 0.0)]],
+                        last_point: Some(p3(2.0, 0.5, 0.0)),
+                        dogleg: Some(Dogleg {
+                            direction: p3(1.0, 0.0, 0.0),
+                            length: 0.36,
+                        }),
+                    },
+                    LeaderRoot {
+                        lines: vec![vec![p3(5.0, 5.0, 0.0), p3(6.0, 6.0, 0.0)]],
+                        last_point: None,
+                        dogleg: None,
+                    },
+                ],
             }),
             Entity::MLine(MLineEntity {
                 common: c.clone(),

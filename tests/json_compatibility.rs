@@ -10,7 +10,8 @@
 //! What is not in the document is what changed shape after 0.1.0, so that
 //! a 0.1.0 document carrying it is not expected to load: a SPLINE (it
 //! gained the degree and knots that define its curve), a LEADER (its
-//! annotation became a three-state reference), and a polyline's vertices
+//! annotation became a three-state reference), a MULTILEADER (its lines
+//! moved under the leader roots they run to), and a polyline's vertices
 //! -- an LWPOLYLINE's, a POLYLINE_2D's and a HATCH polyline path's -- which
 //! became objects of their own carrying each vertex's bulge and widths.
 //! The document's HATCH therefore has no boundary path; 0.1.0 wrote it that
@@ -36,7 +37,7 @@ fn load() -> CadDatabase {
 #[test]
 fn a_document_written_by_0_1_0_loads() {
     let db = load();
-    assert_eq!(db.entities.len(), 29, "every entity comes back");
+    assert_eq!(db.entities.len(), 28, "every entity comes back");
     assert!(db.read_diagnostics.is_clean());
     assert_eq!(db.tables.layers.len(), 2);
     assert_eq!(db.tables.block_records["TITLE"].entities.len(), 1);
