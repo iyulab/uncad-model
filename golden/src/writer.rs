@@ -186,6 +186,10 @@ impl Writer {
             self.pair(9, "$DWGCODEPAGE");
             self.pair(3, name);
         }
+        if let Some(code) = spec.insunits {
+            self.pair(9, "$INSUNITS");
+            self.pair(70, code);
+        }
         // Rewritten at the end: DXF wants the seed above every handle used.
         let seed_at = self.out.len();
         self.pair(9, "$HANDSEED");

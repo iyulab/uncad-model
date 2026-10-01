@@ -69,7 +69,7 @@ use uncad_model::tables::{
     AngularUnitFormat, ArcSymbol, BlockRecord, DimStyleRecord, FractionFormat, LayerRecord,
     LayoutRecord, LinearUnitFormat, PlotSettings, Tables,
 };
-use uncad_model::{CadDatabase, ReadDiagnostics};
+use uncad_model::{CadDatabase, HeaderVariables, ReadDiagnostics};
 
 /// The model `written` should read back as. `written` must come from
 /// [`crate::writer::write`] on the same `spec`.
@@ -226,6 +226,9 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                 .iter()
                 .map(|l| (l.name.clone(), layout(l, &written.handles.paper_entities)))
                 .collect(),
+        },
+        header: HeaderVariables {
+            insunits: spec.insunits,
         },
         read_diagnostics: ReadDiagnostics::default(),
     }

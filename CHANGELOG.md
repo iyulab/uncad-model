@@ -9,12 +9,18 @@ bumps the minor version.
 
 ### Added
 
+- `CadDatabase::header`, a `HeaderVariables`: the header variables that say what the
+  drawing's numbers mean, each as the file states it (`None` when it does not). It carries
+  `insunits`, the `$INSUNITS` code, and `HeaderVariables::units` names the unit that code
+  stands for. JSON written before the field existed reads as "none stated".
 - `MultiLeaderEntity::drawn_lines` and `MultiLeaderEntity::doglegs`: the leader lines as the
   format draws them -- each line on to its root's `last_point` -- and each root's dogleg from
   there, so every consumer draws and measures the same strokes.
 
 ### Changed
 
+- **Breaking:** `CadDatabase` has a new field, `header`; code that builds one as a struct
+  literal adds `header: HeaderVariables::default()` (or the values its source states).
 - **Breaking:** `MultiLeaderEntity::lines` moves under the leader roots the lines run to:
   `MultiLeaderEntity::leaders` is a list of `LeaderRoot { lines, last_point, dogleg }`. A
   line is drawn through its vertices and then to its root's `last_point` (DXF 10 of the

@@ -350,6 +350,7 @@ pub fn spec() -> impl Strategy<Value = Spec> {
     )
     .prop_map(|entities| Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         dim_styles: Vec::new(),
         layers: vec![
             LayerSpec {

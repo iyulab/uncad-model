@@ -129,6 +129,7 @@ pub fn g1_general_part() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
+        insunits: Some(4),
         layers: vec![
             LayerSpec {
                 name: outline,
@@ -210,6 +211,7 @@ pub fn g2_nested_blocks() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: Vec::new(),
         blocks: vec![
             BlockSpec {
@@ -272,6 +274,7 @@ pub fn g6_overlapping_lines() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: Vec::new(),
         blocks: Vec::new(),
         entities: vec![line("0"), line("0")],
@@ -316,6 +319,7 @@ pub fn g9_two_drawing_numbers() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: "TITLE".to_string(),
             color_index: 2,
@@ -340,6 +344,7 @@ pub fn g5_dense_dimensions() -> Spec {
     let dims = "DIMS".to_string();
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: dims.clone(),
             color_index: 3,
@@ -441,6 +446,7 @@ pub fn g10_unreferenced_insert() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: Vec::new(),
         blocks: Vec::new(),
         entities: vec![
@@ -594,6 +600,7 @@ pub fn g7_loose_text_title_block() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: title,
             color_index: 2,
@@ -643,6 +650,7 @@ pub fn g8_korean_title_block() -> Spec {
     Spec {
         dim_styles: Vec::new(),
         codepage: Codepage::Ansi949,
+        insunits: None,
         layers: vec![
             LayerSpec {
                 name: outline_layer.clone(),
@@ -773,6 +781,7 @@ pub fn g3_many_parts(copies: usize) -> Spec {
     }
     Spec {
         codepage: one.codepage,
+        insunits: one.insunits,
         layers: one.layers,
         blocks: one.blocks,
         dim_styles: one.dim_styles,
@@ -812,6 +821,7 @@ pub fn g11_mirrored_part() -> Spec {
     let layer = "MIRROR".to_string();
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: layer.clone(),
             color_index: 4,
@@ -936,6 +946,7 @@ pub fn g12_curved_and_wide_polylines() -> Spec {
     };
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: layer.clone(),
             color_index: 7,
@@ -1032,6 +1043,7 @@ pub fn g13_justified_text() -> Spec {
     use VerticalJustification as V;
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: layer.clone(),
             color_index: 2,
@@ -1214,6 +1226,7 @@ pub fn g14_sheet_with_viewports() -> Spec {
     };
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![
             layer("WALLS", 7, LayerState::default()),
             layer("HIDDEN", 1, state(|s| s.off = true)),
@@ -1401,6 +1414,7 @@ pub fn g15_polygon_mesh() -> Spec {
     }
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: layer.clone(),
             color_index: 5,
@@ -1448,6 +1462,7 @@ pub fn g16_ordinate_dimensions() -> Spec {
     };
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: dims.clone(),
             color_index: 3,
@@ -1552,6 +1567,7 @@ pub fn g17_hatch_edge_paths() -> Spec {
     let xy = Xy::new;
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: vec![LayerSpec {
             name: hatch.clone(),
             color_index: 4,
@@ -1689,6 +1705,7 @@ pub fn g18_line_styles() -> Spec {
     };
     Spec {
         codepage: Codepage::Ascii,
+        insunits: None,
         layers: Vec::new(),
         blocks: Vec::new(),
         dim_styles: Vec::new(),

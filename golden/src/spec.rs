@@ -45,6 +45,9 @@ pub struct Spec {
     /// always UTF-8 `String`s -- the expected model carries them as such --
     /// and the writer encodes them on the way out.
     pub codepage: Codepage,
+    /// The `$INSUNITS` code the header states; `None` writes no such
+    /// variable.
+    pub insunits: Option<u16>,
     /// Layers besides `0`, which always exists. Names must be unique.
     pub layers: Vec<LayerSpec>,
     /// Named block definitions an INSERT (or a DIMENSION) can refer to.

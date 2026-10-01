@@ -12,7 +12,8 @@
 //! entity is written in ([`Ocs`]), the arc a polyline vertex's bulge
 //! describes ([`BulgeArc`]), the point at a parameter on an ELLIPSE or a
 //! NURBS curve ([`Nurbs`]), and how far an ARC or an ELLIPSE runs
-//! ([`curve`]); the unit a `$INSUNITS` code names ([`Units`]); and the one step of reading a string the formats
+//! ([`curve`]); the unit a `$INSUNITS` code names ([`Units`]), which the
+//! drawing states in its [`HeaderVariables`]; and the one step of reading a string the formats
 //! define the same way everywhere, undoing how it was stored ([`text`]); and
 //! the wireframe of an ACIS body from the SAT text both formats carry it in
 //! ([`acis`]).
@@ -26,6 +27,7 @@ pub mod acis;
 pub mod bulge;
 pub mod color;
 pub mod curve;
+pub mod header;
 pub mod json;
 pub mod model;
 pub mod ocs;
@@ -38,6 +40,7 @@ use serde::{Deserialize, Serialize};
 
 pub use bulge::BulgeArc;
 pub use curve::Nurbs;
+pub use header::HeaderVariables;
 pub use json::{JsonError, ToJsonOptions};
 pub use model::{
     Confidence, Entity, EntityCommon, EntityId, Origin, Point2D, Point3D, PolylineVertex, Ref,
@@ -50,21 +53,27 @@ pub use units::Units;
 /// A drawing: the model, and nothing else.
 ///
 /// `entities` holds what the drawing shows (everything owned by the
-/// `*Model_Space`/`*Paper_Space*` blocks, see [`model`]) and `tables` the
-/// tables it resolves against and its layouts (see [`Tables`]). This is
-/// what [`to_json`](Self::to_json) serializes verbatim.
+/// `*Model_Space`/`*Paper_Space*` blocks, see [`model`]), `tables` the
+/// tables it resolves against and its layouts (see [`Tables`]), and `header`
+/// the few header variables that say what its numbers mean (see
+/// [`HeaderVariables`]). This is what [`to_json`](Self::to_json) serializes
+/// verbatim.
 ///
 /// It is a plain Rust value: `Clone`/`PartialEq`/`Send`/`Sync` without
 /// ceremony, constructible directly or deserialized from the JSON `to_json`
 /// produced. It is deliberately *not* a round-trip representation of a file
-/// (no linetype or text style definitions, dictionaries or header
-/// variables -- a layer names its linetype and a text its style, but the
-/// tables those names resolve in are not carried): it keeps what consumers
-/// of the drawing's content need.
+/// (no linetype or text style definitions, dictionaries, or header variables
+/// beyond those [`HeaderVariables`] names -- a layer names its linetype and
+/// a text its style, but the tables those names resolve in are not
+/// carried): it keeps what consumers of the drawing's content need.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CadDatabase {
     pub entities: Vec<Entity>,
     pub tables: Tables,
+    /// The header variables the file states. Defaults to "none stated" when
+    /// absent from JSON written before this field existed.
+    #[serde(default)]
+    pub header: HeaderVariables,
     /// What the reader reported while reading but did not fail on. Defaults
     /// to "nothing reported" when absent from JSON written before this field
     /// existed.

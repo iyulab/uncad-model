@@ -14,7 +14,7 @@ use uncad_model::model::{
     Point3D, Ref,
 };
 use uncad_model::tables::{BlockRecord, LayerRecord, Tables};
-use uncad_model::{CadDatabase, ReadDiagnostics, ToJsonOptions};
+use uncad_model::{CadDatabase, HeaderVariables, ReadDiagnostics, ToJsonOptions};
 
 /// How often each output is regenerated. With four or more entries in a
 /// leaked hash set, two consecutive identical orders are already unlikely;
@@ -132,6 +132,7 @@ fn drawing() -> CadDatabase {
             layouts: BTreeMap::new(),
             image_definitions: BTreeMap::new(),
         },
+        header: HeaderVariables { insunits: Some(4) },
         read_diagnostics: ReadDiagnostics {
             warnings: vec!["UNHANDLEDCLASS".to_string(), "WRONGCRC".to_string()],
         },

@@ -1,7 +1,7 @@
 //! JSON serialization of the model -- [`CadDatabase::to_json`].
 //!
 //! The output is a direct serde serialization of [`CadDatabase`] (`entities` +
-//! `tables` + `read_diagnostics`). It round-trips for any database whose
+//! `tables` + `header` + `read_diagnostics`). It round-trips for any database whose
 //! `f64` fields are all finite: `serde_json::from_str::<CadDatabase>` gives
 //! back a database equal (`PartialEq`) to the one serialized. It is also
 //! reproducible -- `tables.*` are sorted maps and entity order is preserved,
@@ -50,6 +50,8 @@
 //! - Likewise a parser lists every INSERT's `attribs` also as top-level `ATTRIB`
 //!   entities in `entities`; `block_records[..].entities` does not carry that
 //!   duplication, so the two lists differ even for `*Model_Space`.
+//! - `header` is `{"insunits":..}`: each variable as the file states it, `null`
+//!   when it does not. A document without `header` reads as "none stated".
 //! - `read_diagnostics` is `{"warnings":[..]}`: the reader's own warning names,
 //!   empty for a clean read.
 //! - `f64` values that are not finite serialize as `null` (serde_json's
@@ -102,7 +104,7 @@ pub fn to_json(db: &CadDatabase, options: ToJsonOptions) -> Result<String, JsonE
 }
 
 impl CadDatabase {
-    /// Serializes this drawing (`entities` + `tables` + `read_diagnostics`)
+    /// Serializes this drawing (`entities` + `tables` + `header` + `read_diagnostics`)
     /// to JSON text -- see the [module doc](self) for the exact shape.
     pub fn to_json(&self, options: ToJsonOptions) -> Result<String, JsonError> {
         to_json(self, options)
@@ -830,6 +832,7 @@ mod tests {
                 layouts,
                 image_definitions,
             },
+            header: Default::default(),
             read_diagnostics: Default::default(),
         };
 
