@@ -59,7 +59,23 @@ pub struct Written {
     pub handles: Handles,
 }
 
-/// Writes `spec` as an R2000 ASCII DXF.
+/// The version `spec` is written as (`$ACADVER`): R2000, or R2010 when it
+/// holds a MULTILEADER, which R2000 has no record for. The expected model
+/// follows it -- what an absent group means can depend on the version.
+pub fn acadver(spec: &Spec) -> &'static str {
+    let multileader = spec
+        .entities
+        .iter()
+        .chain(&spec.paper_space)
+        .any(|e| matches!(e, EntitySpec::MultiLeader { .. }));
+    if multileader {
+        "AC1024"
+    } else {
+        "AC1015"
+    }
+}
+
+/// Writes `spec` as an ASCII DXF, in the version [`acadver`] gives.
 ///
 /// # Panics
 /// When a string cannot be encoded in the spec's codepage: a non-ASCII
@@ -100,6 +116,12 @@ struct Writer {
     /// The common properties the entity being written states
     /// ([`EntitySpec::Styled`]); taken by [`Self::common`].
     style: Option<LineStyleSpec>,
+    /// MLEADERSTYLE name -> its handle and line type (173), one per name
+    /// the drawing's multileaders use, written in the OBJECTS section.
+    mleader_styles: Vec<(String, u32, i16)>,
+    /// The handle a multileader naming no style in the drawing points at:
+    /// issued, but no object has it.
+    missing_mleader_style: Option<u32>,
 }
 
 impl Writer {
@@ -180,8 +202,14 @@ impl Writer {
 
         self.pair(0, "SECTION");
         self.pair(2, "HEADER");
+        let multileaders: Vec<&EntitySpec> = spec
+            .entities
+            .iter()
+            .chain(&spec.paper_space)
+            .filter(|e| matches!(e, EntitySpec::MultiLeader { .. }))
+            .collect();
         self.pair(9, "$ACADVER");
-        self.pair(1, "AC1015");
+        self.pair(1, acadver(spec));
         if let Some(name) = self.codepage.dxf_name() {
             self.pair(9, "$DWGCODEPAGE");
             self.pair(3, name);
@@ -197,10 +225,28 @@ impl Writer {
         self.pair(0, "ENDSEC");
 
         self.tables(spec);
+        // The styles' handles, from the tables' range: an entity names its
+        // style before the OBJECTS section declares it.
+        for e in &multileaders {
+            if let EntitySpec::MultiLeader { style, .. } = e {
+                match style {
+                    Some((name, line_type)) => {
+                        if !self.mleader_styles.iter().any(|(n, ..)| n == name) {
+                            let h = self.handle();
+                            self.mleader_styles.push((name.clone(), h, *line_type));
+                        }
+                    }
+                    None if self.missing_mleader_style.is_none() => {
+                        self.missing_mleader_style = Some(self.handle());
+                    }
+                    None => {}
+                }
+            }
+        }
         self.next_handle = FIRST_ENTITY_HANDLE;
         self.blocks(spec);
         self.entities(spec);
-        if !spec.layouts.is_empty() {
+        if !spec.layouts.is_empty() || !self.mleader_styles.is_empty() {
             self.objects(spec);
         }
         self.pair(0, "EOF");
@@ -665,6 +711,59 @@ impl Writer {
                 self.extrusion(*mirrored);
             }
             EntitySpec::Styled { .. } => unreachable!("unwrapped above"),
+            EntitySpec::MultiLeader {
+                layer,
+                lines,
+                last_point,
+                line_type,
+                type_overridden,
+                style,
+            } => {
+                self.pair(0, "MULTILEADER");
+                self.common(&hex, layer, owner);
+                self.pair(100, "AcDbMLeader");
+                self.pair(270, 2);
+                self.pair(300, "CONTEXT_DATA{");
+                self.num(40, 1.0);
+                // The context data states its own 170 and 90 (the content's,
+                // not the leader lines'), before the entity's -- as a file
+                // AutoCAD writes does. Here they disagree with the entity's.
+                self.pair(170, if *line_type == 1 { 2 } else { 1 });
+                self.pair(90, -1_073_741_824_i32 | i32::from(!*type_overridden));
+                self.pair(302, "LEADER{");
+                self.pair(290, 1);
+                self.pair(291, 0);
+                self.xy(10, *last_point);
+                self.pair(90, 0);
+                for (index, (points, own)) in lines.iter().enumerate() {
+                    self.pair(304, "LEADER_LINE{");
+                    for point in points {
+                        self.xy(10, *point);
+                    }
+                    self.pair(91, index);
+                    if let Some(own) = own {
+                        self.pair(170, own);
+                        self.pair(93, 1);
+                    }
+                    self.pair(305, "}");
+                }
+                self.pair(271, 0);
+                self.pair(303, "}");
+                self.pair(301, "}");
+                let style_handle = match style {
+                    Some((name, _)) => self
+                        .mleader_styles
+                        .iter()
+                        .find(|(n, ..)| n == name)
+                        .map(|(_, h, _)| *h),
+                    None => self.missing_mleader_style,
+                }
+                .expect("planned in write()");
+                self.pair(340, format!("{style_handle:X}"));
+                // 0x44400: the other override bits a file AutoCAD writes sets.
+                self.pair(90, 0x44400 | u32::from(*type_overridden));
+                self.pair(170, line_type);
+            }
             EntitySpec::Hatch {
                 layer,
                 paths,
@@ -1120,35 +1219,70 @@ impl Writer {
         }
     }
 
-    /// The OBJECTS section: the root dictionary, its layout dictionary and
-    /// one LAYOUT object per [`Spec::layouts`] entry.
+    /// The OBJECTS section: the root dictionary; its layout dictionary and
+    /// one LAYOUT object per [`Spec::layouts`] entry, when there are any;
+    /// and its multileader style dictionary and one MLEADERSTYLE per name
+    /// the drawing's multileaders use, when there are any.
     fn objects(&mut self, spec: &Spec) {
         self.pair(0, "SECTION");
         self.pair(2, "OBJECTS");
         let root = self.handle();
-        let dictionary = self.handle();
+        let layout_dictionary = (!spec.layouts.is_empty()).then(|| self.handle());
         let layouts: Vec<u32> = spec.layouts.iter().map(|_| self.handle()).collect();
+        let style_dictionary = (!self.mleader_styles.is_empty()).then(|| self.handle());
 
         self.pair(0, "DICTIONARY");
         self.pair(5, format!("{root:X}"));
         self.pair(330, 0);
         self.pair(100, "AcDbDictionary");
         self.pair(281, 1);
-        self.pair(3, "ACAD_LAYOUT");
-        self.pair(350, format!("{dictionary:X}"));
-
-        self.pair(0, "DICTIONARY");
-        self.pair(5, format!("{dictionary:X}"));
-        self.pair(330, format!("{root:X}"));
-        self.pair(100, "AcDbDictionary");
-        self.pair(281, 1);
-        for (layout, h) in spec.layouts.iter().zip(&layouts) {
-            self.pair(3, &layout.name);
-            self.pair(350, format!("{h:X}"));
+        if let Some(dictionary) = layout_dictionary {
+            self.pair(3, "ACAD_LAYOUT");
+            self.pair(350, format!("{dictionary:X}"));
+        }
+        if let Some(dictionary) = style_dictionary {
+            self.pair(3, "ACAD_MLEADERSTYLE");
+            self.pair(350, format!("{dictionary:X}"));
         }
 
-        for (layout, h) in spec.layouts.iter().zip(layouts) {
-            self.layout(layout, h, dictionary);
+        if let Some(dictionary) = layout_dictionary {
+            self.pair(0, "DICTIONARY");
+            self.pair(5, format!("{dictionary:X}"));
+            self.pair(330, format!("{root:X}"));
+            self.pair(100, "AcDbDictionary");
+            self.pair(281, 1);
+            for (layout, h) in spec.layouts.iter().zip(&layouts) {
+                self.pair(3, &layout.name);
+                self.pair(350, format!("{h:X}"));
+            }
+            for (layout, h) in spec.layouts.iter().zip(layouts) {
+                self.layout(layout, h, dictionary);
+            }
+        }
+
+        if let Some(dictionary) = style_dictionary {
+            let styles = std::mem::take(&mut self.mleader_styles);
+            self.pair(0, "DICTIONARY");
+            self.pair(5, format!("{dictionary:X}"));
+            self.pair(330, format!("{root:X}"));
+            self.pair(100, "AcDbDictionary");
+            self.pair(281, 1);
+            for (name, h, _) in &styles {
+                self.pair(3, name);
+                self.pair(350, format!("{h:X}"));
+            }
+            for (name, h, line_type) in &styles {
+                self.pair(0, "MLEADERSTYLE");
+                self.pair(5, format!("{h:X}"));
+                self.pair(330, format!("{dictionary:X}"));
+                self.pair(100, "AcDbMLeaderStyle");
+                self.pair(179, 2);
+                // The style's content type (170), before its line type (173).
+                self.pair(170, 2);
+                self.pair(173, line_type);
+                self.pair(3, name);
+            }
+            self.mleader_styles = styles;
         }
         self.pair(0, "ENDSEC");
     }

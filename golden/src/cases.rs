@@ -1721,6 +1721,78 @@ pub fn g18_line_styles() -> Spec {
     }
 }
 
+/// G20: multileaders whose lines are drawn straight, as a spline or not at
+/// all, each settled by a different layer of the format -- its style's type
+/// under an entity that does not override it (and states another), its own
+/// when it overrides, a missing style, and lines that state their own type,
+/// alike and not. Written as R2010, the first version with that last layer.
+pub fn g20_multileader_line_types() -> Spec {
+    const STRAIGHT: i16 = 1;
+    const SPLINE: i16 = 2;
+    let straight_style = Some(("Straight".to_string(), STRAIGHT));
+    let spline_style = Some(("Spline".to_string(), SPLINE));
+    let leader = |x: f64,
+                  lines: Vec<Option<i16>>,
+                  line_type: i16,
+                  type_overridden: bool,
+                  style: Option<(String, i16)>| {
+        EntitySpec::MultiLeader {
+            layer: "0".to_string(),
+            lines: lines
+                .into_iter()
+                .enumerate()
+                .map(|(i, own)| {
+                    let y = 10.0 + 5.0 * i as f64;
+                    (vec![Xy::new(x, y), Xy::new(x + 2.0, y + 3.0)], own)
+                })
+                .collect(),
+            last_point: Xy::new(x + 5.0, 0.0),
+            line_type,
+            type_overridden,
+            style,
+        }
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        insunits: None,
+        layers: Vec::new(),
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            // The style says straight; so does the entity, not overriding.
+            leader(0.0, vec![None], STRAIGHT, false, straight_style.clone()),
+            // The entity states straight but does not override: the
+            // style's spline is what is drawn.
+            leader(20.0, vec![None], STRAIGHT, false, spline_style.clone()),
+            // The entity overrides with a spline over a straight style.
+            leader(40.0, vec![None], SPLINE, true, straight_style.clone()),
+            // The entity overrides with lines not drawn at all.
+            leader(60.0, vec![None], 0, true, straight_style.clone()),
+            // The style is needed and is not in the drawing.
+            leader(80.0, vec![None], STRAIGHT, false, None),
+            // Both lines override with a spline: the entity is a spline.
+            leader(
+                100.0,
+                vec![Some(SPLINE), Some(SPLINE)],
+                STRAIGHT,
+                false,
+                straight_style.clone(),
+            ),
+            // One line overrides, one does not: no single type.
+            leader(
+                120.0,
+                vec![None, Some(SPLINE)],
+                STRAIGHT,
+                false,
+                straight_style,
+            ),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1741,6 +1813,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g17" => g17_hatch_edge_paths(),
         "g18" => g18_line_styles(),
         "g19" => g19_sheet_of_a_layout_not_current(),
+        "g20" => g20_multileader_line_types(),
         _ => return None,
     })
 }
@@ -1750,7 +1823,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 17] = [
+pub const NAMES: [&str; 18] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19",
+    "g17", "g18", "g19", "g20",
 ];

@@ -15,15 +15,15 @@ use crate::spec::{
     AttribSpec, EntitySpec, HatchEdgeSpec, HatchShapeSpec, LayerSpec, LayoutSpec, Spec, TextAlign,
     Xy,
 };
-use crate::writer::{midpoint, space_names, Written};
+use crate::writer::{acadver, midpoint, space_names, Written};
 use std::collections::BTreeMap;
 use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
     DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
     EntityLinetype, HatchBoundaryPath, HatchEdge, HatchEntity, HorizontalJustification,
-    InsertEntity, LineEntity, LwPolylineEntity, Origin, Point2D, Point3D, PolylineVertex, Ref,
-    Solid3DEntity, SolidEntity, TextEntity, TextOverride, VerticalJustification, ViewportEntity,
-    ViewportView,
+    InsertEntity, LeaderLineType, LeaderRoot, LineEntity, LwPolylineEntity, MultiLeaderEntity,
+    Origin, Point2D, Point3D, PolylineVertex, Ref, Solid3DEntity, SolidEntity, TextEntity,
+    TextOverride, VerticalJustification, ViewportEntity, ViewportView,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -311,7 +311,7 @@ fn layout(l: &LayoutSpec, paper_handles: &[u32]) -> LayoutRecord {
     }
 }
 
-fn common(handle: u32, layer: &str) -> EntityCommon {
+fn common(handle: u32, layer: &str, spec: &Spec) -> EntityCommon {
     EntityCommon {
         id: EntityId::new(u64::from(handle)),
         origin: Origin::Vector,
@@ -324,7 +324,9 @@ fn common(handle: u32, layer: &str) -> EntityCommon {
         linetype: uncad_model::model::EntityLinetype::ByLayer,
         linetype_scale: 1.0,
         lineweight: Some(-1),
-        transparency: None,
+        // The writer never states one: from R2004 that reads as 0
+        // (BYLAYER), before it there is no transparency.
+        transparency: (acadver(spec) >= "AC1018").then_some(0),
     }
 }
 
@@ -372,7 +374,7 @@ fn convert(
             converted
         }
         EntitySpec::Line { layer, start, end } => Entity::Line(LineEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             start_point: p3(*start),
             end_point: p3(*end),
         }),
@@ -382,7 +384,7 @@ fn convert(
             radius,
             mirrored,
         } => Entity::Circle(CircleEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             center: p3(*center),
             radius: *radius,
             extrusion: extrusion(*mirrored),
@@ -396,7 +398,7 @@ fn convert(
             mirrored,
         } => Entity::Arc(ArcEntity {
             extrusion: extrusion(*mirrored),
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             center: p3(*center),
             radius: *radius,
             start_angle: start_deg.to_radians(),
@@ -417,7 +419,7 @@ fn convert(
                 .iter()
                 .all(|v| v.start_width == *const_width && v.end_width == *const_width);
             Entity::LwPolyline(LwPolylineEntity {
-                common: common(handle, layer),
+                common: common(handle, layer, spec),
                 vertices: vertices
                     .iter()
                     .map(|v| PolylineVertex {
@@ -445,7 +447,7 @@ fn convert(
             style,
             mirrored,
         } => Entity::Text(TextEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             start_point: p2(*insert),
             text_height: *height,
             text: text.clone(),
@@ -464,7 +466,7 @@ fn convert(
             paths,
             style,
         } => Entity::Hatch(HatchEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             boundary_paths: paths.iter().map(|p| hatch_path(&p.shape)).collect(),
             solid_fill: true,
             gradient: None,
@@ -473,6 +475,46 @@ fn convert(
             extrusion: Z_AXIS,
             style: Some(*style),
         }),
+        EntitySpec::MultiLeader {
+            layer,
+            lines,
+            last_point,
+            line_type,
+            type_overridden,
+            style,
+        } => {
+            // The type drawn, worked out from the spec's own terms: the
+            // entity's when it overrides, else its style's (none when the
+            // style is missing), then each line's own where it states one.
+            let entity = if *type_overridden {
+                Some(*line_type)
+            } else {
+                style.as_ref().map(|(_, t)| *t)
+            };
+            let drawn: Vec<Option<i16>> = lines.iter().map(|(_, own)| own.or(entity)).collect();
+            let settled = match drawn.split_first() {
+                None => entity,
+                Some((first, rest)) if rest.iter().all(|t| t == first) => *first,
+                Some(_) => None,
+            };
+            Entity::MultiLeader(MultiLeaderEntity {
+                common: common(handle, layer, spec),
+                leaders: vec![LeaderRoot {
+                    lines: lines
+                        .iter()
+                        .map(|(points, _)| points.iter().copied().map(p3).collect())
+                        .collect(),
+                    last_point: Some(p3(*last_point)),
+                    dogleg: None,
+                }],
+                line_type: settled.and_then(|code| match code {
+                    0 => Some(LeaderLineType::Invisible),
+                    1 => Some(LeaderLineType::Straight),
+                    2 => Some(LeaderLineType::Spline),
+                    _ => None,
+                }),
+            })
+        }
         EntitySpec::Solid {
             layer,
             corners,
@@ -480,7 +522,7 @@ fn convert(
         } => {
             let [corner1, corner2, corner3, corner4] = corners.map(p2);
             Entity::Solid(SolidEntity {
-                common: common(handle, layer),
+                common: common(handle, layer, spec),
                 corner1,
                 corner2,
                 corner3,
@@ -497,7 +539,7 @@ fn convert(
             default,
             ..
         } => Entity::Attdef(AttdefEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             start_point: p2(*insert),
             text_height: *height,
             tag: tag.clone(),
@@ -522,7 +564,7 @@ fn convert(
             attribs,
             mirrored,
         } => Entity::Insert(InsertEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             // A reference to a block the file never defines. The file names
             // the block (DXF group code 2), so the name is what the reader
             // owes back: unresolved, carrying that name -- never an empty
@@ -555,7 +597,7 @@ fn convert(
             closed_n,
             vertices,
         } => Entity::PolylineMesh(Solid3DEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             wireframe_edges: mesh_wireframe(*m, *n, *closed_m, *closed_n, vertices),
             skipped_edges: 0,
         }),
@@ -571,7 +613,7 @@ fn convert(
             measurement,
             style,
         } => Entity::Dimension(DimensionEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
             kind: Some(DimensionKind::Rotated),
             measurement: *measurement,
@@ -600,7 +642,7 @@ fn convert(
             measurement,
             style,
         } => Entity::Dimension(DimensionEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
             // Its group 70 says "three-point angular"; the entity it is says
             // otherwise, and the entity wins.
@@ -629,7 +671,7 @@ fn convert(
             measurement,
             style,
         } => Entity::Dimension(DimensionEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
             kind: Some(DimensionKind::Diameter),
             measurement: *measurement,
@@ -658,7 +700,7 @@ fn convert(
             measurement,
             style,
         } => Entity::Dimension(DimensionEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             block_name: Ref::Resolved(dim_block.expect("a dimension has a block").to_string()),
             kind: Some(DimensionKind::Ordinate),
             measurement: *measurement,
@@ -692,7 +734,7 @@ fn convert(
             twist_deg,
             frozen_layers,
         } => Entity::Viewport(ViewportEntity {
-            common: common(handle, layer),
+            common: common(handle, layer, spec),
             center: p3(*center),
             width: *width,
             height: *height,
@@ -720,7 +762,7 @@ fn convert(
 /// INSERT's, with the invisible flag the spec gives it.
 fn attrib(a: &AttribSpec, handle: u32, layer: &str, spec: &Spec) -> AttribEntity {
     AttribEntity {
-        common: common(handle, layer),
+        common: common(handle, layer, spec),
         start_point: p2(a.insert),
         text_height: a.height,
         tag: a.tag.clone(),

@@ -417,6 +417,30 @@ pub enum EntitySpec {
         measurement: Option<f64>,
         style: Option<String>,
     },
+    /// A MULTILEADER with one leader root and no dogleg: what its lines are
+    /// drawn as is the point of the case, so the content is left out. A
+    /// drawing with one is written as R2010 (`AC1024`), the first version
+    /// whose lines can state their own type.
+    MultiLeader {
+        layer: String,
+        /// The root's lines (`LEADER_LINE{` blocks), each its points and
+        /// the line's own type, if it states one (93 bit 0x1 and 170 inside
+        /// the block; `None` writes neither).
+        lines: Vec<(Vec<Xy>, Option<i16>)>,
+        /// The root's last leader line point (DXF 10 of the root): every
+        /// line runs on to it.
+        last_point: Xy,
+        /// DXF 170 on the entity.
+        line_type: i16,
+        /// Whether DXF 90 sets bit 0x1 -- the entity's type, not its
+        /// style's, is the one drawn.
+        type_overridden: bool,
+        /// The MLEADERSTYLE the entity names (DXF 340), by name, and that
+        /// style's line type (173). The file declares one style per name
+        /// the drawing's multileaders use. `None` names a handle no object
+        /// in the drawing has.
+        style: Option<(String, i16)>,
+    },
 }
 
 impl EntitySpec {
@@ -701,6 +725,24 @@ impl EntitySpec {
                 measurement: *measurement,
                 style: style.clone(),
             },
+            EntitySpec::MultiLeader {
+                layer,
+                lines,
+                last_point,
+                line_type,
+                type_overridden,
+                style,
+            } => EntitySpec::MultiLeader {
+                layer: layer.clone(),
+                lines: lines
+                    .iter()
+                    .map(|(points, own)| (points.iter().map(m).collect(), *own))
+                    .collect(),
+                last_point: m(last_point),
+                line_type: *line_type,
+                type_overridden: *type_overridden,
+                style: style.clone(),
+            },
         }
     }
 }
@@ -904,6 +946,7 @@ impl EntitySpec {
             | EntitySpec::LinearDimension { layer, .. }
             | EntitySpec::ArcDimension { layer, .. }
             | EntitySpec::DiameterDimension { layer, .. }
+            | EntitySpec::MultiLeader { layer, .. }
             | EntitySpec::OrdinateDimension { layer, .. }
             | EntitySpec::Hatch { layer, .. }
             | EntitySpec::Viewport { layer, .. } => layer,

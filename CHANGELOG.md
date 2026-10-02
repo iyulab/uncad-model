@@ -7,6 +7,20 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `MultiLeaderEntity::line_type`, a `LeaderLineType` (invisible, straight or spline): how the
+  entity's leader lines are drawn between their points. The format settles it in layers -- the
+  entity's own type when its override flags say so, else its MLEADERSTYLE's, and from R2010 a
+  line's own where that line overrides -- and `LeaderLineType::resolve` applies them, so every
+  reader settles it the same way. `None` when the layers do not settle one type (the style is
+  missing, a code is undefined, or the lines differ) and for documents written before the
+  field existed.
+- Golden case `g20`: multileaders whose line type each of those layers settles, written as an
+  R2010 file. The golden writer now writes R2010 when a case holds a multileader, and the
+  expected model follows the version it writes.
+
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

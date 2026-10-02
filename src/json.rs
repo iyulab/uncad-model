@@ -487,6 +487,7 @@ mod tests {
                         dogleg: None,
                     },
                 ],
+                line_type: Some(LeaderLineType::Spline),
             }),
             Entity::MLine(MLineEntity {
                 common: c.clone(),

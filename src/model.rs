@@ -1353,6 +1353,82 @@ pub struct MultiLeaderEntity {
     /// The leader roots (DXF `LEADER{` blocks of the context data), in file
     /// order.
     pub leaders: Vec<LeaderRoot>,
+    /// How every leader line of this entity is drawn between its points.
+    ///
+    /// The format settles it in layers: the entity's own type (DXF 170)
+    /// when its property override flags (DXF 90) set bit 0x1, otherwise the
+    /// type of the MLEADERSTYLE it names (DXF 340, the style's 173); and,
+    /// from R2010, a line whose own override flags (93 inside its
+    /// `LEADER_LINE{` block) set bit 0x1 states its own (170 there). This is
+    /// the type that comes out of those layers.
+    ///
+    /// `None` when that cannot be told -- the style is needed and the
+    /// entity names none the drawing has, a type is a code the format does
+    /// not define, or the lines come out of their layers with different
+    /// types -- and for a document written before this field existed.
+    #[serde(default)]
+    pub line_type: Option<LeaderLineType>,
+}
+
+/// How a MULTILEADER's leader lines run between their points (DXF 170 on
+/// the entity and on a line, 173 on an MLEADERSTYLE).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LeaderLineType {
+    /// 0: the lines are not drawn.
+    Invisible,
+    /// 1: straight segments.
+    Straight,
+    /// 2: a spline through the points.
+    Spline,
+}
+
+impl LeaderLineType {
+    /// The type a format code states, or `None` for a code the format does
+    /// not define.
+    pub fn from_code(code: i64) -> Option<Self> {
+        match code {
+            0 => Some(Self::Invisible),
+            1 => Some(Self::Straight),
+            2 => Some(Self::Spline),
+            _ => None,
+        }
+    }
+
+    /// The type the format's layers settle on, for
+    /// [`MultiLeaderEntity::line_type`]: `entity_flags` and `entity_type`
+    /// are the entity's DXF 90 and 170, `style_type` its MLEADERSTYLE's 173
+    /// (`None` when the style is not in the drawing), and `lines` each
+    /// line's own override flags and type (93 and 170 inside its block;
+    /// both `None` before R2010). A value the layers need but the file does
+    /// not state settles nothing, so the answer is `None`.
+    pub fn resolve(
+        entity_flags: Option<u32>,
+        entity_type: Option<i64>,
+        style_type: Option<i64>,
+        lines: impl IntoIterator<Item = (Option<u32>, Option<i64>)>,
+    ) -> Option<Self> {
+        const TYPE_OVERRIDDEN: u32 = 0x1;
+        let overrides = |flags: Option<u32>| flags.map(|f| f & TYPE_OVERRIDDEN != 0);
+        let entity = match overrides(entity_flags) {
+            Some(true) => entity_type.and_then(Self::from_code),
+            Some(false) => style_type.and_then(Self::from_code),
+            None => None,
+        };
+        let mut settled: Option<Option<Self>> = None;
+        for (flags, own) in lines {
+            let line = match overrides(flags) {
+                Some(true) => own.and_then(Self::from_code),
+                _ => entity,
+            };
+            match settled {
+                None => settled = Some(line),
+                Some(earlier) if earlier != line => return None,
+                Some(_) => {}
+            }
+        }
+        settled.unwrap_or(entity)
+    }
 }
 
 impl MultiLeaderEntity {
