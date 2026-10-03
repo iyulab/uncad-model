@@ -132,7 +132,11 @@ fn drawing() -> CadDatabase {
             layouts: BTreeMap::new(),
             image_definitions: BTreeMap::new(),
         },
-        header: HeaderVariables { insunits: Some(4) },
+        header: HeaderVariables {
+            insunits: Some(4),
+            fingerprintguid: Some("{6C96C536-CF21-D941-AC58-7362E8972727}".to_string()),
+            versionguid: None,
+        },
         read_diagnostics: ReadDiagnostics {
             warnings: vec!["UNHANDLEDCLASS".to_string(), "WRONGCRC".to_string()],
         },

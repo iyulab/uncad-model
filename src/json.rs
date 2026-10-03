@@ -50,8 +50,9 @@
 //! - Likewise a parser lists every INSERT's `attribs` also as top-level `ATTRIB`
 //!   entities in `entities`; `block_records[..].entities` does not carry that
 //!   duplication, so the two lists differ even for `*Model_Space`.
-//! - `header` is `{"insunits":..}`: each variable as the file states it, `null`
-//!   when it does not. A document without `header` reads as "none stated".
+//! - `header` is `{"insunits":..,"fingerprintguid":..,"versionguid":..}`: each
+//!   variable as the file states it, `null` when it does not. A document
+//!   without `header`, or without one of its variables, reads as "none stated".
 //! - `read_diagnostics` is `{"warnings":[..]}`: the reader's own warning names,
 //!   empty for a clean read.
 //! - `f64` values that are not finite serialize as `null` (serde_json's

@@ -55,8 +55,8 @@ pub use units::Units;
 /// `entities` holds what the drawing shows (everything owned by the
 /// `*Model_Space`/`*Paper_Space*` blocks, see [`model`]), `tables` the
 /// tables it resolves against and its layouts (see [`Tables`]), and `header`
-/// the few header variables that say what its numbers mean (see
-/// [`HeaderVariables`]). This is what [`to_json`](Self::to_json) serializes
+/// the few header variables that say what its numbers mean and where the
+/// drawing came from (see [`HeaderVariables`]). This is what [`to_json`](Self::to_json) serializes
 /// verbatim.
 ///
 /// It is a plain Rust value: `Clone`/`PartialEq`/`Send`/`Sync` without

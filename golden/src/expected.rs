@@ -229,6 +229,8 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
         },
         header: HeaderVariables {
             insunits: spec.insunits,
+            // The writer states neither identifier.
+            ..HeaderVariables::default()
         },
         read_diagnostics: ReadDiagnostics::default(),
     }

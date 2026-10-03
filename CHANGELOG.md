@@ -9,6 +9,12 @@ bumps the minor version.
 
 ### Added
 
+- `HeaderVariables::fingerprintguid` and `HeaderVariables::versionguid`: the `$FINGERPRINTGUID`
+  and `$VERSIONGUID` a drawing states (R2000 and later), as stated. The fingerprint is kept
+  from the drawing's creation, also by copies and drawings made from the same template, so it
+  says where a drawing came from rather than which drawing it is; the version identifier
+  changes with a save that changes the drawing.
+
 - `MultiLeaderEntity::line_type`, a `LeaderLineType` (invisible, straight or spline): how the
   entity's leader lines are drawn between their points. The format settles it in layers -- the
   entity's own type when its override flags say so, else its MLEADERSTYLE's, and from R2010 a
