@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
 ### Added
 
 - `MultiLeaderEntity::content`, an `Option<MultiLeaderContent>`: what a multileader points out, as
@@ -15,15 +17,6 @@ bumps the minor version.
   content scale and attachment point) or `BLOCK` (`MultiLeaderBlock`: the block, location, scale,
   rotation and plane). `None` for a leader with no content, and for a document written before the
   field existed. A multileader's text was not carried at all before.
-- `MTextAttachment::from_code`: the attachment point a format code states (MTEXT's DXF 71, a
-  multileader text's 171), `None` for a code the format does not define.
-
-- `HeaderVariables::fingerprintguid` and `HeaderVariables::versionguid`: the `$FINGERPRINTGUID`
-  and `$VERSIONGUID` a drawing states (R2000 and later), as stated. The fingerprint is kept
-  from the drawing's creation, also by copies and drawings made from the same template, so it
-  says where a drawing came from rather than which drawing it is; the version identifier
-  changes with a save that changes the drawing.
-
 - `MultiLeaderEntity::line_type`, a `LeaderLineType` (invisible, straight or spline): how the
   entity's leader lines are drawn between their points. The format settles it in layers -- the
   entity's own type when its override flags say so, else its MLEADERSTYLE's, and from R2010 a
@@ -31,10 +24,24 @@ bumps the minor version.
   reader settles it the same way. `None` when the layers do not settle one type (the style is
   missing, a code is undefined, or the lines differ) and for documents written before the
   field existed.
+- `HeaderVariables::fingerprintguid` and `HeaderVariables::versionguid`: the `$FINGERPRINTGUID`
+  and `$VERSIONGUID` a drawing states (R2000 and later), as stated. The fingerprint is kept
+  from the drawing's creation, also by copies and drawings made from the same template, so it
+  says where a drawing came from rather than which drawing it is; the version identifier
+  changes with a save that changes the drawing.
+- `MTextAttachment::from_code`: the attachment point a format code states (MTEXT's DXF 71, a
+  multileader text's 171), `None` for a code the format does not define.
 - Golden case `g20`: multileaders whose line type each of those layers settles, written as an
   R2010 file. The golden writer now writes R2010 when a case holds a multileader, and the
   expected model follows the version it writes.
 
+### Changed
+
+- **Breaking:** `MultiLeaderEntity` has two new fields, `line_type` and `content`, and
+  `HeaderVariables` two, `fingerprintguid` and `versionguid`; code that builds them as struct
+  literals adds `line_type: None, content: None` (or what its source states), and
+  `..HeaderVariables::default()` or the two values. JSON written before the fields existed
+  reads as "not stated".
 
 ## [0.3.0] - 2026-10-02
 
