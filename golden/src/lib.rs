@@ -22,6 +22,6 @@ pub mod writer;
 
 pub use spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, LayerSpec, LayerState, LayoutSpec,
-    Spec, Vertex, Xy,
+    MultiLeaderContentSpec, Spec, Vertex, Xy,
 };
 pub use writer::{write, Handles, Written};

@@ -21,6 +21,7 @@ fn multileader(leaders: Vec<LeaderRoot>) -> MultiLeaderEntity {
         common,
         leaders,
         line_type: None,
+        content: None,
     }
 }
 

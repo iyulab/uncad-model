@@ -148,6 +148,27 @@ pub struct BlockSpec {
     pub entities: Vec<EntitySpec>,
 }
 
+/// What a multileader points out ([`EntitySpec::MultiLeader`]), in the plane
+/// of the drawing: horizontal, unrotated.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MultiLeaderContentSpec {
+    /// A text at `location` (its top-left corner), `height` high, in the
+    /// text style `style` -- one of [`Spec::text_styles`].
+    Text {
+        text: String,
+        location: Xy,
+        height: f64,
+        style: String,
+    },
+    /// A reference to block `block` -- one of [`Spec::blocks`] -- at
+    /// `location`, scaled by `scale` on every axis.
+    Block {
+        block: String,
+        location: Xy,
+        scale: f64,
+    },
+}
+
 /// A 2D coordinate; every entity here is planar, so `z` is always `0`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Xy {
@@ -417,10 +438,9 @@ pub enum EntitySpec {
         measurement: Option<f64>,
         style: Option<String>,
     },
-    /// A MULTILEADER with one leader root and no dogleg: what its lines are
-    /// drawn as is the point of the case, so the content is left out. A
-    /// drawing with one is written as R2010 (`AC1024`), the first version
-    /// whose lines can state their own type.
+    /// A MULTILEADER with one leader root and no dogleg. A drawing with one
+    /// is written as R2010 (`AC1024`), the first version whose lines can
+    /// state their own type.
     MultiLeader {
         layer: String,
         /// The root's lines (`LEADER_LINE{` blocks), each its points and
@@ -432,6 +452,9 @@ pub enum EntitySpec {
         last_point: Xy,
         /// DXF 170 on the entity.
         line_type: i16,
+        /// What it points out, written in its context data; `None` writes
+        /// neither a text nor a block.
+        content: Option<MultiLeaderContentSpec>,
         /// Whether DXF 90 sets bit 0x1 -- the entity's type, not its
         /// style's, is the one drawn.
         type_overridden: bool,
@@ -730,6 +753,7 @@ impl EntitySpec {
                 lines,
                 last_point,
                 line_type,
+                content,
                 type_overridden,
                 style,
             } => EntitySpec::MultiLeader {
@@ -740,6 +764,28 @@ impl EntitySpec {
                     .collect(),
                 last_point: m(last_point),
                 line_type: *line_type,
+                content: content.as_ref().map(|c| match c {
+                    MultiLeaderContentSpec::Text {
+                        text,
+                        location,
+                        height,
+                        style,
+                    } => MultiLeaderContentSpec::Text {
+                        text: text.clone(),
+                        location: m(location),
+                        height: *height,
+                        style: style.clone(),
+                    },
+                    MultiLeaderContentSpec::Block {
+                        block,
+                        location,
+                        scale,
+                    } => MultiLeaderContentSpec::Block {
+                        block: block.clone(),
+                        location: m(location),
+                        scale: *scale,
+                    },
+                }),
                 type_overridden: *type_overridden,
                 style: style.clone(),
             },

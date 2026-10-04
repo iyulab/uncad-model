@@ -994,6 +994,26 @@ pub enum MTextAttachment {
     BottomRight,
 }
 
+impl MTextAttachment {
+    /// The attachment point a format code states (DXF 71 of an MTEXT, 171
+    /// of a multileader's text, 1 to 9 in the variants' order), or `None`
+    /// for a code the format does not define.
+    pub fn from_code(code: i64) -> Option<Self> {
+        match code {
+            1 => Some(Self::TopLeft),
+            2 => Some(Self::TopCenter),
+            3 => Some(Self::TopRight),
+            4 => Some(Self::MiddleLeft),
+            5 => Some(Self::MiddleCenter),
+            6 => Some(Self::MiddleRight),
+            7 => Some(Self::BottomLeft),
+            8 => Some(Self::BottomCenter),
+            9 => Some(Self::BottomRight),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PolylineEntity {
     pub common: EntityCommon,
@@ -1344,9 +1364,8 @@ pub struct Solid3DEntity {
     pub skipped_edges: usize,
 }
 
-/// MULTILEADER's leader geometry only: its leaders, each a root with the
-/// lines that reach it. The text or block content itself is not carried,
-/// the same narrow scope as 3DSOLID's wireframe.
+/// MULTILEADER: its leaders, each a root with the lines that reach it, and
+/// what they point out -- a text or a block ([`MultiLeaderContent`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MultiLeaderEntity {
     pub common: EntityCommon,
@@ -1368,6 +1387,70 @@ pub struct MultiLeaderEntity {
     /// types -- and for a document written before this field existed.
     #[serde(default)]
     pub line_type: Option<LeaderLineType>,
+    /// What the leaders point out, as the record's context data states it.
+    /// `None` when it states neither a text nor a block (a leader with no
+    /// content), and for a document written before this field existed.
+    #[serde(default)]
+    pub content: Option<MultiLeaderContent>,
+}
+
+/// What a MULTILEADER points out (its context data's content).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MultiLeaderContent {
+    /// DXF 290 is 1: a text.
+    #[serde(rename = "MTEXT")]
+    MText(MultiLeaderText),
+    /// DXF 296 is 1: a block reference.
+    Block(MultiLeaderBlock),
+}
+
+/// A MULTILEADER's text: an MTEXT the record carries in its context data,
+/// placed in world coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MultiLeaderText {
+    /// DXF 304: the text, in MTEXT's format codes like
+    /// [`MTextEntity::text`].
+    pub text: String,
+    /// DXF 340: the text style, resolved from its handle to its name.
+    pub style_name: Ref<String>,
+    /// DXF 12: where the text is, in world coordinates -- the point of the
+    /// text block [`Self::attachment`] names.
+    pub location: Point3D,
+    /// DXF 13: the text's horizontal direction, in world coordinates.
+    pub direction: Point3D,
+    /// DXF 11: the normal of the plane the text lies in.
+    pub extrusion: Point3D,
+    /// DXF 41 of the context data: the character height, the content scale
+    /// already applied.
+    pub height: f64,
+    /// DXF 42: radians about [`Self::extrusion`].
+    pub rotation: f64,
+    /// DXF 43: the width of the box the text is laid out in, before the
+    /// content scale ([`Self::scale`]); `0` is no box.
+    pub width: f64,
+    /// DXF 40 of the context data: the content scale -- the laid-out width
+    /// is `width * scale`.
+    pub scale: f64,
+    /// DXF 171: which point of the text block [`Self::location`] is.
+    /// `None` when the file does not state one the format defines.
+    pub attachment: Option<MTextAttachment>,
+}
+
+/// A MULTILEADER's block: a block reference the record carries in its
+/// context data, placed in world coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MultiLeaderBlock {
+    /// DXF 341: the block, resolved from its handle to its name.
+    pub block_name: Ref<String>,
+    /// DXF 15: where the block's base point goes, in world coordinates.
+    pub location: Point3D,
+    /// DXF 16, 26, 36: the scale along the block's axes.
+    pub scale: Point3D,
+    /// DXF 46: radians about [`Self::extrusion`].
+    pub rotation: f64,
+    /// DXF 14: the normal of the plane the block lies in.
+    pub extrusion: Point3D,
 }
 
 /// How a MULTILEADER's leader lines run between their points (DXF 170 on

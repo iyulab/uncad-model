@@ -3,7 +3,8 @@
 
 use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, HatchEdgeSpec, HatchPathSpec,
-    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, LineStyleSpec, Spec, TextAlign, Vertex, Xy,
+    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, LineStyleSpec, MultiLeaderContentSpec, Spec,
+    TextAlign, Vertex, Xy,
 };
 use crate::writer::{horizontal_code, vertical_code};
 use uncad_model::model::{
@@ -1736,6 +1737,24 @@ pub fn g20_multileader_line_types() -> Spec {
                   line_type: i16,
                   type_overridden: bool,
                   style: Option<(String, i16)>| {
+        // The first two point out a text and a block: what a leader says is
+        // read whatever its lines are drawn as.
+        let content = if x == 0.0 {
+            Some(MultiLeaderContentSpec::Text {
+                text: "\\A1;%%c10 THRU".to_string(),
+                location: Xy::new(x + 6.0, 1.0),
+                height: 2.5,
+                style: "Standard".to_string(),
+            })
+        } else if x == 20.0 {
+            Some(MultiLeaderContentSpec::Block {
+                block: "MARK".to_string(),
+                location: Xy::new(x + 6.0, 0.0),
+                scale: 2.0,
+            })
+        } else {
+            None
+        };
         EntitySpec::MultiLeader {
             layer: "0".to_string(),
             lines: lines
@@ -1748,6 +1767,7 @@ pub fn g20_multileader_line_types() -> Spec {
                 .collect(),
             last_point: Xy::new(x + 5.0, 0.0),
             line_type,
+            content,
             type_overridden,
             style,
         }
@@ -1756,9 +1776,16 @@ pub fn g20_multileader_line_types() -> Spec {
         codepage: Codepage::Ascii,
         insunits: None,
         layers: Vec::new(),
-        blocks: Vec::new(),
+        blocks: vec![BlockSpec {
+            name: "MARK".to_string(),
+            entities: vec![EntitySpec::Line {
+                layer: "0".to_string(),
+                start: Xy::new(0.0, 0.0),
+                end: Xy::new(1.0, 1.0),
+            }],
+        }],
         dim_styles: Vec::new(),
-        text_styles: Vec::new(),
+        text_styles: vec!["Standard".to_string()],
         entities: vec![
             // The style says straight; so does the entity, not overriding.
             leader(0.0, vec![None], STRAIGHT, false, straight_style.clone()),

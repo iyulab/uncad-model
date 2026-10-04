@@ -12,7 +12,8 @@
 
 use crate::spec::{
     AttribSpec, BlockSpec, Codepage, DimStyleSpec, EntitySpec, HatchEdgeSpec, HatchPathSpec,
-    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, LineStyleSpec, Spec, Xy,
+    HatchShapeSpec, LayerSpec, LayerState, LayoutSpec, LineStyleSpec, MultiLeaderContentSpec, Spec,
+    Xy,
 };
 use uncad_model::model::{
     HatchStyle, HorizontalJustification, OrdinateAxis, VerticalJustification,
@@ -122,6 +123,9 @@ struct Writer {
     /// The handle a multileader naming no style in the drawing points at:
     /// issued, but no object has it.
     missing_mleader_style: Option<u32>,
+    /// Text style name -> the handle of its STYLE entry, which a
+    /// multileader's text points at (DXF 340 of its context data).
+    text_style_handles: Vec<(String, u32)>,
 }
 
 impl Writer {
@@ -178,6 +182,59 @@ impl Writer {
         self.num(base, p.x);
         self.num(base + 10, p.y);
         self.num(base + 20, z);
+    }
+
+    /// A multileader's content, in its context data: the groups of the text
+    /// (290 = 1 and what follows) or of the block (296 = 1 and what
+    /// follows), in the order a file AutoCAD writes has them. Nothing for
+    /// no content.
+    fn multileader_content(&mut self, content: Option<&MultiLeaderContentSpec>) {
+        const Z: Xy = Xy::new(0.0, 0.0);
+        match content {
+            None => {}
+            Some(MultiLeaderContentSpec::Text {
+                text,
+                location,
+                height,
+                style,
+            }) => {
+                let style = self
+                    .text_style_handles
+                    .iter()
+                    .find(|(n, _)| n == style)
+                    .map(|(_, h)| *h)
+                    .expect("the style is one of the spec's text styles");
+                self.xyz(10, *location, 0.0);
+                self.num(41, *height);
+                self.pair(290, 1);
+                self.pair(304, text);
+                self.xyz(11, Z, 1.0);
+                self.pair(340, format!("{style:X}"));
+                self.xyz(12, *location, 0.0);
+                self.xyz(13, Xy::new(1.0, 0.0), 0.0);
+                self.num(42, 0.0);
+                self.num(43, 0.0);
+                self.num(44, 0.0);
+                self.num(45, 1.0);
+                self.pair(171, 1);
+                self.pair(296, 0);
+            }
+            Some(MultiLeaderContentSpec::Block {
+                block,
+                location,
+                scale,
+            }) => {
+                let record = self.block_record(block);
+                self.xyz(10, *location, 0.0);
+                self.pair(290, 0);
+                self.pair(296, 1);
+                self.pair(341, format!("{record:X}"));
+                self.xyz(14, Z, 1.0);
+                self.xyz(15, *location, 0.0);
+                self.xyz(16, Xy::new(*scale, *scale), *scale);
+                self.num(46, 0.0);
+            }
+        }
     }
 
     fn handle(&mut self) -> u32 {
@@ -319,6 +376,7 @@ impl Writer {
                 self.pair(330, format!("{table:X}"));
                 self.pair(100, "AcDbSymbolTableRecord");
                 self.pair(100, "AcDbTextStyleTableRecord");
+                self.text_style_handles.push((name.clone(), h));
                 self.pair(2, name);
                 self.pair(70, 0);
                 self.num(40, 0.0);
@@ -716,6 +774,7 @@ impl Writer {
                 lines,
                 last_point,
                 line_type,
+                content,
                 type_overridden,
                 style,
             } => {
@@ -725,6 +784,7 @@ impl Writer {
                 self.pair(270, 2);
                 self.pair(300, "CONTEXT_DATA{");
                 self.num(40, 1.0);
+                self.multileader_content(content.as_ref());
                 // The context data states its own 170 and 90 (the content's,
                 // not the leader lines'), before the entity's -- as a file
                 // AutoCAD writes does. Here they disagree with the entity's.

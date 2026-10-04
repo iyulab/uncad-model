@@ -12,8 +12,8 @@
 //! as DWG or as DXF), the origin is `Vector`, the confidence `High`.
 
 use crate::spec::{
-    AttribSpec, EntitySpec, HatchEdgeSpec, HatchShapeSpec, LayerSpec, LayoutSpec, Spec, TextAlign,
-    Xy,
+    AttribSpec, EntitySpec, HatchEdgeSpec, HatchShapeSpec, LayerSpec, LayoutSpec,
+    MultiLeaderContentSpec, Spec, TextAlign, Xy,
 };
 use crate::writer::{acadver, midpoint, space_names, Written};
 use std::collections::BTreeMap;
@@ -21,9 +21,10 @@ use uncad_model::model::{
     ArcEntity, AttdefEntity, AttribEntity, AttributeFlags, CircleEntity, Confidence,
     DimensionEntity, DimensionKind, DimensionPoints, Entity, EntityCommon, EntityId,
     EntityLinetype, HatchBoundaryPath, HatchEdge, HatchEntity, HorizontalJustification,
-    InsertEntity, LeaderLineType, LeaderRoot, LineEntity, LwPolylineEntity, MultiLeaderEntity,
-    Origin, Point2D, Point3D, PolylineVertex, Ref, Solid3DEntity, SolidEntity, TextEntity,
-    TextOverride, VerticalJustification, ViewportEntity, ViewportView,
+    InsertEntity, LeaderLineType, LeaderRoot, LineEntity, LwPolylineEntity, MTextAttachment,
+    MultiLeaderBlock, MultiLeaderContent, MultiLeaderEntity, MultiLeaderText, Origin, Point2D,
+    Point3D, PolylineVertex, Ref, Solid3DEntity, SolidEntity, TextEntity, TextOverride,
+    VerticalJustification, ViewportEntity, ViewportView,
 };
 
 /// The reference a dimension's style name becomes: resolved when the file
@@ -482,6 +483,7 @@ fn convert(
             lines,
             last_point,
             line_type,
+            content,
             type_overridden,
             style,
         } => {
@@ -514,6 +516,52 @@ fn convert(
                     1 => Some(LeaderLineType::Straight),
                     2 => Some(LeaderLineType::Spline),
                     _ => None,
+                }),
+                content: content.as_ref().map(|c| match c {
+                    MultiLeaderContentSpec::Text {
+                        text,
+                        location,
+                        height,
+                        style,
+                    } => MultiLeaderContent::MText(MultiLeaderText {
+                        text: text.clone(),
+                        style_name: Ref::Resolved(style.clone()),
+                        location: p3(*location),
+                        direction: Point3D {
+                            x: 1.0,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                        extrusion: Point3D {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 1.0,
+                        },
+                        height: *height,
+                        rotation: 0.0,
+                        width: 0.0,
+                        scale: 1.0,
+                        attachment: Some(MTextAttachment::TopLeft),
+                    }),
+                    MultiLeaderContentSpec::Block {
+                        block,
+                        location,
+                        scale,
+                    } => MultiLeaderContent::Block(MultiLeaderBlock {
+                        block_name: Ref::Resolved(block.clone()),
+                        location: p3(*location),
+                        scale: Point3D {
+                            x: *scale,
+                            y: *scale,
+                            z: *scale,
+                        },
+                        rotation: 0.0,
+                        extrusion: Point3D {
+                            x: 0.0,
+                            y: 0.0,
+                            z: 1.0,
+                        },
+                    }),
                 }),
             })
         }
