@@ -9,12 +9,12 @@ bumps the minor version.
 
 ### Added
 
-- `MultiLeaderEntity::content`, an `Option<MultiLeaderContent>`: what a multileader points out,
-  as its context data states it -- `MTEXT` (`MultiLeaderText`: the text in MTEXT's format codes,
-  its style, location, direction, plane, character height, rotation, column width, content scale
-  and attachment point) or `BLOCK` (`MultiLeaderBlock`: the block, location, scale, rotation and
-  plane). `None` for a leader with no content, and for a document written before the field
-  existed. A multileader's text was not carried at all before.
+- `MultiLeaderEntity::content`, an `Option<MultiLeaderContent>`: what a multileader points out, as
+  its context data states it -- `MTEXT` (`MultiLeaderText`: the text in MTEXT's format codes, its
+  style, location, direction, plane, character height, line spacing, rotation, column width,
+  content scale and attachment point) or `BLOCK` (`MultiLeaderBlock`: the block, location, scale,
+  rotation and plane). `None` for a leader with no content, and for a document written before the
+  field existed. A multileader's text was not carried at all before.
 - `MTextAttachment::from_code`: the attachment point a format code states (MTEXT's DXF 71, a
   multileader text's 171), `None` for a code the format does not define.
 

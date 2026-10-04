@@ -538,6 +538,7 @@ fn convert(
                             z: 1.0,
                         },
                         height: *height,
+                        line_spacing_factor: 1.0,
                         rotation: 0.0,
                         width: 0.0,
                         scale: 1.0,

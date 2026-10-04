@@ -1424,6 +1424,10 @@ pub struct MultiLeaderText {
     /// DXF 41 of the context data: the character height, the content scale
     /// already applied.
     pub height: f64,
+    /// DXF 45 of the context data: the line spacing as a fraction of the
+    /// default spacing, like [`MTextEntity::line_spacing_factor`] -- and,
+    /// like it, `1` when the group is absent.
+    pub line_spacing_factor: f64,
     /// DXF 42: radians about [`Self::extrusion`].
     pub rotation: f64,
     /// DXF 43: the width of the box the text is laid out in, before the
