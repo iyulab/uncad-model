@@ -7,6 +7,16 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `AcadTableEntity::grid`, an `Option<TableGrid>`: a table's column widths and its rows, each row
+  with its height and one `TableCell` per column -- the cell's kind (`TableCellKind`: text or
+  block), its text in the file's format codes, whether another cell's span covers it, and how many
+  columns and rows it spans. An empty cell has no text however the writing version spelled it (an
+  empty string or no value), so two drawings do not differ only in that spelling. `None` when the
+  reader did not read the cells or they do not form a whole grid, and for a document written
+  before the field existed. A table's cells were not carried at all before.
+
 ## [0.4.0] - 2026-10-04
 
 ### Added

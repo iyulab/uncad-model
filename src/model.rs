@@ -733,8 +733,8 @@ pub enum LeaderAnnotation {
 
 /// ACAD_TABLE, carried the way [`InsertEntity`] is minus `attribs`: a
 /// table references a block that holds its rendered cell geometry, so
-/// consumers draw it through the same block-reference path. Cell contents
-/// (rows, columns, widths) are not part of the model.
+/// consumers draw it through the same block-reference path. Its rows,
+/// columns and cell contents are [`Self::grid`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AcadTableEntity {
     pub common: EntityCommon,
@@ -748,6 +748,66 @@ pub struct AcadTableEntity {
     pub scale: Point3D,
     /// Radians. See [`Self::scale`].
     pub rotation: f64,
+    /// The table's rows, columns and cells, as the record states them.
+    /// `None` when the reader did not read them -- it says so in its own
+    /// documentation -- or when what the record states is not a whole grid,
+    /// and for a document written before this field existed. A table with
+    /// no rows is `Some` with an empty [`TableGrid::rows`]: "no cells" and
+    /// "cells not read" are different answers.
+    #[serde(default)]
+    pub grid: Option<TableGrid>,
+}
+
+/// A table's cells, row by row from the top, each row's cells from the
+/// left. Every row has one cell per column -- `cells.len()` equals
+/// `column_widths.len()` -- including the cells another cell's span covers,
+/// so a cell's position in the grid is its index and needs no arithmetic
+/// over spans.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableGrid {
+    /// DXF 142, one per column, in drawing units.
+    pub column_widths: Vec<f64>,
+    pub rows: Vec<TableRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableRow {
+    /// DXF 141, in drawing units.
+    pub height: f64,
+    pub cells: Vec<TableCell>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableCell {
+    /// DXF 171. `None` for a code the format does not define.
+    pub kind: Option<TableCellKind>,
+    /// What the cell says, in the file's text format codes (as MTEXT
+    /// carries them). `None` when it says nothing: the format spells an
+    /// empty cell as an empty string or as no value at all, depending on
+    /// the version that wrote it, and those are one meaning -- two
+    /// drawings must not differ only in how an empty cell was spelled.
+    /// A block cell has no text. A reader that cannot read a cell's text
+    /// (a value kind it does not handle) leaves it `None` and reports that
+    /// in its own warnings.
+    pub text: Option<String>,
+    /// DXF 173: the cell lies under another cell's span (see
+    /// [`Self::span_columns`]) and shows nothing of its own.
+    pub covered: bool,
+    /// DXF 175: how many columns this cell spans, rightwards from itself.
+    /// 1 for a cell that spans nothing.
+    pub span_columns: u32,
+    /// DXF 176: how many rows this cell spans, downwards from itself.
+    pub span_rows: u32,
+}
+
+/// What a table cell holds (DXF 171).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TableCellKind {
+    /// 1: text.
+    Text,
+    /// 2: a block.
+    Block,
 }
 
 /// Same field shape as ATTRIB -- the *template* stored in a block

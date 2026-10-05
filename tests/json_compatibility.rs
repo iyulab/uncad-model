@@ -68,6 +68,9 @@ fn fields_added_since_read_as_their_documentation_says() {
         if let Entity::Light(light) = e {
             assert_eq!(light.light_type, None);
         }
+        if let Entity::AcadTable(table) = e {
+            assert_eq!(table.grid, None);
+        }
     }
 }
 

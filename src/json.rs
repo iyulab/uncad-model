@@ -543,6 +543,49 @@ mod tests {
                 insertion_point: p3(0.0, 0.0, 0.0),
                 scale: p3(1.0, 1.0, 1.0),
                 rotation: 0.1,
+                grid: Some(TableGrid {
+                    column_widths: vec![2.5, 4.0],
+                    rows: vec![
+                        TableRow {
+                            height: 0.45,
+                            cells: vec![
+                                TableCell {
+                                    kind: Some(TableCellKind::Text),
+                                    text: Some("PARTS".to_string()),
+                                    covered: false,
+                                    span_columns: 2,
+                                    span_rows: 1,
+                                },
+                                TableCell {
+                                    kind: Some(TableCellKind::Text),
+                                    text: None,
+                                    covered: true,
+                                    span_columns: 1,
+                                    span_rows: 1,
+                                },
+                            ],
+                        },
+                        TableRow {
+                            height: 0.36,
+                            cells: vec![
+                                TableCell {
+                                    kind: Some(TableCellKind::Block),
+                                    text: None,
+                                    covered: false,
+                                    span_columns: 1,
+                                    span_rows: 1,
+                                },
+                                TableCell {
+                                    kind: None,
+                                    text: Some(r"{\fArial;M6}".to_string()),
+                                    covered: false,
+                                    span_columns: 1,
+                                    span_rows: 1,
+                                },
+                            ],
+                        },
+                    ],
+                }),
             }),
             Entity::Wipeout(WipeoutEntity {
                 common: c.clone(),
