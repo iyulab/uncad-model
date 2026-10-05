@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-05
+
 ### Added
 
 - `AcadTableEntity::grid`, an `Option<TableGrid>`: a table's column widths and its rows, each row
@@ -16,6 +18,12 @@ bumps the minor version.
   empty string or no value), so two drawings do not differ only in that spelling. `None` when the
   reader did not read the cells or they do not form a whole grid, and for a document written
   before the field existed. A table's cells were not carried at all before.
+
+### Changed
+
+- **Breaking:** `AcadTableEntity` has a new field, `grid`; code that builds it as a struct literal
+  adds `grid: None` (or the grid its source states). JSON written before the field existed reads
+  as "not read".
 
 ## [0.4.0] - 2026-10-04
 
