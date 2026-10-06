@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-07
+
 ### Added
 
 - `AcadTableEntity::flow`, an `Option<TableFlow>`: which way a table's rows run from its insertion
