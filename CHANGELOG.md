@@ -7,6 +7,15 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `MultiLeaderEntity::arrow_size`, an `Option<f64>`: the size every arrowhead of a multileader is
+  drawn at -- its context data's arrowhead size (DXF 140, the content scale already applied), or,
+  from R2010, a line's own (40 in its `LEADER_LINE{` block) when that line's override flags (93)
+  set bit 0x10. `None` when the context data states no size, a size is not a finite number of zero
+  or more, or the lines come out with different sizes. `MultiLeaderEntity::resolve_arrow_size`
+  works it out from those groups.
+
 ## [0.6.0] - 2026-10-07
 
 ### Added

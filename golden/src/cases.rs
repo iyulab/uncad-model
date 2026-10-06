@@ -1767,6 +1767,7 @@ pub fn g20_multileader_line_types() -> Spec {
                 .collect(),
             last_point: Xy::new(x + 5.0, 0.0),
             line_type,
+            arrow_size: 0.18,
             content,
             type_overridden,
             style,

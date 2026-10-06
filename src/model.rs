@@ -1484,6 +1484,19 @@ pub struct MultiLeaderEntity {
     /// types -- and for a document written before this field existed.
     #[serde(default)]
     pub line_type: Option<LeaderLineType>,
+    /// The size every arrowhead of this entity is drawn at, in drawing
+    /// units: the arrowhead size of its context data (DXF 140), the content
+    /// scale already applied -- and, from R2010, a line whose own override
+    /// flags (93 inside its `LEADER_LINE{` block) set bit 0x10 states its
+    /// own (40 there). This is the size that comes out of those layers
+    /// ([`Self::resolve_arrow_size`]).
+    ///
+    /// `None` when that cannot be told -- the context data states no size,
+    /// a size is not a finite number of zero or more, or the lines come out
+    /// with different sizes -- and for a document written before this
+    /// field existed.
+    #[serde(default)]
+    pub arrow_size: Option<f64>,
     /// What the leaders point out, as the record's context data states it.
     /// `None` when it states neither a text nor a block (a leader with no
     /// content), and for a document written before this field existed.
@@ -1616,6 +1629,34 @@ impl LeaderLineType {
 }
 
 impl MultiLeaderEntity {
+    /// The size the format's layers settle on, for [`Self::arrow_size`]:
+    /// `context` is the context data's 140, and `lines` each line's own
+    /// override flags and size (93 and 40 inside its block; both `None`
+    /// before R2010). A size the layers need but the file does not state,
+    /// or one that is not a finite number of zero or more, settles nothing,
+    /// so the answer is `None`.
+    pub fn resolve_arrow_size(
+        context: Option<f64>,
+        lines: impl IntoIterator<Item = (Option<u32>, Option<f64>)>,
+    ) -> Option<f64> {
+        const SIZE_OVERRIDDEN: u32 = 0x10;
+        let valid = |size: Option<f64>| size.filter(|s| s.is_finite() && *s >= 0.0);
+        let context = valid(context);
+        let mut settled: Option<Option<f64>> = None;
+        for (flags, own) in lines {
+            let line = match flags {
+                Some(f) if f & SIZE_OVERRIDDEN != 0 => valid(own),
+                _ => context,
+            };
+            match settled {
+                None => settled = Some(line),
+                Some(earlier) if earlier != line => return None,
+                Some(_) => {}
+            }
+        }
+        settled.unwrap_or(context)
+    }
+
     /// The leader lines as drawn, in order: each line of each root through
     /// its vertices and on to the root's
     /// [`last_point`](LeaderRoot::last_point). Its first point is where the

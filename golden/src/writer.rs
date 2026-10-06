@@ -774,6 +774,7 @@ impl Writer {
                 lines,
                 last_point,
                 line_type,
+                arrow_size,
                 content,
                 type_overridden,
                 style,
@@ -784,6 +785,7 @@ impl Writer {
                 self.pair(270, 2);
                 self.pair(300, "CONTEXT_DATA{");
                 self.num(40, 1.0);
+                self.num(140, *arrow_size);
                 self.multileader_content(content.as_ref());
                 // The context data states its own 170 and 90 (the content's,
                 // not the leader lines'), before the entity's -- as a file

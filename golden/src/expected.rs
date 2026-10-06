@@ -483,6 +483,7 @@ fn convert(
             lines,
             last_point,
             line_type,
+            arrow_size,
             content,
             type_overridden,
             style,
@@ -517,6 +518,7 @@ fn convert(
                     2 => Some(LeaderLineType::Spline),
                     _ => None,
                 }),
+                arrow_size: Some(*arrow_size),
                 content: content.as_ref().map(|c| match c {
                     MultiLeaderContentSpec::Text {
                         text,

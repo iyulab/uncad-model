@@ -21,6 +21,7 @@ fn multileader(leaders: Vec<LeaderRoot>) -> MultiLeaderEntity {
         common,
         leaders,
         line_type: None,
+        arrow_size: None,
         content: None,
     }
 }
@@ -127,6 +128,55 @@ fn what_the_layers_cannot_settle_is_unknown() {
             None,
             Some(STRAIGHT),
             [(Some(0), None), (Some(1), Some(SPLINE))]
+        ),
+        None
+    );
+}
+
+// The arrowhead size, layer by layer: the context data's, then each line's
+// own where its override flags (93) set bit 0x10.
+
+#[test]
+fn the_context_data_sizes_every_arrowhead_unless_a_line_overrides_it() {
+    // No line states its own: the context data's size.
+    assert_eq!(
+        MultiLeaderEntity::resolve_arrow_size(Some(0.18), [(Some(0), Some(9.0)), (None, None)]),
+        Some(0.18)
+    );
+    assert_eq!(
+        MultiLeaderEntity::resolve_arrow_size(Some(4.0), []),
+        Some(4.0)
+    );
+    // Every line overrides, all to the same size.
+    assert_eq!(
+        MultiLeaderEntity::resolve_arrow_size(
+            Some(0.18),
+            [(Some(0x10), Some(1.0)), (Some(0x11), Some(1.0))]
+        ),
+        Some(1.0)
+    );
+}
+
+#[test]
+fn an_arrowhead_size_the_layers_cannot_settle_is_unknown() {
+    // The context data states none.
+    assert_eq!(MultiLeaderEntity::resolve_arrow_size(None, []), None);
+    // A size that is not a finite number of zero or more.
+    assert_eq!(MultiLeaderEntity::resolve_arrow_size(Some(-1.0), []), None);
+    assert_eq!(
+        MultiLeaderEntity::resolve_arrow_size(Some(f64::NAN), []),
+        None
+    );
+    // A line that overrides without stating a size.
+    assert_eq!(
+        MultiLeaderEntity::resolve_arrow_size(Some(0.18), [(Some(0x10), None)]),
+        None
+    );
+    // Lines that come out different: one entity size cannot describe them.
+    assert_eq!(
+        MultiLeaderEntity::resolve_arrow_size(
+            Some(0.18),
+            [(Some(0), None), (Some(0x10), Some(1.0))]
         ),
         None
     );

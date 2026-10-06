@@ -489,6 +489,7 @@ mod tests {
                     },
                 ],
                 line_type: Some(LeaderLineType::Spline),
+                arrow_size: Some(2.5),
                 content: Some(MultiLeaderContent::MText(MultiLeaderText {
                     text: "%%c10 THRU".to_string(),
                     style_name: Ref::Resolved("Standard".to_string()),
@@ -507,6 +508,7 @@ mod tests {
                 common: c.clone(),
                 leaders: Vec::new(),
                 line_type: None,
+                arrow_size: None,
                 content: Some(MultiLeaderContent::Block(MultiLeaderBlock {
                     block_name: Ref::Resolved("MARK".to_string()),
                     location: p3(1.0, 2.0, 0.0),

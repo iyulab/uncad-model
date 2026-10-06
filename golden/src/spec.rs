@@ -452,6 +452,9 @@ pub enum EntitySpec {
         last_point: Xy,
         /// DXF 170 on the entity.
         line_type: i16,
+        /// DXF 140 of the context data: the size every arrowhead is drawn
+        /// at (no line states its own).
+        arrow_size: f64,
         /// What it points out, written in its context data; `None` writes
         /// neither a text nor a block.
         content: Option<MultiLeaderContentSpec>,
@@ -753,6 +756,7 @@ impl EntitySpec {
                 lines,
                 last_point,
                 line_type,
+                arrow_size,
                 content,
                 type_overridden,
                 style,
@@ -764,6 +768,7 @@ impl EntitySpec {
                     .collect(),
                 last_point: m(last_point),
                 line_type: *line_type,
+                arrow_size: *arrow_size,
                 content: content.as_ref().map(|c| match c {
                     MultiLeaderContentSpec::Text {
                         text,
