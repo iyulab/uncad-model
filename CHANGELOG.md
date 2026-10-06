@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-07
+
 ### Added
 
 - `MultiLeaderEntity::arrow_size`, an `Option<f64>`: the size every arrowhead of a multileader is
