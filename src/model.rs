@@ -756,10 +756,47 @@ pub struct AcadTableEntity {
     /// "cells not read" are different answers.
     #[serde(default)]
     pub grid: Option<TableGrid>,
+    /// Which way the rows run from the insertion point: the table's own
+    /// flow direction (DXF 70 of the table, an override) when it states
+    /// one, otherwise that of the TABLESTYLE it points at (DXF 342, the
+    /// style's 70). `None` when neither states it, when the style it points
+    /// at is not in the drawing, or when the reader did not read it -- it
+    /// says so in its own documentation -- and for a document written
+    /// before this field existed. Where a row or a cell lies follows from
+    /// this, the insertion point and [`Self::grid`]; without it, it is not
+    /// known.
+    #[serde(default)]
+    pub flow: Option<TableFlow>,
 }
 
-/// A table's cells, row by row from the top, each row's cells from the
-/// left. Every row has one cell per column -- `cells.len()` equals
+/// Which way a table's rows run from its insertion point (DXF 70 of a
+/// table or of a TABLESTYLE).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TableFlow {
+    /// 0: downwards -- the first row is at the top, and the insertion point
+    /// is the table's upper-left corner.
+    Down,
+    /// 1: upwards -- the first row is at the bottom, and the insertion point
+    /// is the table's lower-left corner.
+    Up,
+}
+
+impl TableFlow {
+    /// The flow a DXF 70 code states; `None` for a code the format does not
+    /// define.
+    pub fn from_code(code: i64) -> Option<TableFlow> {
+        match code {
+            0 => Some(TableFlow::Down),
+            1 => Some(TableFlow::Up),
+            _ => None,
+        }
+    }
+}
+
+/// A table's cells, row by row from the first -- the top row when the
+/// table's [`flow`](AcadTableEntity::flow) runs down, the bottom row when it
+/// runs up -- each row's cells from the left. Every row has one cell per column -- `cells.len()` equals
 /// `column_widths.len()` -- including the cells another cell's span covers,
 /// so a cell's position in the grid is its index and needs no arithmetic
 /// over spans.

@@ -543,6 +543,7 @@ mod tests {
                 insertion_point: p3(0.0, 0.0, 0.0),
                 scale: p3(1.0, 1.0, 1.0),
                 rotation: 0.1,
+                flow: Some(TableFlow::Down),
                 grid: Some(TableGrid {
                     column_widths: vec![2.5, 4.0],
                     rows: vec![

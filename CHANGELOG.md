@@ -7,6 +7,19 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `AcadTableEntity::flow`, an `Option<TableFlow>`: which way a table's rows run from its insertion
+  point -- `Down` (the first row at the top, the insertion point the upper-left corner) or `Up`
+  (the first row at the bottom, the insertion point the lower-left corner). It is the table's own
+  flow direction (DXF 70) when it overrides its style, otherwise its TABLESTYLE's; `None` when
+  neither states it or the reader did not read it. `TableFlow::from_code` reads the DXF 70 code.
+
+### Changed
+
+- `TableGrid`'s rows are documented as running from the first row, which is the top row only when
+  the table's flow runs down.
+
 ## [0.5.0] - 2026-10-05
 
 ### Added
