@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-07
+
 ### Added
 
 - `BlockRecord::external_reference`, an `Option<ExternalReference>`: when a block states that it is
