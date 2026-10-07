@@ -7,6 +7,14 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `BlockRecord::external_reference`, an `Option<ExternalReference>`: when a block states that it is
+  an external reference (BLOCK DXF 70 bit 4), the referenced drawing's path as written (DXF 1) and
+  whether it is an overlay (bit 8). The referenced drawing's content is not in the file, so such a
+  block's entities are only what was bound or cached into it -- often none. Breaking for code that
+  builds a `BlockRecord` with a struct literal; the JSON field defaults to `null`.
+
 ## [0.8.0] - 2026-10-07
 
 ### Added

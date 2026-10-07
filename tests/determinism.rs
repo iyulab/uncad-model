@@ -92,6 +92,7 @@ fn drawing() -> CadDatabase {
                 base_point: Default::default(),
                 name: name.to_string(),
                 entities: entities.clone(),
+                external_reference: None,
             },
         );
     }

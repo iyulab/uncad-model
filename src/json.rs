@@ -811,6 +811,7 @@ mod tests {
                 base_point: Default::default(),
                 name: "*Model_Space".to_string(),
                 entities: one_of_each(),
+                external_reference: None,
             },
         );
         let mut layers = BTreeMap::new();

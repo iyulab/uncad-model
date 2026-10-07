@@ -344,6 +344,26 @@ pub struct BlockRecord {
     /// An absent group is the format's default, the origin.
     #[serde(default)]
     pub base_point: Point3D,
+    /// The drawing this block stands for, when the file states that the block
+    /// is an external reference (BLOCK DXF 70 bit 4): its content is that
+    /// other drawing's, which is not in this file -- whatever entities the
+    /// definition carries are what was bound or cached into it, often none.
+    /// `None` when the bit is clear: an ordinary block.
+    #[serde(default)]
+    pub external_reference: Option<ExternalReference>,
+}
+
+/// An external reference as its block states it: where the referenced
+/// drawing is, and how it is attached.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalReference {
+    /// DXF 1: the referenced drawing's path, as the file writes it -- the
+    /// file's own spelling, which may be absolute, relative or a bare name,
+    /// and is not looked up. Empty when the file writes none.
+    pub path: String,
+    /// DXF 70 bit 8: an overlay rather than an attachment -- a drawing that
+    /// in turn references this one does not see it.
+    pub overlay: bool,
 }
 
 /// One LAYOUT object: a tab of the drawing -- the model tab, or a sheet of

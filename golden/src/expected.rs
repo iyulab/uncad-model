@@ -140,6 +140,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                 name,
                 entities,
                 base_point: Default::default(),
+                external_reference: None,
             },
         );
     }
@@ -160,6 +161,7 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                 base_point: Default::default(),
                 name: name.clone(),
                 entities: block_entities,
+                external_reference: None,
             },
         );
     }
