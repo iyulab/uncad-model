@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-07
+
 ### Added
 
 - `HeaderVariables::pdmode` and `pdsize` (`$PDMODE`, `$PDSIZE`), as stated, and
