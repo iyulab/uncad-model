@@ -136,6 +136,8 @@ fn drawing() -> CadDatabase {
             insunits: Some(4),
             fingerprintguid: Some("{6C96C536-CF21-D941-AC58-7362E8972727}".to_string()),
             versionguid: None,
+            pdmode: Some(0),
+            pdsize: Some(0.0),
         },
         read_diagnostics: ReadDiagnostics {
             warnings: vec!["UNHANDLEDCLASS".to_string(), "WRONGCRC".to_string()],

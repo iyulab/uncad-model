@@ -7,6 +7,14 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `HeaderVariables::pdmode` and `pdsize` (`$PDMODE`, `$PDSIZE`), as stated, and
+  `HeaderVariables::point_display`: how a POINT is shown -- its figure (a dot, nothing, a plus, a
+  cross or a tick), whether a circle and a square surround it, and its size, in drawing units or as
+  a fraction of the view's height (`PointDisplay`, `PointFigure`, `PointSize`). `None` for a mode
+  the format does not define.
+
 ## [0.7.0] - 2026-10-07
 
 ### Added
