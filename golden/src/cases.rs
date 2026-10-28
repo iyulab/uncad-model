@@ -1821,6 +1821,88 @@ pub fn g20_multileader_line_types() -> Spec {
     }
 }
 
+/// G21: the ways a drawing states a tolerance, as the standards write them.
+///
+/// ISO 129-1 states a limit deviation as a stacked pair after the value
+/// (`\S+0.1^0;` -- upper over lower), ISO 286 a fit as a symbol (`H7`), and
+/// ISO 2768 a general tolerance once, in the title block. A reader carries
+/// every one of them as the drawing wrote it: it does not reorder a pair that
+/// reads upper-below-lower, does not turn `0` into `+0`, and does not decide
+/// which grade a general tolerance names. Reading them is the next layer's
+/// job; this case holds the readers to not touching them.
+pub fn g21_tolerance_forms() -> Spec {
+    let dims = "DIMS".to_string();
+    let title = "TITLE".to_string();
+    // One linear dimension per row, `y` apart so no two draw over each other.
+    let linear = |row: usize, text: &str, measurement: Option<f64>| {
+        let y = 25.0 * row as f64;
+        EntitySpec::LinearDimension {
+            layer: dims.clone(),
+            from: Xy::new(0.0, y),
+            to: Xy::new(50.0, y),
+            line_point: Xy::new(0.0, y + 10.0),
+            text: text.to_string(),
+            measurement,
+            style: None,
+        }
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        insunits: Some(4),
+        layers: vec![
+            LayerSpec {
+                name: dims.clone(),
+                color_index: 3,
+                state: LayerState::default(),
+            },
+            LayerSpec {
+                name: title.clone(),
+                color_index: 2,
+                state: LayerState::default(),
+            },
+        ],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            // A diameter-less pair of limit deviations: the most common form.
+            linear(0, r"<>{\H0.7x;\S+0.1^0;}", Some(50.0)),
+            // One side zero, written without a sign, on either side.
+            linear(1, r"<>{\H0.7x;\S0^-0.1;}", Some(50.0)),
+            // The upper figure below the lower, and both negative: kept as written.
+            linear(2, r"<>{\H0.7x;\S+0.000^+0.200;}", Some(50.0)),
+            linear(3, r"<>{\H0.7x;\S-0.1^-0.05;}", Some(50.0)),
+            // A value typed over the measurement, with a pair after it: the
+            // drawing states 49.6 and measures 50.
+            linear(4, r"49.6{\H0.7x;\S0^-0.3;}", Some(50.0)),
+            // A fit symbol on a diameter (ISO 286) -- no deviations written.
+            EntitySpec::DiameterDimension {
+                layer: dims.clone(),
+                first: Xy::new(100.0, 0.0),
+                second: Xy::new(120.0, 0.0),
+                text: "%%C20 H7".to_string(),
+                measurement: Some(20.0),
+                style: None,
+            },
+            // The general tolerance, stated once for every dimension without its own.
+            EntitySpec::Text {
+                layer: title.clone(),
+                insert: Xy::new(0.0, -20.0),
+                height: 3.5,
+                text: "GENERAL TOLERANCES ISO 2768-m".to_string(),
+                rotation_deg: 0.0,
+                align: None,
+                width_factor: 1.0,
+                mirrored: false,
+                oblique_deg: 0.0,
+                style: None,
+            },
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1842,6 +1924,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g18" => g18_line_styles(),
         "g19" => g19_sheet_of_a_layout_not_current(),
         "g20" => g20_multileader_line_types(),
+        "g21" => g21_tolerance_forms(),
         _ => return None,
     })
 }
@@ -1851,7 +1934,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 18] = [
+pub const NAMES: [&str; 19] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19", "g20",
+    "g17", "g18", "g19", "g20", "g21",
 ];
