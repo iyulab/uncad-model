@@ -31,6 +31,7 @@ pub mod header;
 pub mod json;
 pub mod model;
 pub mod ocs;
+pub mod quantity;
 pub mod tables;
 pub mod text;
 pub mod transform;
@@ -46,6 +47,7 @@ pub use model::{
     Confidence, Entity, EntityCommon, EntityId, Origin, Point2D, Point3D, PolylineVertex, Ref,
 };
 pub use ocs::Ocs;
+pub use quantity::{quantity, quantity_of_json, Quantity};
 pub use tables::Tables;
 pub use transform::Affine2;
 pub use units::Units;

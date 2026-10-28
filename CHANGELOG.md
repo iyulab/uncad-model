@@ -7,6 +7,19 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `quantity(entity, path)`, `quantity_of_json(entity_json, path)` (the same answer for a consumer that
+  holds the serialized entity) and the `Quantity` enum (`Length`, `Angle`, `Ratio`, `Index`, `Direction`,
+  `Count`, `Flag`): what a numeric field measures, for a consumer that holds only the serialized form
+  (a JSON path such as `vertices[2].point.y`). The model already documents each number's meaning
+  ("in the drawing's units", "radians"); this states it as a value so a consumer picking a tolerance
+  or a display format does not guess from the field's name. A dimension's `measurement` follows the
+  kind the drawing states (radians for the angular kinds); a dimension that states no kind, a path
+  that is not a number, or a name the table does not know answers `None`. A test serializes one
+  entity of every kind and fails when a number has no quantity, so a field added to the model
+  cannot be left out.
+
 ## [0.9.0] - 2026-10-07
 
 ### Added

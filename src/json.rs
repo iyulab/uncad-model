@@ -113,7 +113,7 @@ impl CadDatabase {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::model::*;
     use crate::tables::{
@@ -151,7 +151,7 @@ mod tests {
     /// One instance of every `Entity` variant. The `match` at the end
     /// has no wildcard arm, so adding a variant without adding it here (and
     /// to the tag table in `tags_match_type_name`) fails to compile.
-    fn one_of_each() -> Vec<Entity> {
+    pub(crate) fn one_of_each() -> Vec<Entity> {
         let c = common("1A");
         let attrib = AttribEntity {
             common: c.clone(),
