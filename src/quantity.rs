@@ -21,7 +21,9 @@ use serde_json::Value;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Quantity {
-    /// A distance or a coordinate, in the drawing's units.
+    /// A distance or a coordinate, in the drawing's units -- or in the unit the
+    /// model documents for the field where it names another (a viewport's lens
+    /// length is in millimetres whatever the drawing's units are).
     Length,
     /// An angle, in radians.
     Angle,
@@ -101,9 +103,8 @@ fn classify(path: &str, measurement: impl FnOnce() -> Option<Quantity>) -> Optio
 /// vector it belongs to.
 fn component(vector: &str) -> Quantity {
     match vector {
-        "extrusion" | "direction" | "vector" | "miter_direction" | "start_tangent" | "normal" => {
-            Quantity::Direction
-        }
+        "extrusion" | "direction" | "vector" | "miter_direction" | "start_tangent"
+        | "end_tangent" | "normal" => Quantity::Direction,
         "scale" => Quantity::Ratio,
         "size_pixels" => Quantity::Count,
         // Points, offsets, an image's pixel vectors, an ellipse's major-axis
@@ -134,8 +135,10 @@ fn named(name: &str, parent: Option<&str>) -> Option<Quantity> {
         | "twist" => Quantity::Angle,
 
         "height" | "width" | "text_height" | "start_width" | "end_width" | "const_width"
-        | "radius" | "elevation" | "reference_width" | "extents_width" | "lens_length"
-        | "length" | "arrow_size" | "column_widths" | "dash_pattern" => Quantity::Length,
+        | "radius" | "elevation" | "reference_width" | "extents_width" | "extents_height"
+        | "lens_length" | "length" | "arrow_size" | "column_widths" | "dash_pattern" => {
+            Quantity::Length
+        }
 
         "width_factor"
         | "bulge"
@@ -152,7 +155,7 @@ fn named(name: &str, parent: Option<&str>) -> Option<Quantity> {
         | "fade" => Quantity::Ratio,
 
         "color_index" | "true_color" | "color1" | "color2" | "lineweight" | "transparency"
-        | "id" | "viewport_id" => Quantity::Index,
+        | "id" | "viewport_id" | "variable" => Quantity::Index,
         // A reference's payload is the id it points at.
         "data" if parent == Some("annotation_id") => Quantity::Index,
 
@@ -306,6 +309,43 @@ mod tests {
         assert_eq!(
             quantity_of_json(&angular, "measurement"),
             Some(Quantity::Angle)
+        );
+    }
+
+    #[test]
+    fn every_numeric_field_declared_in_the_model_has_a_quantity() {
+        // The sample entities leave optional fields empty, so the test above cannot see
+        // them; the declarations can. A scalar numeric field added to `model.rs` with no
+        // entry in the table fails here. (Point fields are classified by their vector's
+        // name, and `measurement` by its dimension's kind -- neither is a scalar name.)
+        const NUMERIC: [&str; 10] = [
+            "f64", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "usize", "isize",
+        ];
+        let mut missing = std::collections::BTreeSet::new();
+        for line in include_str!("model.rs").lines() {
+            let Some(rest) = line.trim().strip_prefix("pub ") else {
+                continue;
+            };
+            let Some((name, ty)) = rest.split_once(": ") else {
+                continue;
+            };
+            // A field declaration, not a function that happens to start `pub fn name(`.
+            if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                continue;
+            }
+            let numeric = ty
+                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                .any(|token| NUMERIC.contains(&token));
+            if numeric
+                && !matches!(name, "x" | "y" | "z" | "measurement")
+                && named(name, None).is_none()
+            {
+                missing.insert(name.to_string());
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "numeric fields of the model with no quantity: {missing:?}"
         );
     }
 
