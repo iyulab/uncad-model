@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-30
+
 ### Added
 
 - `quantity(entity, path)`, `quantity_of_json(entity_json, path)` (the same answer for a consumer that
