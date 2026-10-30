@@ -1903,6 +1903,92 @@ pub fn g21_tolerance_forms() -> Spec {
     }
 }
 
+/// G22, a sheet of three views inside a frame: the frame (a closed
+/// rectangle on the drawing space of an A3 sheet, the filing margin on the
+/// left), a front view with two holes, the top view below it and a side view
+/// beside it (first-angle placement), and a short line past the frame.
+///
+/// The views are tens of millimetres apart and nothing in one reaches the
+/// box of another, so a rule that separates views by distance finds three;
+/// the frame holds all of them and the line past it holds none.
+pub fn g22_sheet_of_three_views() -> Spec {
+    let frame = "FRAME".to_string();
+    let part = "PART".to_string();
+    let hidden = "HIDDEN".to_string();
+    let rectangle = |layer: &String, x0: f64, y0: f64, x1: f64, y1: f64| EntitySpec::LwPolyline {
+        layer: layer.clone(),
+        vertices: vec![
+            Xy::new(x0, y0).into(),
+            Xy::new(x1, y0).into(),
+            Xy::new(x1, y1).into(),
+            Xy::new(x0, y1).into(),
+        ],
+        closed: true,
+        const_width: 0.0,
+        elevation: 0.0,
+        mirrored: false,
+    };
+    let line = |layer: &String, from: Xy, to: Xy| EntitySpec::Line {
+        layer: layer.clone(),
+        start: from,
+        end: to,
+    };
+    let mut entities = vec![
+        // The drawing space of an A3 sheet less 20 mm on the left and 10 mm
+        // on the other sides: 390 by 277 mm.
+        rectangle(&frame, 20.0, 10.0, 410.0, 287.0),
+        // The front view: a 120 by 60 plate with two holes of 10 mm.
+        rectangle(&part, 50.0, 150.0, 170.0, 210.0),
+        EntitySpec::Circle {
+            layer: part.clone(),
+            center: Xy::new(80.0, 180.0),
+            radius: 5.0,
+            mirrored: false,
+        },
+        EntitySpec::Circle {
+            layer: part.clone(),
+            center: Xy::new(140.0, 180.0),
+            radius: 5.0,
+            mirrored: false,
+        },
+        // The top view, below the front view, with the holes' hidden lines.
+        rectangle(&part, 50.0, 70.0, 170.0, 110.0),
+        line(&hidden, Xy::new(80.0, 70.0), Xy::new(80.0, 110.0)),
+        line(&hidden, Xy::new(140.0, 70.0), Xy::new(140.0, 110.0)),
+    ];
+    // The side view, beside the front view: four lines and a middle line.
+    let side = [
+        (200.0, 150.0, 240.0, 150.0),
+        (240.0, 150.0, 240.0, 210.0),
+        (240.0, 210.0, 200.0, 210.0),
+        (200.0, 210.0, 200.0, 150.0),
+        (200.0, 180.0, 240.0, 180.0),
+    ];
+    for (x0, y0, x1, y1) in side {
+        entities.push(line(&part, Xy::new(x0, y0), Xy::new(x1, y1)));
+    }
+    // Past the frame.
+    entities.push(line(&part, Xy::new(450.0, 100.0), Xy::new(470.0, 100.0)));
+    Spec {
+        codepage: Codepage::Ascii,
+        insunits: Some(4),
+        layers: [(&frame, 7), (&part, 7), (&hidden, 8)]
+            .into_iter()
+            .map(|(name, color_index)| LayerSpec {
+                name: name.clone(),
+                color_index,
+                state: LayerState::default(),
+            })
+            .collect(),
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities,
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -1925,6 +2011,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g19" => g19_sheet_of_a_layout_not_current(),
         "g20" => g20_multileader_line_types(),
         "g21" => g21_tolerance_forms(),
+        "g22" => g22_sheet_of_three_views(),
         _ => return None,
     })
 }
@@ -1934,7 +2021,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 19] = [
+pub const NAMES: [&str; 20] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19", "g20", "g21",
+    "g17", "g18", "g19", "g20", "g21", "g22",
 ];
