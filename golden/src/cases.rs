@@ -2076,6 +2076,59 @@ pub fn g23_stacked_title_block() -> Spec {
     }
 }
 
+/// G24, one view whose outline is drawn as separate entities that meet at
+/// their ends: a 100 by 60 plate whose upper right corner is a quarter circle
+/// of radius 10 that joins its neighbours tangentially, the other three
+/// corners square, a hole of diameter 10 and a short line that touches
+/// nothing; the hole and the line lie within 5 mm of the outline, so the
+/// sheet holds one view. What the pieces are and how they meet is the whole content; the
+/// arc's end points are the cosine and sine of its angles, never the exact
+/// numbers the lines carry.
+pub fn g24_connected_outline() -> Spec {
+    let part = "PART".to_string();
+    let line = |from: Xy, to: Xy| EntitySpec::Line {
+        layer: part.clone(),
+        start: from,
+        end: to,
+    };
+    let entities = vec![
+        line(Xy::new(0.0, 0.0), Xy::new(100.0, 0.0)),
+        line(Xy::new(100.0, 0.0), Xy::new(100.0, 50.0)),
+        EntitySpec::Arc {
+            layer: part.clone(),
+            center: Xy::new(90.0, 50.0),
+            radius: 10.0,
+            start_deg: 0.0,
+            end_deg: 90.0,
+            mirrored: false,
+        },
+        line(Xy::new(90.0, 60.0), Xy::new(0.0, 60.0)),
+        line(Xy::new(0.0, 60.0), Xy::new(0.0, 0.0)),
+        EntitySpec::Circle {
+            layer: part.clone(),
+            center: Xy::new(8.0, 30.0),
+            radius: 5.0,
+            mirrored: false,
+        },
+        line(Xy::new(10.0, 3.0), Xy::new(40.0, 3.0)),
+    ];
+    Spec {
+        codepage: Codepage::Ascii,
+        insunits: Some(4),
+        layers: vec![LayerSpec {
+            name: part,
+            color_index: 7,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities,
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -2100,6 +2153,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g21" => g21_tolerance_forms(),
         "g22" => g22_sheet_of_three_views(),
         "g23" => g23_stacked_title_block(),
+        "g24" => g24_connected_outline(),
         _ => return None,
     })
 }
@@ -2109,7 +2163,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 21] = [
+pub const NAMES: [&str; 22] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19", "g20", "g21", "g22", "g23",
+    "g17", "g18", "g19", "g20", "g21", "g22", "g23", "g24",
 ];
