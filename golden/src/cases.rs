@@ -1484,6 +1484,10 @@ pub fn g16_ordinate_dimensions() -> Spec {
                 angular_decimal_places: Some(1),
                 fraction_format: Some(FractionFormat::NotStacked),
                 arc_symbol: Some(ArcSymbol::Suppressed),
+                // Negative: the text is boxed, which is how a basic dimension
+                // is drawn. Not the default, so a reader that ignores the
+                // group (or its sign) fails.
+                text_gap: Some(-0.625),
             },
             DimStyleSpec {
                 name: "ARCH".to_string(),

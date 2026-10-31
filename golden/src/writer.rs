@@ -482,6 +482,9 @@ impl Writer {
         if let Some(zin) = style.zero_suppression {
             self.pair(78, zin);
         }
+        if let Some(gap) = style.text_gap {
+            self.num(147, gap);
+        }
         if let Some(symbol) = style.arc_symbol {
             self.pair(
                 90,

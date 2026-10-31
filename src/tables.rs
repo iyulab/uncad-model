@@ -151,6 +151,14 @@ pub struct DimStyleRecord {
     /// reads as `None` too.
     #[serde(default)]
     pub arc_symbol: Option<ArcSymbol>,
+    /// DXF 147 (`DIMGAP`): the gap between the text and the dimension line.
+    /// **A negative value draws a box around the text** -- how a basic
+    /// dimension is written. Only its sign says that; the magnitude is a
+    /// length in drawing units. Unwritten: 0.09, the format's default (a
+    /// DIMSTYLE record that does not state it). A document written before
+    /// this field existed reads as `None`.
+    #[serde(default)]
+    pub text_gap: Option<f64>,
 }
 
 /// How a dimension style writes a linear measurement (`DIMLUNIT`, DXF 277,
@@ -319,6 +327,7 @@ impl DimStyleRecord {
                 179 => style.angular_decimal_places = integer,
                 276 => style.fraction_format = integer.and_then(FractionFormat::from_code),
                 90 => style.arc_symbol = integer.and_then(ArcSymbol::from_code),
+                147 => style.text_gap = real,
                 _ => {}
             }
         }

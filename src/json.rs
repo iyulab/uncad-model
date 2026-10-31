@@ -853,6 +853,7 @@ pub(crate) mod tests {
                 angular_decimal_places: Some(2),
                 fraction_format: Some(FractionFormat::Diagonal),
                 arc_symbol: Some(crate::tables::ArcSymbol::AboveText),
+                text_gap: Some(-0.0625),
             },
         );
         let mut layouts = BTreeMap::new();

@@ -886,6 +886,9 @@ pub struct DimStyleSpec {
     pub fraction_format: Option<FractionFormat>,
     /// DXF 90 (`DIMARCSYM`); unwritten when `None`.
     pub arc_symbol: Option<ArcSymbol>,
+    /// DXF 147 (`DIMGAP`); unwritten when `None`. Negative draws a box
+    /// around the text.
+    pub text_gap: Option<f64>,
 }
 
 /// The common properties an entity can state itself; `None` writes no

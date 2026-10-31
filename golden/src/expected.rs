@@ -213,6 +213,8 @@ pub fn model(spec: &Spec, written: &Written) -> CadDatabase {
                             // The files are R2000, which has the variable:
                             // unwritten is before the text.
                             arc_symbol: Some(s.arc_symbol.unwrap_or(ArcSymbol::BeforeText)),
+                            // Unwritten is the format's 0.09 (positive: no box).
+                            text_gap: Some(s.text_gap.unwrap_or(0.09)),
                         },
                     )
                 })

@@ -7,6 +7,19 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `DimStyleRecord::text_gap` (DXF 147, `DIMGAP`): the gap between a dimension's text and its dimension line.
+  A negative value draws a box around the text, which is how a basic dimension is written; the sign is the
+  stated fact and the magnitude a length in drawing units. Unwritten in a DXF is the format's 0.09. A
+  dimension's own override of the variable (group 147 in its extended data) is applied by
+  `DimStyleRecord::overridden`. A document written before the field existed reads it as `None`.
+
+### Changed
+
+- `DimStyleRecord` has one more field, so a struct literal that names every field needs `text_gap`
+  (`..Default::default()` keeps working).
+
 ## [0.10.0] - 2026-10-30
 
 ### Added
