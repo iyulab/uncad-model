@@ -1993,6 +1993,89 @@ pub fn g22_sheet_of_three_views() -> Spec {
     }
 }
 
+/// G23, a title block of loose texts laid out the way ISO 7200 draws its
+/// fields: each field's name a small text at the top left of the field, its
+/// value a larger text beneath it in the same column. Nothing but position
+/// and size ties a value to its name. It holds a value that goes on over two
+/// lines (Title), two lines of one height with nothing to tell name from
+/// value (Sheet), and a value centred on its point rather than started at it
+/// (Scale), which does not read as sitting in a column.
+pub fn g23_stacked_title_block() -> Spec {
+    let title = "TITLE".to_string();
+    let text = |x: f64, y: f64, height: f64, s: &str, align: Option<TextAlign>| EntitySpec::Text {
+        layer: title.clone(),
+        insert: Xy::new(x, y),
+        height,
+        text: s.to_string(),
+        rotation_deg: 0.0,
+        align,
+        width_factor: 1.0,
+        mirrored: false,
+        oblique_deg: 0.0,
+        style: None,
+    };
+    let name = |x: f64, y: f64, s: &str| text(x, y, 2.0, s, None);
+    let value = |x: f64, y: f64, s: &str| text(x, y, 3.5, s, None);
+    let entities = vec![
+        EntitySpec::LwPolyline {
+            layer: title.clone(),
+            vertices: vec![
+                Xy::new(100.0, -40.0).into(),
+                Xy::new(200.0, -40.0).into(),
+                Xy::new(200.0, -85.0).into(),
+                Xy::new(100.0, -85.0).into(),
+            ],
+            closed: true,
+            const_width: 0.0,
+            elevation: 0.0,
+            mirrored: false,
+        },
+        // First row: two fields side by side, name above value.
+        name(102.0, -44.0, "Responsible dept."),
+        value(102.0, -49.0, "ABC 2"),
+        name(130.0, -44.0, "Technical reference"),
+        value(130.0, -49.0, "Patricia Johnson"),
+        // A field whose value runs over two lines, and a narrow one beside it.
+        name(102.0, -58.0, "Title"),
+        value(102.0, -63.0, "Mounting bracket"),
+        value(102.0, -68.0, "for motor M2"),
+        name(150.0, -58.0, "Rev."),
+        value(150.0, -63.0, "A"),
+        // Two lines of one height, 5 apart: no size tells a name from a value.
+        value(102.0, -76.0, "SHEET"),
+        value(102.0, -81.0, "1 OF 2"),
+        // A name over a value that is centred on its point (DXF 72 = 1) and
+        // started wherever the centring put it.
+        name(170.0, -44.0, "Scale"),
+        text(
+            168.5,
+            -49.0,
+            3.5,
+            "1:2",
+            Some(TextAlign {
+                horizontal: 1,
+                vertical: 0,
+                at: Xy::new(170.0, -49.0),
+            }),
+        ),
+    ];
+    Spec {
+        dim_styles: Vec::new(),
+        codepage: Codepage::Ascii,
+        insunits: None,
+        layers: vec![LayerSpec {
+            name: title,
+            color_index: 2,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        entities,
+        text_styles: Vec::new(),
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -2016,6 +2099,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g20" => g20_multileader_line_types(),
         "g21" => g21_tolerance_forms(),
         "g22" => g22_sheet_of_three_views(),
+        "g23" => g23_stacked_title_block(),
         _ => return None,
     })
 }
@@ -2025,7 +2109,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 20] = [
+pub const NAMES: [&str; 21] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19", "g20", "g21", "g22",
+    "g17", "g18", "g19", "g20", "g21", "g22", "g23",
 ];
