@@ -2215,6 +2215,121 @@ pub fn g25_dimension_text_forms() -> Spec {
     }
 }
 
+/// G26: a flat pattern drawn as pieces -- which of its outlines close.
+///
+/// A plate is cut along outlines and folded along lines; whether an outline
+/// is a closed contour is a fact about where the ends of its pieces lie.
+/// The case holds every way an outline can close or fail to, at gaps the
+/// spec states, so a reader of the graph of joined ends has an answer for
+/// each (the ends of two pieces are joined when they lie within 0.1 mm):
+///
+/// - the plate: four lines and four arcs meeting exactly (a closed loop);
+/// - a round hole (a circle: closed on its own);
+/// - a slot: one closed polyline of two lines and two half-circle segments;
+/// - a triangle whose last line stops 0.05 mm short of the first (closed at
+///   0.1 mm, open at 0.01 mm);
+/// - a rectangle with a 0.5 mm gap and one with a 2.0 mm gap (open at 0.1 mm,
+///   each with two free ends and a nearest end the stated distance away);
+/// - a small rectangle with one side drawn twice (every end has a partner,
+///   some have two: closed, but not a single loop);
+/// - two bend lines on another layer (each a piece with two free ends).
+///
+/// Millimetres. Nothing touches the plate's outline except its own pieces.
+pub fn g26_flat_pattern_outlines() -> Spec {
+    let cut = "CUT".to_string();
+    let bend = "BEND".to_string();
+    let line = |layer: &String, from: Xy, to: Xy| EntitySpec::Line {
+        layer: layer.clone(),
+        start: from,
+        end: to,
+    };
+    let arc = |center: Xy, start_deg: f64, end_deg: f64| EntitySpec::Arc {
+        layer: cut.clone(),
+        center,
+        radius: 10.0,
+        start_deg,
+        end_deg,
+        mirrored: false,
+    };
+    let entities = vec![
+        // The plate: 100 x 60 with corners rounded at radius 10.
+        line(&cut, Xy::new(10.0, 0.0), Xy::new(90.0, 0.0)),
+        arc(Xy::new(90.0, 10.0), 270.0, 360.0),
+        line(&cut, Xy::new(100.0, 10.0), Xy::new(100.0, 50.0)),
+        arc(Xy::new(90.0, 50.0), 0.0, 90.0),
+        line(&cut, Xy::new(90.0, 60.0), Xy::new(10.0, 60.0)),
+        arc(Xy::new(10.0, 50.0), 90.0, 180.0),
+        line(&cut, Xy::new(0.0, 50.0), Xy::new(0.0, 10.0)),
+        arc(Xy::new(10.0, 10.0), 180.0, 270.0),
+        // A round hole.
+        EntitySpec::Circle {
+            layer: cut.clone(),
+            center: Xy::new(20.0, 30.0),
+            radius: 5.0,
+            mirrored: false,
+        },
+        // A slot, one closed polyline: bulge 1 is a half circle.
+        EntitySpec::LwPolyline {
+            layer: cut.clone(),
+            vertices: vec![
+                Vertex::bulged(Xy::new(45.0, 25.0), 0.0),
+                Vertex::bulged(Xy::new(65.0, 25.0), 1.0),
+                Vertex::bulged(Xy::new(65.0, 35.0), 0.0),
+                Vertex::bulged(Xy::new(45.0, 35.0), 1.0),
+            ],
+            closed: true,
+            const_width: 0.0,
+            elevation: 0.0,
+            mirrored: false,
+        },
+        // A triangle whose last line stops 0.05 mm short of where it began.
+        line(&cut, Xy::new(78.0, 8.0), Xy::new(92.0, 8.0)),
+        line(&cut, Xy::new(92.0, 8.0), Xy::new(85.0, 20.0)),
+        line(&cut, Xy::new(85.0, 20.0), Xy::new(78.0, 8.05)),
+        // A rectangle with a 0.5 mm gap on its left side.
+        line(&cut, Xy::new(10.0, 40.0), Xy::new(25.0, 40.0)),
+        line(&cut, Xy::new(25.0, 40.0), Xy::new(25.0, 52.0)),
+        line(&cut, Xy::new(25.0, 52.0), Xy::new(10.0, 52.0)),
+        line(&cut, Xy::new(10.0, 52.0), Xy::new(10.0, 40.5)),
+        // A rectangle with a 2.0 mm gap on its left side.
+        line(&cut, Xy::new(50.0, 42.0), Xy::new(65.0, 42.0)),
+        line(&cut, Xy::new(65.0, 42.0), Xy::new(65.0, 54.0)),
+        line(&cut, Xy::new(65.0, 54.0), Xy::new(50.0, 54.0)),
+        line(&cut, Xy::new(50.0, 54.0), Xy::new(50.0, 44.0)),
+        // A rectangle whose first side is drawn twice.
+        line(&cut, Xy::new(12.0, 6.0), Xy::new(20.0, 6.0)),
+        line(&cut, Xy::new(20.0, 6.0), Xy::new(20.0, 12.0)),
+        line(&cut, Xy::new(20.0, 12.0), Xy::new(12.0, 12.0)),
+        line(&cut, Xy::new(12.0, 12.0), Xy::new(12.0, 6.0)),
+        line(&cut, Xy::new(12.0, 6.0), Xy::new(20.0, 6.0)),
+        // Two bend lines, each a piece on its own.
+        line(&bend, Xy::new(35.0, 3.0), Xy::new(35.0, 57.0)),
+        line(&bend, Xy::new(75.0, 25.0), Xy::new(75.0, 57.0)),
+    ];
+    Spec {
+        codepage: Codepage::Ascii,
+        insunits: Some(4),
+        layers: vec![
+            LayerSpec {
+                name: cut,
+                color_index: 1,
+                state: LayerState::default(),
+            },
+            LayerSpec {
+                name: bend,
+                color_index: 5,
+                state: LayerState::default(),
+            },
+        ],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities,
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -2241,6 +2356,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g23" => g23_stacked_title_block(),
         "g24" => g24_connected_outline(),
         "g25" => g25_dimension_text_forms(),
+        "g26" => g26_flat_pattern_outlines(),
         _ => return None,
     })
 }
@@ -2250,7 +2366,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 23] = [
+pub const NAMES: [&str; 24] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19", "g20", "g21", "g22", "g23", "g24", "g25",
+    "g17", "g18", "g19", "g20", "g21", "g22", "g23", "g24", "g25", "g26",
 ];
