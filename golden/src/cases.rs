@@ -2129,6 +2129,92 @@ pub fn g24_connected_outline() -> Spec {
     }
 }
 
+/// G25: the texts a drawing writes in a dimension beyond its measurement --
+/// the fits, limits, symmetric deviations, counts and units of the standards.
+///
+/// ISO 286 states a fit as a symbol, alone or as a pair (`H7/g6`), and a drawing
+/// may add the deviations it stands for; ISO 129-1 states a limit dimension
+/// as the two limits one over the other and a symmetric deviation after a
+/// plus-minus sign; a count and a thread are written in front of or in place
+/// of the value; a drawing in millimetres may restate a value in inches. G21
+/// holds a reader to leaving the stacked pairs as written; this case does the same
+/// for the rest of what real dimension texts carry, as plain material for the
+/// layer that reads them: each text is kept byte for byte (`<>` stands for
+/// the measurement, `%%C` for the diameter sign, `%%P` for the plus-minus
+/// sign, `%%D` for the degree sign) and the measurement is kept beside it.
+pub fn g25_dimension_text_forms() -> Spec {
+    let dims = "DIMS".to_string();
+    // One linear dimension per row, `y` apart so no two draw over each other.
+    let linear = |row: usize, text: &str, measurement: Option<f64>| {
+        let y = 25.0 * row as f64;
+        EntitySpec::LinearDimension {
+            layer: dims.clone(),
+            from: Xy::new(0.0, y),
+            to: Xy::new(measurement.unwrap_or(50.0), y),
+            line_point: Xy::new(0.0, y + 10.0),
+            text: text.to_string(),
+            measurement,
+            style: None,
+        }
+    };
+    // One diameter dimension per row, to the right of the linear ones.
+    let diameter = |row: usize, text: &str, measurement: f64| {
+        let y = 25.0 * row as f64;
+        EntitySpec::DiameterDimension {
+            layer: dims.clone(),
+            first: Xy::new(100.0, y),
+            second: Xy::new(100.0 + measurement, y),
+            text: text.to_string(),
+            measurement: Some(measurement),
+            style: None,
+        }
+    };
+    Spec {
+        codepage: Codepage::Ascii,
+        insunits: Some(4),
+        layers: vec![LayerSpec {
+            name: dims.clone(),
+            color_index: 3,
+            state: LayerState::default(),
+        }],
+        blocks: Vec::new(),
+        dim_styles: Vec::new(),
+        text_styles: Vec::new(),
+        entities: vec![
+            // A fit written as a pair of symbols, hole over shaft.
+            diameter(0, "%%C25 H7/g6", 25.0),
+            // A fit symbol with the deviations it stands for after it.
+            diameter(1, r"%%C25 H7{\H0.7x;\S+0.021^0;}", 25.0),
+            // A shaft symbol alone, and the pair stacked as a fraction.
+            diameter(2, "%%C25 g6", 25.0),
+            diameter(3, r"%%C25{\H0.7x;\SH7/g6;}", 25.0),
+            // A count in front of the value, written three ways, and a note after it.
+            diameter(4, "4X %%C6", 6.0),
+            diameter(5, "4-%%C6", 6.0),
+            diameter(6, "4X %%C6 THRU", 6.0),
+            // A thread in place of the value, with its tolerance class.
+            diameter(7, "M8x1.25-6H", 8.0),
+            // A symmetric deviation after the plus-minus sign, on a typed value
+            // and on the measurement.
+            linear(0, "50 %%P0.05", Some(50.0)),
+            linear(1, "<>%%P0.1", Some(50.0)),
+            // A limit dimension: the two limits one over the other.
+            linear(2, r"{\S25.021^24.980;}", Some(25.0)),
+            // A reference dimension, and a count of equal spaces.
+            linear(3, "(<>)", Some(50.0)),
+            linear(4, "3X 20 (=60)", Some(20.0)),
+            // A chamfer written as a length and an angle.
+            linear(5, "1x45%%D", Some(1.0)),
+            // A value restated in inches on a drawing in millimetres, and a
+            // second unit after a line break.
+            linear(6, r#"<> (1.250")"#, Some(31.75)),
+            linear(7, r"<>\X[1.97]", Some(50.0)),
+        ],
+        paper_space: Vec::new(),
+        layouts: Vec::new(),
+    }
+}
+
 /// A case by its name (`"g1"`, `"g2"`, ...), or `None`.
 pub fn by_name(name: &str) -> Option<Spec> {
     Some(match name {
@@ -2154,6 +2240,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
         "g22" => g22_sheet_of_three_views(),
         "g23" => g23_stacked_title_block(),
         "g24" => g24_connected_outline(),
+        "g25" => g25_dimension_text_forms(),
         _ => return None,
     })
 }
@@ -2163,7 +2250,7 @@ pub fn by_name(name: &str) -> Option<Spec> {
 /// [`g3_many_parts`] is deliberately absent: it takes a size, and its
 /// fixture would be checked-in megabytes whose exact bytes answer no
 /// question the case asks.
-pub const NAMES: [&str; 22] = [
+pub const NAMES: [&str; 23] = [
     "g1", "g2", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12", "g13", "g14", "g15", "g16",
-    "g17", "g18", "g19", "g20", "g21", "g22", "g23", "g24",
+    "g17", "g18", "g19", "g20", "g21", "g22", "g23", "g24", "g25",
 ];
