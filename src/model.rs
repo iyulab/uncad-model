@@ -1299,7 +1299,7 @@ impl HatchStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DimensionKind {
-    /// 0: a linear dimension, measured along `points.rotation`.
+    /// 0: a linear dimension, measured along [`DimensionEntity::rotation`].
     Rotated,
     /// 1: aligned with the two extension line origins.
     Aligned,
