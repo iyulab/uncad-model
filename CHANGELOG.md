@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-02
+
 ### Added
 
 - `DimStyleRecord::text_gap` (DXF 147, `DIMGAP`): the gap between a dimension's text and its dimension line.
