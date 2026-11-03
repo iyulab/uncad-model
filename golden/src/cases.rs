@@ -2136,7 +2136,9 @@ pub fn g24_connected_outline() -> Spec {
 /// may add the deviations it stands for; ISO 129-1 states a limit dimension
 /// as the two limits one over the other and a symmetric deviation after a
 /// plus-minus sign; a count and a thread are written in front of or in place
-/// of the value; a drawing in millimetres may restate a value in inches. G21
+/// of the value; a drawing in millimetres may restate a value in inches; a
+/// text may differ from the measurement it sits on (a rounded radius), state
+/// a requirement in words, or carry unequal deviations. G21
 /// holds a reader to leaving the stacked pairs as written; this case does the same
 /// for the rest of what real dimension texts carry, as plain material for the
 /// layer that reads them: each text is kept byte for byte (`<>` stands for
@@ -2209,6 +2211,17 @@ pub fn g25_dimension_text_forms() -> Spec {
             // second unit after a line break.
             linear(6, r#"<> (1.250")"#, Some(31.75)),
             linear(7, r"<>\X[1.97]", Some(50.0)),
+            // A diameter that states its own symmetric deviation in the text,
+            // beside the measurement it repeats.
+            diameter(8, "%%C47.7%%P0.03", 47.7),
+            // A radius written on a span that measures a little less: the text
+            // is what the drawing shows, the measurement is what it measures.
+            linear(8, "R1.4", Some(1.35)),
+            // A requirement written as words, not a value.
+            linear(9, "concavity 5um~45um", Some(20.0)),
+            // Both deviations non-zero and unequal: the middle of the limits is
+            // not the nominal value.
+            linear(10, r"45{\H0.7x;\S+0.05^-0.02;}", Some(45.0)),
         ],
         paper_space: Vec::new(),
         layouts: Vec::new(),
