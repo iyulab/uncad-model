@@ -10,7 +10,7 @@ fn p(x: f64, y: f64) -> Point3D {
 
 fn multileader(leaders: Vec<LeaderRoot>) -> MultiLeaderEntity {
     let common: EntityCommon = serde_json::from_value(serde_json::json!({
-        "id": 1, "origin": "VECTOR", "confidence": "HIGH",
+        "id": "1", "origin": "VECTOR", "confidence": "HIGH",
         "source_handle": {"type": "ABSENT"}, "layer": {"type": "ABSENT"},
         "color_index": 256, "true_color": null, "invisible": false,
         "linetype": {"type": "BY_LAYER"}, "linetype_scale": 1.0,

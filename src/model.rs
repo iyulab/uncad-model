@@ -154,10 +154,41 @@ impl Ref<String> {
 /// inputs. A file handle is not a reference ID (see
 /// [`EntityCommon::source_handle`]).
 ///
-/// Serialized as a plain integer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+/// Serialized as a decimal string (`"42"`), not a number: an ID is an opaque
+/// token, and a 64-bit value does not survive a consumer whose numbers are
+/// IEEE doubles (distinct IDs above 2^53 would read back as one). The
+/// string is canonical -- digits only, no sign, no leading zeros -- and
+/// reading accepts nothing else, so equal IDs are equal strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EntityId(u64);
+
+impl Serialize for EntityId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for EntityId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Token;
+        impl serde::de::Visitor<'_> for Token {
+            type Value = EntityId;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("an entity ID: a decimal string of an unsigned 64-bit value")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, text: &str) -> Result<EntityId, E> {
+                match text.parse::<u64>() {
+                    // Canonical only: "+5" and "007" parse as numbers but are not the token a producer mints.
+                    Ok(value) if value.to_string() == text => Ok(EntityId(value)),
+                    _ => Err(E::invalid_value(serde::de::Unexpected::Str(text), &self)),
+                }
+            }
+        }
+        deserializer.deserialize_str(Token)
+    }
+}
 
 impl EntityId {
     /// Mints an ID. Only a producer of entities calls this; a consumer

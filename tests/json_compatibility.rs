@@ -224,7 +224,7 @@ fn an_mline_without_its_scale_does_not_claim_one() {
 /// again.
 #[test]
 fn a_polyline_0_1_0_wrote_does_not_load() {
-    let lwpolyline = r#"{"type":"LWPOLYLINE","common":{"id":35,"origin":"VECTOR",
+    let lwpolyline = r#"{"type":"LWPOLYLINE","common":{"id":"35","origin":"VECTOR",
         "confidence":"HIGH","source_handle":{"type":"RESOLVED","data":"23"},
         "layer":{"type":"RESOLVED","data":"0"},"color_index":256,"true_color":null},
         "vertices":[{"x":0.0,"y":0.0},{"x":10.0,"y":0.0},{"x":10.0,"y":5.0}],

@@ -7,6 +7,15 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `EntityId` is serialized as a decimal string (`"42"`), not a number, and reading accepts only
+  that canonical form (digits, no sign, no leading zeros). An ID is an opaque token; as a JSON number a
+  64-bit value does not survive a consumer whose numbers are IEEE doubles -- distinct IDs above 2^53 read
+  back as one. Every place a document carries an ID changes with it: `common.id`, `annotation_id` and
+  `active_viewport` references, and map keys. To migrate a stored document, quote each ID value; a
+  producer needs no change beyond rebuilding, since the encoding lives in the type.
+
 ## [0.11.0] - 2026-11-02
 
 ### Added

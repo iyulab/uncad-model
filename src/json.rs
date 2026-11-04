@@ -732,7 +732,7 @@ pub(crate) mod tests {
 
     #[test]
     fn an_unknown_or_missing_type_tag_is_an_error_not_a_panic() {
-        let common = r#""common":{"id":1,"origin":"VECTOR","confidence":"HIGH","source_handle":{"type":"RESOLVED","data":"1"},"layer":{"type":"RESOLVED","data":"0"},"color_index":256,"true_color":null}"#;
+        let common = r#""common":{"id":"1","origin":"VECTOR","confidence":"HIGH","source_handle":{"type":"RESOLVED","data":"1"},"layer":{"type":"RESOLVED","data":"0"},"color_index":256,"true_color":null}"#;
         assert!(serde_json::from_str::<Entity>(&format!(r#"{{"type":"NOPE",{common}}}"#)).is_err());
         assert!(serde_json::from_str::<Entity>(&format!(r#"{{{common}}}"#)).is_err());
         assert!(
@@ -764,7 +764,7 @@ pub(crate) mod tests {
             serde_json::json!({"type": "BY_BLOCK"})
         );
 
-        let old = r#"{"id":1,"origin":"VECTOR","confidence":"HIGH","source_handle":{"type":"ABSENT"},"layer":{"type":"ABSENT"},"color_index":256,"true_color":null}"#;
+        let old = r#"{"id":"1","origin":"VECTOR","confidence":"HIGH","source_handle":{"type":"ABSENT"},"layer":{"type":"ABSENT"},"color_index":256,"true_color":null}"#;
         let c: EntityCommon = serde_json::from_str(old).unwrap();
         assert_eq!(c.linetype, EntityLinetype::ByLayer);
         assert_eq!(c.linetype_scale, 1.0);
