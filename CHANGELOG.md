@@ -7,6 +7,8 @@ bumps the minor version.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-05
+
 ### Changed
 
 - **Breaking:** `EntityId` is serialized as a decimal string (`"42"`), not a number, and reading accepts only
