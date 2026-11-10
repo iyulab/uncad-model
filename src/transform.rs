@@ -177,16 +177,29 @@ impl InsertEntity {
     ) -> Option<Affine2> {
         let plane = Ocs::of(self.extrusion)?.flat_map()?;
         let mut own = self.transform(base_point);
-        if let Some(array) = &self.array {
-            let (dx, dy) = (
-                f64::from(column) * array.column_spacing,
-                f64::from(row) * array.row_spacing,
-            );
-            let (sin, cos) = self.rotation.sin_cos();
-            own.e += cos * dx - sin * dy;
-            own.f += sin * dx + cos * dy;
-        }
+        let offset = self.cell_offset(column, row);
+        own.e += offset.x;
+        own.f += offset.y;
         Some(own.then(&plane))
+    }
+
+    /// Where the cell at `column` and `row` of this reference's grid lies
+    /// from the reference's own insertion point, in the reference's own
+    /// plane: the spacings, turned with the reference's rotation and not
+    /// scaled. Zero for a reference with no grid.
+    pub fn cell_offset(&self, column: u32, row: u32) -> Point2D {
+        let Some(array) = &self.array else {
+            return Point2D { x: 0.0, y: 0.0 };
+        };
+        let (dx, dy) = (
+            f64::from(column) * array.column_spacing,
+            f64::from(row) * array.row_spacing,
+        );
+        let (sin, cos) = self.rotation.sin_cos();
+        Point2D {
+            x: cos * dx - sin * dy,
+            y: sin * dx + cos * dy,
+        }
     }
 }
 
@@ -536,6 +549,16 @@ mod tests {
             (moved.a, moved.b, moved.c, moved.d),
             (own.a, own.b, own.c, own.d)
         );
+    }
+
+    #[test]
+    fn a_cell_offset_is_the_spacing_turned_and_zero_without_a_grid() {
+        let mut i = insert(v(100.0, 50.0, 0.0), FRAC_PI_2, v(0.0, 0.0, 1.0));
+        assert_eq!(i.cell_offset(2, 3), p(0.0, 0.0));
+        i.scale = v(3.0, 3.0, 1.0);
+        i.array = Some(grid(3, 4, 10.0, 20.0));
+        assert!(close(i.cell_offset(1, 0), p(0.0, 10.0)));
+        assert!(close(i.cell_offset(0, 1), p(-20.0, 0.0)));
     }
 
     #[test]
