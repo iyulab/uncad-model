@@ -7,6 +7,21 @@ bumps the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `InsertEntity::array`, an `Option<InsertArray>`: the grid of placements a multiple insert (MINSERT) makes
+  of its block -- columns and rows (DXF 70, 71) and their spacings (44, 45). `None` is a single placement
+  and writes nothing, so a document without a multiple insert serializes as before, and one written before
+  the field existed reads as `None`. The spacings are lengths in the reference's own plane: the grid turns
+  with the reference's rotation and is not scaled by its scale factors. `InsertArray::cells` lists the
+  distinct placements (a direction whose spacing is `0` has one cell), and
+  `InsertEntity::world_transform_at` is the placement of one cell.
+
+### Changed
+
+- **Breaking:** `InsertEntity` has a new public field, so a struct literal of it names `array`
+  (`array: None` for a single placement).
+
 ## [0.12.0] - 2026-11-05
 
 ### Changed

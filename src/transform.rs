@@ -162,6 +162,32 @@ impl InsertEntity {
         let plane = Ocs::of(self.extrusion)?.flat_map()?;
         Some(self.transform(base_point).then(&plane))
     }
+
+    /// [`world_transform`](Self::world_transform) of the cell at `column` and
+    /// `row` of this reference's grid ([`InsertEntity::array`]): the
+    /// placement of the reference itself, moved by the cell's offset, which
+    /// is turned with the reference's rotation and not scaled. Cell `(0, 0)`
+    /// is the reference's own placement, and any cell of a reference with no
+    /// grid is the same one. `None` as for `world_transform`.
+    pub fn world_transform_at(
+        &self,
+        base_point: Point3D,
+        column: u32,
+        row: u32,
+    ) -> Option<Affine2> {
+        let plane = Ocs::of(self.extrusion)?.flat_map()?;
+        let mut own = self.transform(base_point);
+        if let Some(array) = &self.array {
+            let (dx, dy) = (
+                f64::from(column) * array.column_spacing,
+                f64::from(row) * array.row_spacing,
+            );
+            let (sin, cos) = self.rotation.sin_cos();
+            own.e += cos * dx - sin * dy;
+            own.f += sin * dx + cos * dy;
+        }
+        Some(own.then(&plane))
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +290,7 @@ mod tests {
             rotation,
             attribs: Vec::new(),
             extrusion,
+            array: None,
         }
     }
 
@@ -393,6 +420,7 @@ mod tests {
             rotation,
             attribs: Vec::new(),
             extrusion,
+            array: None,
         }
     }
 
@@ -463,5 +491,88 @@ mod tests {
         assert!((dy.atan2(dx) - 75f64.to_radians()).abs() < 1e-12);
         // A base point at the origin changes nothing.
         assert_eq!(i.world_transform(ORIGIN), Some(i.transform(ORIGIN)));
+    }
+
+    fn grid(
+        columns: u32,
+        rows: u32,
+        column_spacing: f64,
+        row_spacing: f64,
+    ) -> crate::model::InsertArray {
+        crate::model::InsertArray {
+            columns,
+            rows,
+            column_spacing,
+            row_spacing,
+        }
+    }
+
+    /// The grid turns with the reference and does not stretch with it: a
+    /// 2 x 2 grid at 10 and 20 spacing, the reference turned a quarter and
+    /// scaled by 3, puts the cell at column 1, row 0 ten units along the
+    /// turned x axis -- not thirty.
+    #[test]
+    fn a_grid_cell_is_moved_by_the_turned_and_unscaled_spacing() {
+        let mut i = insert(v(100.0, 50.0, 0.0), FRAC_PI_2, v(0.0, 0.0, 1.0));
+        i.scale = v(3.0, 3.0, 1.0);
+        i.array = Some(grid(2, 2, 10.0, 20.0));
+        let own = i.world_transform(ORIGIN).unwrap();
+        // Cell (0, 0) is the reference's own placement.
+        assert_eq!(i.world_transform_at(ORIGIN, 0, 0), Some(own));
+        // The block's origin lands on the insertion point, moved by the cell.
+        let c1 = i
+            .world_transform_at(ORIGIN, 1, 0)
+            .unwrap()
+            .apply(p(0.0, 0.0));
+        assert!(close(c1, p(100.0, 60.0)), "{c1:?}");
+        let r1 = i
+            .world_transform_at(ORIGIN, 0, 1)
+            .unwrap()
+            .apply(p(0.0, 0.0));
+        assert!(close(r1, p(80.0, 50.0)), "{r1:?}");
+        // The linear part is the reference's own: only the offset moves.
+        let moved = i.world_transform_at(ORIGIN, 1, 1).unwrap();
+        assert_eq!(
+            (moved.a, moved.b, moved.c, moved.d),
+            (own.a, own.b, own.c, own.d)
+        );
+    }
+
+    #[test]
+    fn a_reference_without_a_grid_has_one_placement_whatever_the_cell() {
+        let i = insert(v(5.0, 5.0, 0.0), 0.3, v(0.0, 0.0, 1.0));
+        assert_eq!(
+            i.world_transform_at(ORIGIN, 3, 4),
+            i.world_transform(ORIGIN)
+        );
+    }
+
+    #[test]
+    fn a_grid_in_a_mirrored_plane_is_mirrored_with_it() {
+        let mut i = insert(v(0.0, 0.0, 0.0), 0.0, v(0.0, 0.0, -1.0));
+        i.array = Some(grid(2, 1, 10.0, 0.0));
+        let c1 = i
+            .world_transform_at(ORIGIN, 1, 0)
+            .unwrap()
+            .apply(p(0.0, 0.0));
+        assert!(close(c1, p(-10.0, 0.0)), "{c1:?}");
+    }
+
+    #[test]
+    fn cells_run_row_by_row_and_cells_on_one_spot_are_one_placement() {
+        let cells: Vec<_> = grid(3, 2, 1.0, 1.0).cells().collect();
+        assert_eq!(cells, [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]);
+        // A spacing of zero puts every cell of that direction on one spot.
+        assert_eq!(
+            grid(3, 2, 0.0, 1.0).cells().collect::<Vec<_>>(),
+            [(0, 0), (0, 1)]
+        );
+        assert_eq!(
+            grid(3, 2, 1.0, 0.0).cells().collect::<Vec<_>>(),
+            [(0, 0), (1, 0), (2, 0)]
+        );
+        assert_eq!(grid(3, 2, 0.0, 0.0).cells().collect::<Vec<_>>(), [(0, 0)]);
+        // No cell at all is not a grid a reader should write.
+        assert_eq!(grid(0, 2, 1.0, 1.0).cells().count(), 0);
     }
 }

@@ -21,7 +21,7 @@ use uncad_model::model::{
     AttributeFlags, DimensionKind, Entity, HatchBoundaryPath, HorizontalJustification, Point3D,
     PolylineVertex, Ref, VerticalJustification,
 };
-use uncad_model::CadDatabase;
+use uncad_model::{CadDatabase, ToJsonOptions};
 
 const Z_AXIS: Point3D = Point3D {
     x: 0.0,
@@ -242,4 +242,23 @@ fn a_vertex_without_widths_has_none_of_its_own() {
         serde_json::from_str(r#"{"point":{"x":1.0,"y":2.0},"bulge":0.5}"#).unwrap();
     assert_eq!((vertex.start_width, vertex.end_width), (0.0, 0.0));
     assert_eq!(vertex.bulge, 0.5);
+}
+
+#[test]
+fn a_reference_written_without_a_grid_is_one_placement_and_writes_none() {
+    let db = load();
+    let mut seen = 0;
+    for e in &db.entities {
+        if let Entity::Insert(i) = e {
+            assert_eq!(i.array, None);
+            seen += 1;
+        }
+    }
+    assert_eq!(seen, 1, "the document holds one reference");
+    // A reference that is one placement writes no grid, so the bytes of a
+    // document without multiple inserts are what they were.
+    assert!(!db
+        .to_json(ToJsonOptions::default())
+        .unwrap()
+        .contains("\"array\""));
 }

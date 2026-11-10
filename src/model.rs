@@ -712,6 +712,56 @@ pub struct InsertEntity {
     /// follows from all of them.
     #[serde(default = "z_axis")]
     pub extrusion: Point3D,
+    /// The grid of placements a multiple insert (MINSERT) makes of its block
+    /// -- DXF 70, 71, 44 and 45. `None` is one placement, which is what an
+    /// INSERT is: a reader that finds no grid, or one of a single cell,
+    /// leaves it `None`, and so does a document written before the field
+    /// existed. A reader that does not read multiple inserts at all does not
+    /// make a single placement of one: it reports the entity as not read.
+    /// [`InsertEntity::world_transform_at`] is the placement of one cell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub array: Option<InsertArray>,
+}
+
+/// The grid a multiple insert (MINSERT) places its block in: `columns` along
+/// the reference's own x axis and `rows` along its y axis, the cell at
+/// column 0 and row 0 being the reference's own placement.
+///
+/// The spacings are lengths in the reference's own plane (DXF 44, 45), and
+/// they are neither scaled by the reference's scale factors nor free of its
+/// rotation: the grid turns with the reference and does not stretch with it.
+/// A spacing of `0` puts every cell of that direction on one spot, so those
+/// cells are one placement ([`InsertArray::cells`]).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct InsertArray {
+    /// DXF 70: cells along the x axis, at least 1.
+    pub columns: u32,
+    /// DXF 71: cells along the y axis, at least 1.
+    pub rows: u32,
+    /// DXF 44: the distance between neighbouring columns.
+    pub column_spacing: f64,
+    /// DXF 45: the distance between neighbouring rows.
+    pub row_spacing: f64,
+}
+
+impl InsertArray {
+    /// The `(column, row)` of each distinct placement, row by row: a
+    /// direction whose spacing is `0` has one cell, since its cells coincide.
+    /// A spacing that is not a number counts as a nonzero one -- the cells
+    /// are not on one spot, and where they are is not this type's to say.
+    pub fn cells(&self) -> impl Iterator<Item = (u32, u32)> {
+        let columns = if self.column_spacing == 0.0 {
+            self.columns.min(1)
+        } else {
+            self.columns
+        };
+        let rows = if self.row_spacing == 0.0 {
+            self.rows.min(1)
+        } else {
+            self.rows
+        };
+        (0..rows).flat_map(move |row| (0..columns).map(move |column| (column, row)))
+    }
 }
 
 /// TOLERANCE, a GD&T feature control frame. `text_value` keeps the raw

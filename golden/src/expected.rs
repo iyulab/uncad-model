@@ -645,6 +645,7 @@ fn convert(
                 .map(|(a, &h)| attrib(a, h, layer, spec))
                 .collect(),
             extrusion: extrusion(*mirrored),
+            array: None,
         }),
         EntitySpec::PolygonMesh {
             layer,

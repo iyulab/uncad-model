@@ -136,9 +136,8 @@ fn named(name: &str, parent: Option<&str>) -> Option<Quantity> {
 
         "height" | "width" | "text_height" | "start_width" | "end_width" | "const_width"
         | "radius" | "elevation" | "reference_width" | "extents_width" | "extents_height"
-        | "lens_length" | "length" | "arrow_size" | "column_widths" | "dash_pattern" => {
-            Quantity::Length
-        }
+        | "lens_length" | "length" | "arrow_size" | "column_widths" | "dash_pattern"
+        | "column_spacing" | "row_spacing" => Quantity::Length,
 
         "width_factor"
         | "bulge"
@@ -159,7 +158,9 @@ fn named(name: &str, parent: Option<&str>) -> Option<Quantity> {
         // A reference's payload is the id it points at.
         "data" if parent == Some("annotation_id") => Quantity::Index,
 
-        "degree" | "span_rows" | "span_columns" | "skipped_edges" => Quantity::Count,
+        "degree" | "span_rows" | "span_columns" | "skipped_edges" | "columns" | "rows" => {
+            Quantity::Count
+        }
         "display_flags" => Quantity::Flag,
 
         _ => return None,

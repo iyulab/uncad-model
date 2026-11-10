@@ -287,6 +287,12 @@ pub(crate) mod tests {
                 rotation: 0.25,
                 attribs: vec![attrib.clone()],
                 extrusion: p3(0.0, 0.0, -1.0),
+                array: Some(InsertArray {
+                    columns: 3,
+                    rows: 2,
+                    column_spacing: 1.5,
+                    row_spacing: 2.5,
+                }),
             }),
             Entity::Attrib(attrib),
             Entity::Attdef(AttdefEntity {
