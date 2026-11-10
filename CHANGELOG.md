@@ -15,6 +15,7 @@ bumps the minor version.
   the field existed reads as `None`. The spacings are lengths in the reference's own plane: the grid turns
   with the reference's rotation and is not scaled by its scale factors. `InsertArray::cells` lists the
   distinct placements (a direction whose spacing is `0` has one cell),
+  `InsertEntity::cells` lists a reference's placements (one without a grid),
   `InsertEntity::world_transform_at` is the placement of one cell and `InsertEntity::cell_offset` where the
   cell's insertion point lies from the reference's own.
 

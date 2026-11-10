@@ -163,6 +163,18 @@ impl InsertEntity {
         Some(self.transform(base_point).then(&plane))
     }
 
+    /// The `(column, row)` of each placement this reference makes of its
+    /// block, row by row: the one placement of a reference with no grid, each
+    /// distinct cell of a grid ([`InsertArray::cells`]), none for a grid with
+    /// no cell.
+    pub fn cells(&self) -> impl Iterator<Item = (u32, u32)> {
+        let grid = self.array;
+        let single = grid.is_none().then_some((0, 0));
+        single
+            .into_iter()
+            .chain(grid.into_iter().flat_map(|grid| grid.cells()))
+    }
+
     /// [`world_transform`](Self::world_transform) of the cell at `column` and
     /// `row` of this reference's grid ([`InsertEntity::array`]): the
     /// placement of the reference itself, moved by the cell's offset, which
@@ -559,6 +571,19 @@ mod tests {
         i.array = Some(grid(3, 4, 10.0, 20.0));
         assert!(close(i.cell_offset(1, 0), p(0.0, 10.0)));
         assert!(close(i.cell_offset(0, 1), p(-20.0, 0.0)));
+    }
+
+    #[test]
+    fn a_reference_lists_the_placements_it_makes() {
+        let mut i = insert(v(0.0, 0.0, 0.0), 0.0, v(0.0, 0.0, 1.0));
+        assert_eq!(i.cells().collect::<Vec<_>>(), [(0, 0)]);
+        i.array = Some(grid(2, 2, 1.0, 1.0));
+        assert_eq!(
+            i.cells().collect::<Vec<_>>(),
+            [(0, 0), (1, 0), (0, 1), (1, 1)]
+        );
+        i.array = Some(grid(0, 2, 1.0, 1.0));
+        assert_eq!(i.cells().count(), 0);
     }
 
     #[test]
